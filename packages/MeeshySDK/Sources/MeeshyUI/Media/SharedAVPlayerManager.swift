@@ -74,52 +74,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         didSet { if let player { applyLoop(to: player) } }
     }
 
-    /// **La boucle est une FILE, pas un retour en arrière.** Revenir au
-    /// début par `seek` à la notification de fin coûte un saut de fil, une
-    /// purge du décodeur et une image-clé à redécoder : ≈ 0,1 s de trou à
-    /// chaque tour (mesuré : claps à 8,10–8,13 s
-    /// pour un média de 8,00 s). Avec un successeur du MÊME média déjà en file,
-    /// `.advance` l'enchaîne sans couture — c'est ce que fait `AVPlayerLooper`,
-    /// sans vider la file ni perdre l'élément déjà préparé.
-    ///
-    /// Sans successeur en file (lecteur qui n'est pas une file, insertion
-    /// refusée), `.advance` viderait le lecteur : `.none`, et le retour au
-    /// début par `seek` reste le repli.
-    public nonisolated static func actionAtItemEnd(looping: Bool, successorQueued: Bool = false) -> AVPlayer.ActionAtItemEnd {
-        guard looping else { return .pause }
-        return successorQueued ? .advance : .none
-    }
-
     /// Les éléments que CE moteur a mis en lecture — l'élément chargé et ses
     /// successeurs de boucle. La notification de fin s'écoute pour tous.
-    private var engineItems = Set<ObjectIdentifier>()
-
-    private func applyLoop(to player: AVPlayer) {
-        var queued = false
-        if shouldLoop {
-            let outcome = PlaybackLoopQueue.queueSuccessor(on: player)
-            queued = outcome.queued
-            if let inserted = outcome.inserted { engineItems.insert(ObjectIdentifier(inserted)) }
-        } else {
-            PlaybackLoopQueue.dropSuccessors(of: player)
-        }
-        player.actionAtItemEnd = Self.actionAtItemEnd(looping: shouldLoop, successorQueued: queued)
-    }
-
-    /// **La part du média jouée, lue SUR le lecteur à l'instant de l'appel.**
-    /// `currentTime` n'est publié que 2 à 5 fois par seconde
-    /// (`MediaThermalPolicy.timeObserverInterval`) : une barre qui le lit
-    /// avance par à-coups et reprend le tour de boucle jusqu'à une demi-seconde
-    /// après l'image. Une barre rafraîchie par l'affichage lit ceci — le temps
-    /// de l'élément EN COURS, donc zéro dès que la file enchaîne. Un
-    /// déplacement en vol affiche sa cible, pas la tête qu'il quitte.
-    public func liveProgress() -> Double {
-        guard let player, let item = player.currentItem else { return 0 }
-        return PlaybackProgressLaw.fraction(
-            itemSeconds: seekInFlight ? currentTime : Self.finiteSeconds(player.currentTime()),
-            durationSeconds: PlaybackProgressLaw.heldDuration(
-                reported: item.duration.seconds, known: duration, isLoopSuccessor: shouldLoop))
-    }
+    var engineItems = Set<ObjectIdentifier>()
 
     public var attachmentId: String?
 
@@ -128,22 +85,22 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// sur play / tick ~10s / pause / fin. Découplé de `reportWatchProgress`
     /// (qui reste sur `/attachments/:id/status`, plan séparé).
     public let watchSamples = PassthroughSubject<WatchSample, Never>()
-    private var watchClockStart: Date?
+    var watchClockStart: Date?
     /// Heartbeat samples accumulated for the CURRENT watch session, consumed by the
     /// engagement layer via `drainWatchSamples()`. The `watchSamples` publisher
     /// stays for any live subscriber; this buffer is what surfaces actually read.
-    private var sessionWatchSamples: [WatchSample] = []
+    var sessionWatchSamples: [WatchSample] = []
     /// `true` once playback reached the media end at least once this session
     /// (drives the engagement `completed` flag → server `playCount`).
-    private var sessionReachedEnd = false
+    var sessionReachedEnd = false
 
-    private var timeObserver: Any?
+    var timeObserver: Any?
     /// La cadence de l'observateur de temps posé, `nil` sans observateur.
-    private(set) var armedTimeObserverInterval: Double?
+    var armedTimeObserverInterval: Double?
     private var cancellables = Set<AnyCancellable>()
     /// Les pistes audio suivent le mute effectif.
     let audioTracks = AudioTrackActivator()
-    private var watchStartTime: Date?
+    var watchStartTime: Date?
 
     /// Guards `applyResumePositionIfAvailable()` against firing on every
     /// `duration` publisher tick (AVFoundation reports it more than once as
@@ -157,7 +114,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// continu, avec son motif de fin. Distinct des `WatchSample` d'engagement,
     /// qui échantillonnent une horloge : ceux-là ne diraient jamais qu'un
     /// visionnage s'est arrêté sur une coupure du son plutôt qu'une pause.
-    private var stretchTracker = PlaybackStretchTracker()
+    var stretchTracker = PlaybackStretchTracker()
 
     /// Version linguistique consommée — sous-titres, piste doublée. Fournie par
     /// la surface, qui seule la connaît ; le moteur ne lit aucun singleton.
@@ -184,7 +141,7 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// La qualité de lecture d'un contenu SOCIAL, déclarée par la
     /// surface APRÈS `load()` (comme la consommation servie). Une vidéo de
     /// conversation n'en déclare aucune : rien n'est mesuré.
-    private var qoeObserver: PlaybackQoEObserver?
+    var qoeObserver: PlaybackQoEObserver?
 
     public func setPlaybackSubject(_ subject: PlaybackQoESubject?) {
         guard qoeObserver?.subject != subject else { return }
@@ -206,11 +163,11 @@ public final class SharedAVPlayerManager: ObservableObject {
         servedConsumption = (attachmentId, consumption)
     }
 
-    private var positionMs: Int { currentTime.isNaN ? 0 : max(0, Int(currentTime * 1000)) }
+    var positionMs: Int { currentTime.isNaN ? 0 : max(0, Int(currentTime * 1000)) }
     /// Last `currentTime` (s) at which an engagement heartbeat fired. Instance-scoped
     /// (was a `var` captured inside the time-observer closure) so the observer block
     /// can stay a plain `MainActor.assumeIsolated` call — no `Task` hop per tick.
-    private var lastHeartbeat: Double = 0
+    var lastHeartbeat: Double = 0
 
     /// Ce qu'une interruption a mis en pause — survit à `cleanup()`,
     /// qui le solde explicitement.
@@ -405,35 +362,6 @@ public final class SharedAVPlayerManager: ObservableObject {
         isPlaying = false
     }
 
-    // MARK: - Engagement watch sample seam
-
-    /// Test seam — émet directement un `WatchSample` sur le publisher.
-    public func emitWatchSampleForTesting(positionMs: Int, atMs: Int) {
-        watchSamples.send(WatchSample(positionMs: positionMs, atMs: atMs))
-    }
-
-    /// Drains the heartbeat samples accumulated for the current watch session and
-    /// whether playback reached the end, then resets. Called by a surface when it
-    /// finalizes an engagement session (reel switch / story advance / disappear).
-    public func drainWatchSamples() -> (samples: [WatchSample], reachedEnd: Bool) {
-        let drained = (samples: sessionWatchSamples, reachedEnd: sessionReachedEnd)
-        sessionWatchSamples.removeAll()
-        sessionReachedEnd = false
-        return drained
-    }
-
-    /// Émet un sample à partir de l'horloge monotone de lecture
-    /// (`watchClockStart`). No-op tant que la lecture n'a pas démarré.
-    private func emitWatchSample(complete: Bool = false) {
-        guard let start = watchClockStart else { return }
-        let atMs = Int(Date().timeIntervalSince(start) * 1000)
-        let posMs = currentTime.isNaN ? 0 : Int(currentTime * 1000)
-        let sample = WatchSample(positionMs: max(0, posMs), atMs: max(0, atMs))
-        watchSamples.send(sample)
-        sessionWatchSamples.append(sample)
-        if complete { sessionReachedEnd = true }
-    }
-
     public func togglePlayPause() {
         if isPlaying { pause() } else { play() }
     }
@@ -442,87 +370,11 @@ public final class SharedAVPlayerManager: ObservableObject {
     /// déplacement en vol se termine. Sans cette coalescence, un glissement
     /// empile un `seek` par image de geste et l'image cesse de suivre le doigt
     /// — le contraire de ce qu'un scrub progressif doit produire.
-    private var seekInFlight = false
-    private var pendingSeek: (seconds: Double, precise: Bool)?
+    var seekInFlight = false
+    var pendingSeek: (seconds: Double, precise: Bool)?
     /// Le chargement auquel un déplacement en vol appartient : sa complétion,
     /// arrivée après un changement de média, ne touche plus l'état du suivant.
-    private var seekGeneration = 0
-
-    public func seek(to seconds: Double) {
-        seek(to: seconds, precise: true)
-    }
-
-    /// **Le déplacement suit le doigt, puis se pose exactement.**
-    ///
-    /// `precise: false` autorise AVFoundation à s'arrêter à l'image-clé la plus
-    /// proche : le décodeur n'a rien à reconstruire, l'image apparaît quasi
-    /// immédiatement, et c'est ce qui rend le suivi possible pendant le geste.
-    /// `precise: true` (le défaut, et la CONCLUSION du geste) force la frame
-    /// exacte, au prix d'un décodage depuis l'image-clé précédente — acceptable
-    /// une seule fois, ruineux soixante fois par seconde.
-    ///
-    /// Les déplacements se COALESCENT : tant qu'un déplacement est en vol, seule
-    /// la dernière cible demandée est retenue, et elle part à la complétion. Un
-    /// glissement produit ainsi autant de déplacements que le décodeur peut en
-    /// servir, jamais autant que le doigt en demande.
-    public func seek(to seconds: Double, precise: Bool) {
-        // Sans lecteur, la complétion ne viendrait jamais et tout déplacement
-        // suivant resterait en attente derrière celui-ci.
-        guard player != nil else { return }
-        // `Int(_:)` trappe sur une valeur non finie : une position de reprise illisible ne déplace rien.
-        guard seconds.isFinite else { return }
-        // Relevé AVANT le déplacement : c'est jusque-là que le visionnage a
-        // porté. Le traqueur ignore de lui-même un déplacement à l'arrêt.
-        stretchTracker.seek(from: positionMs, to: max(0, Int(seconds * 1000)))
-        // La tête publiée EST la tête demandée : la barre s'y pose,
-        // au lieu de revenir à l'ancienne position jusqu'au tick suivant.
-        let head = PlaybackProgressLaw.headAfterSeek(target: seconds, durationSeconds: duration)
-        if currentTime != head { currentTime = head }
-
-        guard !seekInFlight else {
-            pendingSeek = (seconds, precise)
-            return
-        }
-        seekInFlight = true
-        performSeek(to: seconds, precise: precise)
-    }
-
-    private func performSeek(to seconds: Double, precise: Bool) {
-        qoeObserver?.noteSeek()
-        let time = CMTime(seconds: seconds, preferredTimescale: 600)
-        let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.5, preferredTimescale: 600)
-        let generation = seekGeneration
-        player?.seek(to: time, toleranceBefore: tolerance, toleranceAfter: tolerance) { [weak self] _ in
-            guard let self else { return }
-            // La complétion d'AVPlayer arrive hors du MainActor ; l'état
-            // coalescé lui appartient, on y revient avant de le toucher.
-            Task { @MainActor in
-                guard generation == self.seekGeneration else { return }
-                self.seekInFlight = false
-                if let next = self.pendingSeek {
-                    self.pendingSeek = nil
-                    self.seekInFlight = true
-                    self.performSeek(to: next.seconds, precise: next.precise)
-                }
-            }
-        }
-    }
-
-    public func skip(seconds: Double) {
-        let target = min(max(currentTime + seconds, 0), duration)
-        seek(to: target)
-    }
-
-    public func setSpeed(_ speed: PlaybackSpeed) {
-        playbackSpeed = speed
-        if isPlaying {
-            player?.rate = Float(speed.rawValue)
-        }
-    }
-
-    public func cycleSpeed() {
-        setSpeed(playbackSpeed.next())
-    }
+    var seekGeneration = 0
 
     public func stop() {
         tearDown()
@@ -587,46 +439,6 @@ public final class SharedAVPlayerManager: ObservableObject {
         haltPlayback: { [weak self] in self?.stop() },
         pausePlayback: { [weak self] in self?.pause() })
 
-    // MARK: - Watch Progress Reporting
-
-    private func reportWatchProgress(complete: Bool) {
-        guard let attId = attachmentId else { return }
-        guard let start = watchStartTime else { return }
-        let watchedSeconds = Date().timeIntervalSince(start)
-        // Vidé AVANT la garde, et jamais après : un retour anticipé laisserait
-        // la trace dans le traqueur, qui l'attribuerait ensuite à la vidéo
-        // SUIVANTE. Le seuil de 3 s protège le réseau, pas la mesure — une
-        // trace non vide vaut d'être envoyée quelle qu'ait été sa durée.
-        let stretches = stretchTracker.drain()
-        guard complete || watchedSeconds >= 3 || !stretches.isEmpty else { return }
-        let positionMs = Int(currentTime * 1000)
-        let totalDurationMs = Int(duration * 1000)
-
-        // Persist the at-rest watch fraction (monotonic, kept after completion)
-        // so the bubble thumbnail can show a discreet progress bar at a glance.
-        if complete {
-            MediaConsumptionStore.shared.record(fraction: 1, complete: true, for: attId)
-            // Natural/forced end → forget the saved RESUME position so a later
-            // re-watch starts from 0 (mirrors AudioPlaybackManager.handlePlaybackFinished).
-            VideoPlaybackPositionStore.shared.clear(for: attId)
-        } else if duration > 0 {
-            MediaConsumptionStore.shared.record(fraction: currentTime / duration, complete: false, for: attId)
-            saveOrClearResumePosition(currentTime, forAttachment: attId, totalDuration: duration)
-        }
-
-        let language = consumedLanguageProvider?()
-
-        let body = AttachmentStatusBody(
-            action: "watched",
-            playPositionMs: positionMs,
-            durationMs: totalDurationMs,
-            complete: complete,
-            stretches: stretches,
-            language: language
-        )
-        AttachmentStatusReporter.report(attachmentId: attId, body: body)
-    }
-
     // MARK: - Playback position persistence
     //
     // Resume-where-you-stopped: a saved position is honored only when it sits
@@ -688,21 +500,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         play()
     }
 
-    private nonisolated static func finiteSeconds(_ time: CMTime) -> Double {
+    nonisolated static func finiteSeconds(_ time: CMTime) -> Double {
         let seconds = time.seconds
         return seconds.isFinite ? max(0, seconds) : 0
-    }
-
-    /// Saves `elapsed` as the resume point for `id`, or clears any stored
-    /// position when `elapsed` sits at either edge of the track (nothing
-    /// meaningful to resume). Short tracks are never stored.
-    private func saveOrClearResumePosition(_ elapsed: TimeInterval, forAttachment id: String, totalDuration: TimeInterval) {
-        guard totalDuration >= VideoResumeRules.minResumableDuration else { return }
-        if Self.isResumable(elapsed, totalDuration: totalDuration) {
-            VideoPlaybackPositionStore.shared.save(elapsed, for: id)
-        } else {
-            VideoPlaybackPositionStore.shared.clear(for: id)
-        }
     }
 
     // MARK: - Observers
@@ -824,40 +624,6 @@ public final class SharedAVPlayerManager: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-    }
-
-    /// Cadence backs off as the device heats up or saves power (WWDC19 #422,
-    /// #9880), and is re-armed live by `applyMediaPolicy`. The block runs via
-    /// `MainActor.assumeIsolated` — NOT a `Task { @MainActor }` per tick:
-    /// `queue: .main` already runs on the MainActor executor. `lastHeartbeat`
-    /// is an instance property so the closure captures nothing mutable.
-    func armTimeObserver(on player: AVPlayer, interval cadence: Double) {
-        if let observer = timeObserver { player.removeTimeObserver(observer) }
-        armedTimeObserverInterval = cadence
-        let interval = CMTime(seconds: cadence, preferredTimescale: 600)
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let seconds = time.seconds.isNaN ? 0 : time.seconds
-                self.currentTime = seconds
-                // Ne crée aucune entrée : retient seulement la dernière position
-                // connue, pour clore proprement un visionnage interrompu net.
-                self.stretchTracker.observe(max(0, Int(seconds * 1000)))
-                if self.isPlaying, seconds - self.lastHeartbeat >= 10 {
-                    self.lastHeartbeat = seconds
-                    self.emitWatchSample()
-                }
-            }
-        }
-    }
-
-    /// Retire l'observateur de temps du lecteur courant.
-    func disarmTimeObserver() {
-        if let observer = timeObserver, let player {
-            player.removeTimeObserver(observer)
-        }
-        timeObserver = nil
-        armedTimeObserverInterval = nil
     }
 
     // MARK: - Cleanup
