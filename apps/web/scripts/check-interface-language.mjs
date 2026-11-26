@@ -115,11 +115,29 @@ function recordDirectionAtBodyBirth() {
   observer.observe(document, { childList: true, subtree: true });
 }
 
-const horizontalOverflow = (page) =>
-  page.evaluate(() => {
+/* Les écrans ne défilent pas dans le document : chacun a sa COLONNE (`main`
+   du hub et du fil, liste du flux), dont l'`overflow-y: auto` rend aussi
+   l'axe horizontal défilable. Le document seul resterait à 390 px pendant que
+   la colonne file sur 930 : la mesure porte donc sur le document ET sur la
+   colonne qui défile autour du contenu attendu. Les pistes horizontales
+   voulues (carrousel, rail) sont DANS la colonne, jamais elle-même. */
+const horizontalOverflow = (page, content) =>
+  page.evaluate((selector) => {
+    const scrolls = (element) => ['auto', 'scroll'].includes(getComputedStyle(element).overflowY);
     const root = document.scrollingElement ?? document.documentElement;
-    return { scroll: root.scrollWidth, client: root.clientWidth };
-  });
+    let column = document.querySelector(selector)?.parentElement ?? null;
+    while (column !== null && column !== root && !scrolls(column)) column = column.parentElement;
+    const boxes = column === null || column === root ? [root] : [root, column];
+    return boxes.map((box) => ({ box: box === root ? 'document' : box.tagName.toLowerCase(), scroll: box.scrollWidth, client: box.clientWidth }));
+  }, content);
+
+const expectNoHorizontalScroll = async (page, content, tag) => {
+  const boxes = await horizontalOverflow(page, content);
+  expect(boxes.length === 2, `${tag} : la colonne qui défile autour de ${content} est trouvée`);
+  for (const { box, scroll, client } of boxes) {
+    expect(scroll <= client + 1, `${tag} : aucun défilement horizontal du ${box} (${scroll} px pour ${client})`);
+  }
+};
 
 async function newContextFor({ locale, stored }, viewport, scheme) {
   const context = await browser.newContext({ viewport, locale, colorScheme: scheme });
@@ -160,8 +178,7 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   const dir = await page.evaluate(() => ({ now: document.documentElement.dir, atBodyBirth: window.__dirAtBodyBirth ?? null }));
   expect(dir.now === want.dir, `${tag} : <html dir="${want.dir}"> (obtenu "${dir.now}")`);
   expect(dir.atBodyBirth === want.dir, `${tag} : dir="${want.dir}" dès la naissance de <body> (obtenu "${dir.atBodyBirth}")`);
-  const overflow = await horizontalOverflow(page);
-  expect(overflow.scroll <= overflow.client + 1, `${tag} : aucun défilement horizontal (${overflow.scroll} > ${overflow.client})`);
+  await expectNoHorizontalScroll(page, '[data-links-family-title]', tag);
   expect((await page.locator('header h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
   expect((await page.locator('[data-links-family-title]').first().innerText()).trim() === want.family, `${tag} : la première famille du hub dans la langue`);
   expect(
@@ -228,8 +245,7 @@ async function measureScreens({ name, locale, stored, want }) {
     await page.waitForTimeout(300);
     const dir = await page.evaluate(() => document.documentElement.dir);
     expect(dir === want.dir, `${tag} : <html dir="${want.dir}"> (obtenu "${dir}")`);
-    const overflow = await horizontalOverflow(page);
-    expect(overflow.scroll <= overflow.client + 1, `${tag} : aucun défilement horizontal (${overflow.scroll} > ${overflow.client})`);
+    await expectNoHorizontalScroll(page, screen.ready, tag);
     if (screen.path === '/feed') await measureCarousel(page, tag, want);
     if (CAPTURES) await page.screenshot({ path: join(CAPTURES, `direction-${want.lang}${screen.path.replaceAll('/', '-')}.png`) });
     expect(errors.length === 0, `${tag} : aucune erreur de page (${errors.join(' | ')})`);
