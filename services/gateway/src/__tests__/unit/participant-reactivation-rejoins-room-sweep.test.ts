@@ -84,7 +84,8 @@ describe('toute porte qui rallume une participation rebranche ses sockets (#1696
   it('le balayage voit bien des écritures de réintégration (sans quoi il resterait vert à vide)', () => {
     // La moitié qui donne son sens à un inventaire vide : sans elle, exclure un
     // fichier du balayage suffirait à rendre le test vert.
-    expect(reactivatingFiles().length).toBeGreaterThanOrEqual(5);
+    // Quatre depuis #4557 : l'invitation rallume par l'admission partagée.
+    expect(reactivatingFiles().length).toBeGreaterThanOrEqual(4);
   });
 
   it('le verbe de jointure existe bien sous ce nom (un balayage de chaîne ne vaut que par sa cible)', () => {

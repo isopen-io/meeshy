@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { decideDirectOpening, requestRecipientFields } from '../../services/messaging/messageRequests';
 import { MemberRole } from '@meeshy/shared/types/role-types';
 import { actorHasMinimumRole } from '@meeshy/shared/utils/conversation-authority';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -12,29 +11,17 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
-import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
-import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
-import { NEW_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import {
-  resolveConversationEntry,
-  REJOIN_PARTICIPANT_STATE
-} from '../../services/conversations/conversationEntryAdmission';
-import { commitParticipantRejoin } from '../../services/conversations/rejoinParticipantWrite';
-import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
-import { announceConversationLanguageChange } from '../../services/message-translation/conversationLanguageChanges';
-import { announceMembershipAdmission } from './membershipAdmissionFanOut';
+  admitConversationMember,
+  type ParticipantAdmissionVerdict,
+  type ParticipantInviteEngagement,
+} from '../../services/conversations/memberAdmission';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
-import { EngagementService } from '../../services/engagement/EngagementService';
-import { serializeConversationParticipant, type SerializableParticipantRow } from '@meeshy/shared/utils/participant-helpers';
+import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
-import {
-  applyCommunityAdmission,
-  loadSalonCommunity,
-  planSalonEntry,
-} from '../../services/conversations/communityMembershipSync';
-import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
+import { loadSalonCommunity } from '../../services/conversations/communityMembershipSync';
 
 const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
 
@@ -57,13 +44,53 @@ const logger = enhancedLogger.child({ module: 'ConversationInviteRoute' });
  */
 
 /**
+ * Les refus de la forme historique — les codes que les appelants de cette porte
+ * lisent (400 déjà membre, 403 banni, 404 inconnu), traduits du verdict de
+ * l'admission partagée. Un verdict d'admission (`new`, `rejoin`) n'y figure pas.
+ */
+const INVITE_REFUSALS: Partial<Record<ParticipantAdmissionVerdict['outcome'], (reply: FastifyReply) => void>> = {
+  'not-found': (reply) => sendNotFound(reply, 'User not found'),
+  banned: (reply) => sendForbidden(reply, 'This user is banned from the conversation — lift the ban first'),
+  'already-member': (reply) => sendBadRequest(reply, 'This user is already a member of the conversation'),
+  'community-forbidden': (reply) =>
+    sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' }),
+};
+
+/**
+ * La ligne relue pour la réponse. Le rang ne part jamais brut :
+ * `serializeConversationParticipant` est le seul chemin vers le fil, et il
+ * exige la visibilité de présence ; `anonymousSession` est requis par la
+ * fabrique (#20292) et vaut `null` pour un inscrit.
+ */
+const INVITED_MEMBER_INCLUDE = {
+  anonymousSession: { select: { rights: true } },
+  user: {
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      firstName: true,
+      lastName: true,
+      avatar: true,
+      role: true,
+      systemLanguage: true,
+      regionalLanguage: true,
+      customDestinationLanguage: true,
+      deactivatedAt: true,
+      createdAt: true,
+      updatedAt: true
+    }
+  }
+} as const;
+
+/**
  * `POST /conversations/:id/invite` — un inscrit ajouté par un membre. Extrait
  * de `sharing.ts` (budget de taille), qui garde les liens de partage.
  */
 export function registerInviteRoute(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  engagement: Pick<EngagementService, 'recordActivity'>
+  engagement: ParticipantInviteEngagement
 ) {
   // Route pour inviter un utilisateur à une conversation
   fastify.post('/conversations/:id/invite', {
@@ -214,276 +241,64 @@ export function registerInviteRoute(
         return sendForbidden(reply, 'Vous n\'avez pas les permissions pour inviter des utilisateurs');
       }
 
-      // Vérifier que l'utilisateur à inviter existe
-      const userToInvite = await fastify.prisma.user.findUnique({
-        where: { id: userId },
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-          firstName: true,
-          lastName: true,
-          ...RECIPIENT_LANG_SELECT,
-          deactivatedAt: true
-        }
-      });
-
-      if (!userToInvite) {
-        return sendNotFound(reply, 'User not found');
-      }
-      // #14107 (MSG-03, RG-22) — invité par quelqu'un qui n'est pas au moins sa
-      // Connaissance : il entre par sa boîte de demandes, et l'invitation ne s'annonce pas.
-      const opening = await decideDirectOpening(fastify.prisma, { senderId: inviterId, recipientId: userId });
-
-      // `conversation.participants` est chargé sous `PARTICIPATION_VIVANTE`
-      // (#20104, et sous `isActive` nu avant lui) : il ne peut donc PAS voir la
-      // ligne d'un banni ni celle d'un ancien membre, et le `create` qui suivait
-      // leur fabriquait une ligne neuve et active — un bannissement défait sans
-      // passer par `POST …/unban`, plus une seconde ligne `Participant` pour la
-      // même paire. Resserrer la clause ÉLARGIT ce que cette note décrit : un
-      // banni y était déjà invisible, un membre désactivé aussi.
-      const entry = await resolveConversationEntry({
-        prisma: fastify.prisma,
-        conversationId,
-        userId,
-        // Déjà chargée pour vérifier l'appartenance de l'inviteur — inviter dans
-        // un fil terminé donnait une ligne active dans une conversation que
-        // `GET /conversations` ne rend plus et où le premier message est refusé.
-        conversation,
-      });
-
-      if (entry.outcome === 'closed') {
+      // #4557 (critère 2) — **un ADAPTATEUR de la porte d'ajout, jamais une
+      // copie.** Tout ce qui suit le rang — lecture de la cible, résolution
+      // d'entrée, écriture ou rejoin, admission communautaire, avis
+      // d'arrivée, les trois diffusions d'adhésion, notifications, crédit
+      // d'engagement — est `admitConversationMember`, la même fonction que
+      // `POST …/participants` appelle pour chaque identifiant de son lot.
+      // L'implémentation recopiée qui vivait ici divergeait encore : ni
+      // `avatar` sur la ligne, aucune notification aux membres présents.
+      // Seuls restent ici la réponse historique et ses codes d'erreur.
+      if (conversation.isActive === false || conversation.closedAt) {
         return sendError(reply, 410, 'Cette conversation est terminée');
       }
 
-      if (entry.outcome === 'banned') {
-        return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');
-      }
-
-      if (entry.outcome === 'already-member') {
-        return sendBadRequest(reply, 'This user is already a member of the conversation');
-      }
-
-      // #16695 — entrer dans un salon d'une communauté privée, c'est y être
-      // admis : la loi de `POST …/participants` et de la création, une fois.
+      const socketManager = fastify.socketIOHandler?.getManager();
       const community = await loadSalonCommunity(fastify.prisma, { communityId: conversation.communityId, actorId: inviterId });
-      const communityAdmission = await planSalonEntry(fastify.prisma, community, { kind: 'registered', userId });
-      if (communityAdmission.kind === 'refused') {
-        return communityAdmission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendNotFound(reply, 'User not found');
-      }
-
-      // #4174 — la table de droits vient du site UNIQUE
-      // (`services/participantRights.ts`). Elle était écrite ICI, et elle
-      // DIFFÉRAIT de celle que `POST …/participants` posait pour le même
-      // geste : `canSendVideos` et `canSendAudios` y valaient `false`. Le
-      // même utilisateur, ajouté au même groupe, recevait donc des droits
-      // différents selon le bouton employé — alors que les deux portes
-      // partagent le résolveur d'admission, produisent la même ligne de rôle
-      // `member`, et sont déclenchées par le même écran.
-      const invitedMemberFields = {
-        type: 'user',
-        displayName: userToInvite.displayName || userToInvite.username,
-        role: 'member',
-        // #9711 — la langue de l'INVITÉ, descendue de son prisme, jamais le
-        // défaut `"en"` du schéma.
-        language: recipientLanguage(userToInvite, 'fr'),
-        permissions: { ...NEW_MEMBER_PERMISSIONS },
-        ...requestRecipientFields(opening, new Date(), inviterId)
-      };
-
-      // La mise en garde qui vivait ici — « ne rien charger qu'aucune surface ne
-      // sert, sinon le jour où la dérive `member`/`membership` est corrigée, la
-      // présence brute d'un invité part sur le fil » — est LEVÉE, parce que le
-      // jour est arrivé et que le gate arrive avec. Le rang ne part plus jamais
-      // brut : `serializeConversationParticipant` est le seul chemin vers le fil,
-      // et il exige qu'on lui passe la visibilité.
-      const invitedMemberInclude = {
-        user: {
-          select: {
-            id: true,
-            username: true,
-            displayName: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            role: true,
-            systemLanguage: true,
-            regionalLanguage: true,
-            customDestinationLanguage: true,
-            createdAt: true,
-            updatedAt: true
-          }
-        }
-      };
-
-      // #19688 — la garde est AUSSI dans le `where` de l'écriture : un
-      // bannissement commis entre la décision ci-dessus et cette ligne ne doit
-      // pas être rallumé. Le refus est celui que la porte rend déjà en amont.
-      const rejoin = entry.outcome === 'rejoin' && entry.participantId
-        ? await commitParticipantRejoin<SerializableParticipantRow>({
-            prisma: fastify.prisma,
-            participantId: entry.participantId,
-            data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
-            include: invitedMemberInclude
-          })
-        : null;
-      if (rejoin?.outcome === 'banned') {
-        return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');
-      }
-      if (rejoin?.outcome === 'vanished') {
-        return sendNotFound(reply, 'User not found');
-      }
-
-      const newMember = rejoin
-        ? rejoin.participant
-        : await fastify.prisma.participant.create({
-            data: {
-              conversationId: conversationId,
-              userId: userId,
-              ...invitedMemberFields,
-              joinedAt: new Date(),
-              isActive: true
-            },
-            include: invitedMemberInclude
-          });
-
-      if (entry.outcome === 'rejoin' && entry.participantId) {
-        invalidateParticipantLookup(entry.participantId, conversationId);
-      }
-      if (community) await applyCommunityAdmission(fastify.prisma, community.communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
-      announceConversationLanguageChange({ kind: 'arrival', conversationId, language: invitedMemberFields.language, readerUserId: userId });
-
-      // `social.conversation_invite` (#8959) — même crédit que
-      // `POST …/participants` : une fois par personne et par conversation.
-      if (inviterId && inviterId !== userId) {
-        engagement
-          .recordActivity(inviterId, 'social.conversation_invite', { targetId: `${conversationId}:${userId}` })
-          .catch((err: unknown) => logger.warn('engagement social.conversation_invite failed', { err }));
-      }
-
-      // Auto-join the invited user's currently-connected sockets to the
-      // conversation room so they receive message:new events immediately
-      // without a reconnect (mirrors POST /conversations/:id/participants).
-      //
-      // #18384 — AVANT le message d'arrivée, qui part sur `conversation:<id>` :
-      // tant que la socket de l'invité n'y est pas, il ne reçoit pas son propre
-      // message d'arrivée, et la file hors ligne ne le rattrape pas (il figure
-      // déjà dans `connectedUsers`, sans marqueur d'injoignabilité).
-      // ATTENDUE, et fail-OPEN : l'invitation est déjà persistée.
-      const inviteSocketManager = fastify.socketIOHandler?.getManager();
-      if (inviteSocketManager) {
-        await inviteSocketManager.joinUserToConversationRoom(userId, conversationId).catch(
-          (err: unknown) => logger.error('Failed to auto-join invited user to conversation room', err as Error)
-        );
-      }
-
-      // Annoncer l'arrivée — troisième des quatre portes, même loi.
-      await postJoinSystemMessage(
+      const verdict = await admitConversationMember(
         {
           prisma: fastify.prisma,
-          broadcast: (message, targetConversationId) =>
-            fastify.socketIOHandler?.getManager()?.broadcastMessage(message as never, targetConversationId)
-              ?? Promise.resolve()
+          io: socketManager?.getIO?.(),
+          joinRoom: socketManager ? (target, room) => socketManager.joinUserToConversationRoom(target, room) : null,
+          broadcastMessage: (message, room) => socketManager?.broadcastMessage(message as never, room) ?? Promise.resolve(),
+          notificationService: fastify.notificationService,
+          engagement,
         },
-        {
-          conversationId,
-          participantId: newMember.id,
-          displayName: invitedMemberFields.displayName,
-          isAnonymous: false,
-          viaShareLink: false,
-          addedBy: noticeActor(inviterMember)
-        }
+        { conversationId, conversation, userId, currentUserId: inviterId, addedBy: noticeActor(inviterMember), community }
       );
 
-      // #17032 — les TROIS diffusions d'adhésion, par leur site UNIQUE. #16837
-      // en avait rapatrié UNE (l'arrivée) ; les deux autres étaient encore
-      // derrière, et l'une d'elles — `conversation:new` — est **la seule qui
-      // CRÉE la ligne de liste** de l'invité. Sans elle, l'invité connecté
-      // voyait ses sockets jointes à la room et recevait les `message:new`,
-      // pendant que sa liste ne connaissait pas la conversation ; une
-      // invitation de GROUPE n'avait aucun canal de découverte, la
-      // notification n'étant créée que pour un tête-à-tête.
-      //
-      // La jumelle avait été ouverte et à moitié reprise, et le commentaire de
-      // l'auto-join ci-dessus l'annonçait : « mirrors
-      // POST /conversations/:id/participants ». La question juste n'était pas
-      // « que fait la jumelle pour mon problème ? » mais « que fait-elle, tout
-      // court, APRÈS cette écriture ? » — et elle se répond en lisant sa suite
-      // ligne à ligne.
-      await announceMembershipAdmission({
-        prisma: fastify.prisma,
-        io: inviteSocketManager?.getIO?.(),
-        conversationId,
-        arrival: {
-          userId,
-          displayName: invitedMemberFields.displayName,
-          joinedAt: newMember.joinedAt ?? new Date(),
-        },
-        actorUserId: inviterId,
-        onError: (error) => logger.warn('membership admission fan-out failed on invite', { userId, conversationId, err: error }),
-      });
+      const refusal = INVITE_REFUSALS[verdict.outcome];
+      if (refusal) return refusal(reply);
 
-      // Envoyer une notification à l'utilisateur invité
-      const notificationService = opening.kind === 'direct' ? fastify.notificationService : undefined;
-      if (notificationService) {
-        try {
-          // Récupérer les informations de l'inviteur
-          const inviter = await fastify.prisma.user.findUnique({
-            where: { id: inviterId },
-            select: {
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          });
-
-          if (inviter) {
-            await notificationService.createConversationInviteNotification({
-              invitedUserId: userId,
-              inviterId: inviterId,
-              inviterUsername: inviter.displayName || inviter.username,
-              inviterAvatar: inviter.avatar || undefined,
-              conversationId: conversationId,
-              conversationTitle: conversation.title,
-              conversationType: conversation.type
-            });
-            logger.debug('Notification invitation envoyée');
-          }
-        } catch (notifError) {
-          logger.error('Erreur envoi notification invitation', notifError as Error);
-          // Ne pas bloquer l'invitation
-        }
-      }
-
-      // PERFORMANCE: Invalider le cache d'autocomplete car la liste des membres a changé
       const mentionService = fastify.mentionService;
       if (mentionService) {
-        try {
-          await mentionService.invalidateCacheForConversation(conversationId);
-          logger.debug('Cache autocomplete invalidé');
-        } catch (cacheError) {
-          logger.error('Erreur invalidation cache', cacheError as Error);
-          // Ne pas bloquer l'invitation
-        }
+        await mentionService.invalidateCacheForConversation(conversationId)
+          .catch((cacheError: unknown) => logger.error('Erreur invalidation cache', cacheError as Error));
+      }
+
+      const newMember = verdict.participantId
+        ? await fastify.prisma.participant.findUnique({ where: { id: verdict.participantId }, include: INVITED_MEMBER_INCLUDE })
+        : null;
+      if (!newMember || !newMember.user) {
+        return sendNotFound(reply, 'User not found');
       }
 
       // Régime STRICT (2026-08-25) : partager une conversation n'ouvre plus
       // rien — la réponse à l'inviteur montre la présence de l'invité selon
       // SA propre autorisation (soi/ADMIN+/ami), jamais sur la seule
       // co-participation qu'il vient de créer.
-      const inviteViewer = viewerFromRequest(request);
       const invitePresenceVis = await getPresenceVisibilityService(prisma).resolveForTarget(
-        inviteViewer,
-        { id: userId, deactivatedAt: userToInvite.deactivatedAt ?? null }
+        viewerFromRequest(request),
+        { id: userId, deactivatedAt: newMember.user.deactivatedAt ?? null }
       );
 
+      const invitedName = newMember.user.displayName || newMember.user.username;
       return sendSuccess(reply, {
         participant: serializeConversationParticipant(newMember, {
           presence: invitePresenceVis
         }),
-        message: `${userToInvite.displayName || userToInvite.username} a été invité à la conversation`
+        message: `${invitedName} a été invité à la conversation`
       });
 
     } catch (error) {

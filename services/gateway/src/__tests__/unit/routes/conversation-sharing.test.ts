@@ -157,6 +157,7 @@ function createMockFastify() {
     createMemberJoinedNotification: jest.fn<any>().mockResolvedValue(undefined),
     createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     createConversationInviteNotification: jest.fn<any>().mockResolvedValue(undefined),
+    createAddedToConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
     // #4169 — `mintConversationShareLink` (porte unique de `/new-link` ET
     // `/links`) notifie les admins/créateur par cette méthode. Absente ici,
     // elle n'aurait pas fait tomber le chemin nominal (best-effort, capturée
@@ -167,18 +168,21 @@ function createMockFastify() {
   const mentionService = {
     invalidateCacheForConversation: jest.fn<any>().mockResolvedValue(undefined),
   };
+  const userFindUnique = jest.fn<any>();
+  const participantCreate = jest.fn<any>();
   const prismaOnFastify = {
     conversation: { findUnique: jest.fn<any>() },
-    user: { findUnique: jest.fn<any>() },
+    user: { findUnique: userFindUnique, findFirst: jest.fn<any>((args: any) => userFindUnique(args)) },
     // `findMany` sert la décision d'entrée (`resolveConversationEntry`) : elle
     // lit TOUTES les lignes de la paire (conversation, utilisateur), y compris
     // celles qu'un départ ou un bannissement a laissées inactives — que
     // `conversation.participants`, chargé avec `isActive: true`, ne peut pas
     // voir. Vide par défaut = primo-arrivant.
     participant: {
-      create: jest.fn<any>(),
+      create: participantCreate,
       update: jest.fn<any>(),
       findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>(async () => participantCreate.mock.results.at(-1)?.value ?? null),
     },
     // L'avis d'arrivée écrit ici. Sans ce double, `postJoinSystemMessage`
     // échouait à l'intérieur de sa propre garde — il ne rejette jamais — et
@@ -982,13 +986,8 @@ describe('POST /conversations/:id/invite', () => {
     fastify.prisma.participant.create.mockResolvedValue({ id: 'new-part', user: makeTargetUser() });
     const req = makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } });
     await route.handler(req, reply);
-    expect(fastify.notificationService.createConversationInviteNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
-        invitedUserId: INVITEE_ID,
-        inviterId: USER_ID,
-        conversationId: CONV_ID,
-      })
-    );
+    expect(fastify.notificationService.createAddedToConversationNotification).toHaveBeenCalledWith(expect.objectContaining({ recipientUserId: INVITEE_ID, addedByUserId: USER_ID, conversationId: CONV_ID }));
+    expect(fastify.notificationService.createConversationInviteNotification).not.toHaveBeenCalled();
   });
 
   it('does not block invite when notification service is absent', async () => {
@@ -1165,7 +1164,7 @@ describe('POST /conversations/:id/invite — profil de l invité', () => {
 
     await route.handler(makeRequest({ params: { id: CONV_ID }, body: { userId: INVITEE_ID } }), reply);
 
-    const include = fastify.prisma.participant.create.mock.calls[0][0].include;
+    const include = (fastify.prisma.participant as any).findUnique.mock.calls[0][0].include;
     expect(include.user.select.isOnline).toBeUndefined();
   });
 });

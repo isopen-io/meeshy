@@ -486,10 +486,12 @@ describe('#13928 — un Ami voit « en ligne », jamais lastActiveAt, sur les ro
           }),
           update: jest.fn<any>().mockResolvedValue({}),
         },
-        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(friendUser()) },
+        user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(friendUser()), findFirst: jest.fn<any>().mockResolvedValue(friendUser()) },
         participant: {
           findMany: jest.fn<any>().mockResolvedValue([]),
           create: jest.fn<any>().mockResolvedValue(friendRow({ user: friendUser() })),
+          // #4557 — l'invitation relit la ligne écrite par l'admission partagée.
+          findUnique: jest.fn<any>().mockResolvedValue({ anonymousSession: null, ...friendRow({ user: friendUser() }) }),
           update: jest.fn<any>(),
         },
         message: { create: jest.fn<any>().mockImplementation(async ({ data }: any) => ({ id: 'sys-1', ...data })) },

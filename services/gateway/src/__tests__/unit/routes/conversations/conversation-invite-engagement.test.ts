@@ -98,6 +98,8 @@ function prismaDouble(bobAlreadyMember: boolean) {
         return row;
       }),
       update: jest.fn(async (args: { where: { id: string }; data: Record<string, unknown> }) => ({ id: args.where.id, ...args.data, user: bob })),
+      // #4557 — l'invitation relit la ligne écrite par l'admission partagée.
+      findUnique: jest.fn(async (args: { where: { id: string } }) => ({ anonymousSession: null, ...(rows.find((row) => row.id === args.where.id) ?? {}), user: bob })),
     },
     user: { findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => bob),

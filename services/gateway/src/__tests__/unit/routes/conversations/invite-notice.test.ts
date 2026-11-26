@@ -56,10 +56,12 @@ function monter() {
       }),
       update: jest.fn<any>().mockResolvedValue(undefined),
     },
-    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(bob) },
+    user: { findMany: jest.fn<any>().mockResolvedValue([]), findUnique: jest.fn<any>().mockResolvedValue(bob), findFirst: jest.fn<any>().mockResolvedValue(bob) },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', user: bob }),
+      // #4557 — l'invitation relit la ligne écrite par l'admission partagée.
+      findUnique: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', anonymousSession: null, user: bob }),
       update: jest.fn<any>(),
     },
     message: { create: jest.fn<any>(async ({ data }: any) => ({ id: 'sys-1', createdAt: new Date(), ...data })) },

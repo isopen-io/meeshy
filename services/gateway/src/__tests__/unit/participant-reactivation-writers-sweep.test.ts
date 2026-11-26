@@ -54,11 +54,9 @@ const GUARDED: ReadonlyArray<Reactivation & { readonly guard: string }> = [
     marker: 'REJOIN_PARTICIPANT_STATE',
     guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
   },
-  {
-    file: 'routes/conversations/sharing-invite.ts',
-    marker: 'REJOIN_PARTICIPANT_STATE',
-    guard: "commitParticipantRejoin porte unsetOrNull(bannedAt) dans le where (#19688) ; resolveConversationEntry rend déjà 'banned' en amont",
-  },
+  // #4557 — `routes/conversations/sharing-invite.ts` n'est plus une porte de
+  // réintégration : l'invitation adapte `admitConversationMember` (ci-dessus)
+  // et n'écrit plus aucune ligne `Participant` elle-même.
   {
     file: 'routes/conversations/participant-ban-core.ts',
     marker: 'unban.data',

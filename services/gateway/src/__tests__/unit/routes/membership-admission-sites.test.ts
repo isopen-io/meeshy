@@ -72,12 +72,14 @@ const doorFiles = (): string[] =>
 
 describe("les portes d'adhésion partagent le site unique de leurs trois diffusions (#17032)", () => {
   // Un balayage négatif dont le scan rend `[]` reste VERT : la première
-  // assertion est donc que le balayage balaie. Le dépôt en compte quatre, et
-  // chacune le dit dans son propre commentaire.
+  // assertion est donc que le balayage balaie. Le dépôt en comptait quatre ;
+  // trois depuis que l'invitation adapte l'admission partagée (#4557).
   it('le balayage trouve bien les portes — sans quoi il ne peut rien garder', () => {
     const doors = doorFiles();
-    expect(doors.length).toBeGreaterThanOrEqual(4);
-    expect(doors).toContain('routes/conversations/sharing-invite.ts');
+    // Trois depuis #4557 : l'invitation adapte `admitConversationMember` et
+    // n'est plus une porte à part — sa diffusion est celle de l'admission.
+    expect(doors.length).toBeGreaterThanOrEqual(3);
+    expect(doors).not.toContain('routes/conversations/sharing-invite.ts');
     expect(doors).toContain('services/conversations/memberAdmission.ts');
   });
 
@@ -102,8 +104,8 @@ describe("les portes d'adhésion partagent le site unique de leurs trois diffusi
     });
   });
 
-  it('les deux portes non exemptées émettent les trois, et par le MÊME appel', () => {
-    ['routes/conversations/sharing-invite.ts', 'services/conversations/memberAdmission.ts'].forEach((name) => {
+  it('la porte non exemptée émet les trois, et par le MÊME appel', () => {
+    ['services/conversations/memberAdmission.ts'].forEach((name) => {
       const source = read(name);
       expect(source).toContain(FAN_OUT);
       // Et aucune des trois n'est retapée à côté : c'est ce qui a produit la
@@ -147,7 +149,7 @@ describe("l'admission dans la room précède le message d'arrivée (#18384)", ()
   };
 
   it('le balayage LIT bien les portes', () => {
-    expect(doorFiles().length).toBeGreaterThanOrEqual(4);
+    expect(doorFiles().length).toBeGreaterThanOrEqual(3);
   });
 
   it("aucune porte ne poste l'arrivée avant d'avoir admis l'arrivant", () => {

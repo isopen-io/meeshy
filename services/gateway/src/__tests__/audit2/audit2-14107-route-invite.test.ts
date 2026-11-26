@@ -37,12 +37,14 @@ function monter() {
       })),
       update: jest.fn(async () => undefined),
     },
-    user: { findMany: jest.fn(async () => [{ id: BOB, birthDate: new Date('1990-01-01') }]), findUnique: jest.fn(async () => bob) },
+    user: { findMany: jest.fn(async () => [{ id: BOB, birthDate: new Date('1990-01-01') }]), findUnique: jest.fn(async () => bob), findFirst: jest.fn(async () => bob) },
     participant: {
       findMany: jest.fn(async () => []),
       findFirst: jest.fn(async () => null),
       count: jest.fn(async () => 0),
       create: jest.fn(async (a: any) => ({ id: 'p-bob', userId: BOB, ...a.data, user: bob })),
+      // #4557 — l'invitation relit la ligne écrite par l'admission partagée.
+      findUnique: jest.fn(async () => ({ ...prisma.participant.create.mock.calls.at(-1)?.[0]?.data, id: 'p-bob', userId: BOB, anonymousSession: null, user: bob })),
       update: jest.fn(),
     },
     message: { create: jest.fn(async ({ data }: any) => ({ id: 'sys-1', createdAt: new Date(), ...data })) },

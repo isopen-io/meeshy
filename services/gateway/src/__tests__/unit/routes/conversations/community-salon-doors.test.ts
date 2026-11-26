@@ -188,12 +188,14 @@ async function inviter(monde: Monde) {
     },
     user: {
       findMany: jest.fn<any>(async (a: any) => (a?.where?.id?.in ?? []).map((id: string) => ({ id }))),
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      // #4557 — l'admission partagée lit l'invité par `findFirst({ where: { id } })`.
+      findFirst: jest.fn<any>(async (a: any) => (a?.where?.id === BOB ? bob : null)),
       findUnique: jest.fn<any>().mockResolvedValue(bob),
     },
     participant: {
       findMany: jest.fn<any>().mockResolvedValue([]),
       create: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', user: bob }),
+      findUnique: jest.fn<any>().mockResolvedValue({ id: 'p-bob', userId: BOB, displayName: 'Bob', anonymousSession: null, user: bob }),
       update: jest.fn<any>(),
     },
     message: { create: jest.fn<any>(async ({ data }: any) => ({ id: 'sys-1', createdAt: new Date(), ...data })) },
@@ -202,6 +204,7 @@ async function inviter(monde: Monde) {
     prisma,
     notificationService: {
       createConversationInviteNotification: jest.fn<any>().mockResolvedValue(undefined),
+      createAddedToConversationNotification: jest.fn<any>().mockResolvedValue(undefined),
       createMemberJoinedNotificationsBatch: jest.fn<any>().mockResolvedValue(0),
     },
     socketIOHandler: { getManager: jest.fn<any>().mockReturnValue({ joinUserToConversationRoom: jest.fn<any>().mockResolvedValue(undefined), broadcastMessage: jest.fn<any>().mockResolvedValue(undefined) }) },

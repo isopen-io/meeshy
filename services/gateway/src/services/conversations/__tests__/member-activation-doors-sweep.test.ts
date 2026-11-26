@@ -42,7 +42,8 @@ const DOORS: Readonly<Record<string, Door>> = {
   // d'entrée, serait passée inaperçue (le défaut même de #16188). La loi de
   // CHAQUE porte juge donc encore sa rentrée, comme sa création.
   'services/conversations/memberAdmission.ts': { writes: 2, law: 'newMemberRefusal(' },
-  'routes/conversations/sharing-invite.ts': { writes: 2, law: 'newMemberRefusal(' },
+  // #4557 — `routes/conversations/sharing-invite.ts` n'écrit plus : il adapte
+  // `memberAdmission.ts`, ci-dessus.
   'services/messaging/MessagingService.ts': { writes: 1, law: 'newMemberRefusal(' },
   'routes/conversations/link-admission.ts': { writes: 2, law: 'admitLinkEntry(' },
   'services/conversations/rejoinParticipantWrite.ts': {

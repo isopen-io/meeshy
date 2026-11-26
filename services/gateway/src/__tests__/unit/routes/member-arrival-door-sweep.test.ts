@@ -91,8 +91,9 @@ const NOT_AN_ARRIVAL_DOOR: Record<string, string> = {
 const ARRIVAL_DOORS = [
   // #19650 — l'ajout d'un membre a quitté `participants-writes.ts` pour être
   // partagé avec l'invitation pendant un appel ; la porte est là où il vit.
+  // #4557 — l'invitation (`sharing-invite.ts`) est un ADAPTATEUR de cette
+  // porte : elle ne crée plus de ligne elle-même.
   'services/conversations/memberAdmission.ts',
-  'routes/conversations/sharing-invite.ts',
   'routes/conversations/link-admission.ts',
 ] as const;
 

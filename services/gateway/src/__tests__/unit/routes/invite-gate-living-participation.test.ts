@@ -103,7 +103,8 @@ let prisma: any;
 /**
  * Ce que ces témoins mesurent est l'ADMISSION par la porte, et elle s'observe au
  * premier site qui la SUIT : la résolution de l'invité
- * (`user.findUnique({ where: { id } })`, juste après le contrôle de rang). La
+ * (`user.findFirst({ where: { id } })` dans l'admission partagée que la route
+ * adapte depuis #4557, juste après le contrôle de rang). La
  * porte refusant par un `return`, cet appel n'a lieu que si elle a admis.
  *
  * Pourquoi pas « la route rend 200 » : le chemin de CRÉATION qui suit touche
@@ -113,7 +114,7 @@ let prisma: any;
  * dite ici pour qu'elle ne se lise pas comme un oubli.
  */
 const invitePortailFranchi = (): boolean =>
-  prisma.user.findUnique.mock.calls.some(
+  prisma.user.findFirst.mock.calls.some(
     (call: any) => call[0]?.where?.id === INVITEE_USER
   );
 
@@ -137,6 +138,7 @@ function makePrisma() {
     },
     user: {
       findUnique: jest.fn(async () => ({ id: INVITEE_USER, username: 'bob', displayName: 'Bob' })),
+      findFirst: jest.fn(async () => ({ id: INVITEE_USER, username: 'bob', displayName: 'Bob' })),
       // `utils/blocking.ts` interroge les blocages réciproques APRÈS la porte.
       // Sans cette surface le handler JETTE hors de tout `try`, et le worker
       // jest meurt — un échec qui ne ressemble pas à un échec de témoin.
@@ -151,6 +153,7 @@ function makePrisma() {
         return { id: 'part-new', ...(args?.data ?? {}) };
       }),
       update: jest.fn(async () => ({ id: 'part-new' })),
+      findUnique: jest.fn(async () => ({ id: 'part-new', ...(created.at(-1) ?? {}), anonymousSession: null, user: { id: INVITEE_USER, username: 'bob', displayName: 'Bob' } })),
       count: jest.fn(async () => 1),
     },
   } as any;
