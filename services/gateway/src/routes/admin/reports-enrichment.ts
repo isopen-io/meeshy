@@ -19,6 +19,14 @@
  * (`deletedAt`) n'a pas d'extrait non plus : le retrait est une décision de
  * modération qu'on ne contourne pas en relisant le texte.
  *
+ * Une exception, et une seule (#14689) : le message masqué par l'OBSOLESCENCE de
+ * sa conversation. Rendre une conversation obsolète pose sur chaque message vivant
+ * le MÊME instant que `Conversation.deletedAt` (et programme `purgeAfter`) ; ces
+ * 48 h sont la fenêtre de modération (#14691). Tant que le signalement est ouvert
+ * (`pending`, `under_review` ; tout autre statut ferme), son extrait reste servi.
+ * Un message retiré à un autre instant — par son auteur ou par la modération —
+ * garde son masque, et les protections de contenu s'appliquent inchangées.
+ *
  * Le masque DIT qu'il masque : `isProtected: true` et `excerpt: null` — la
  * console écrit « Contenu protégé », jamais un vide qui se lirait comme « pas de
  * texte ».
@@ -46,6 +54,7 @@ import {
 
 const EXCERPT_LENGTH = 120;
 const POST_KINDS: ReadonlySet<string> = new Set(['post', 'story', 'reel', 'status']);
+const OPEN_REPORT_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review']);
 const RESTRICTED_AUDIENCES: ReadonlySet<string> = new Set(['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD']);
 
 export type ReportedEntity = {
@@ -68,6 +77,7 @@ export type ReportedEntity = {
 };
 
 type RawReport = {
+  readonly status?: string | null;
   readonly reportedType?: string | null;
   readonly reportedEntityId?: string | null;
   readonly reporterId?: string | null;
@@ -138,6 +148,23 @@ function messageOwner(sender: {
   );
 }
 
+const CONVERSATION_SELECT = { id: true, title: true, deletedAt: true, purgeAfter: true } as const;
+
+type ConversationObsolescence = {
+  readonly deletedAt?: Date | null;
+  readonly purgeAfter?: Date | null;
+};
+
+/** Le message n'a été masqué QUE par l'obsolescence de sa conversation : même instant, purge programmée. */
+const maskedByObsolescence = (
+  messageDeletedAt: Date | null,
+  conversation: ConversationObsolescence | undefined
+): boolean =>
+  messageDeletedAt !== null &&
+  conversation?.deletedAt != null &&
+  conversation.purgeAfter != null &&
+  conversation.deletedAt.getTime() === messageDeletedAt.getTime();
+
 export type EnrichmentOptions = {
   readonly canSeeExcerpt: boolean;
   readonly canSeeConversationMembers: boolean;
@@ -200,7 +227,7 @@ export async function enrichReports<Row extends RawReport>(
     lookup(conversationIds, (ids) =>
       prisma.conversation.findMany({
         where: { id: { in: ids } },
-        select: { id: true, title: true },
+        select: CONVERSATION_SELECT,
         take: ids.length,
       })
     ),
@@ -246,17 +273,18 @@ export async function enrichReports<Row extends RawReport>(
   const messageConversations = await lookup(missingTitles, (ids) =>
     prisma.conversation.findMany({
       where: { id: { in: ids } },
-      select: { id: true, title: true },
+      select: CONVERSATION_SELECT,
       take: ids.length,
     })
   );
-  const titleOf = (conversationId: string): string | null =>
-    clean((conversations.get(conversationId) ?? messageConversations.get(conversationId))?.title);
+  const conversationOf = (conversationId: string) =>
+    conversations.get(conversationId) ?? messageConversations.get(conversationId);
+  const titleOf = (conversationId: string): string | null => clean(conversationOf(conversationId)?.title);
 
   const excerptIf = (allowed: boolean, text: string | null | undefined): string | null =>
     options.canSeeExcerpt && allowed ? clip(text) : null;
 
-  const resolve = (type: string, id: string): Resolved => {
+  const resolve = (type: string, id: string, reportIsOpen: boolean): Resolved => {
     if (type === 'user') {
       const person = people.get(id);
       return person ? { ...UNKNOWN, label: personLabel(person).label } : GONE;
@@ -266,10 +294,12 @@ export async function enrichReports<Row extends RawReport>(
       if (!row) return GONE;
       const isProtected = messageContentIsProtected(row);
       const deleted = row.deletedAt !== null;
+      const readable =
+        !deleted || (reportIsOpen && maskedByObsolescence(row.deletedAt, conversationOf(row.conversationId)));
       return {
         label: null,
         owner: messageOwner({ ...row.sender, user: toAdminPerson(row.sender.user) }),
-        excerpt: excerptIf(!isProtected && !deleted, row.content),
+        excerpt: excerptIf(!isProtected && readable, row.content),
         isProtected,
         deleted,
         conversation: { id: row.conversationId, title: titleOf(row.conversationId) },
@@ -313,7 +343,9 @@ export async function enrichReports<Row extends RawReport>(
   };
 
   const resolvedByReport = reports.map((report) =>
-    report.reportedType && report.reportedEntityId ? resolve(report.reportedType, report.reportedEntityId) : null
+    report.reportedType && report.reportedEntityId
+      ? resolve(report.reportedType, report.reportedEntityId, OPEN_REPORT_STATUSES.has(report.status ?? ''))
+      : null
   );
 
   const previews = await loadConversationNamePreviews(

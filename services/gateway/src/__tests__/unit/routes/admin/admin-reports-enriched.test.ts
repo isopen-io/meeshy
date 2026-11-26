@@ -97,8 +97,9 @@ const messageRow = (over: Row = {}): Row => ({
   ...over,
 });
 
-function makePrisma(over: { messages?: Row[]; posts?: Row[] } = {}) {
+function makePrisma(over: { messages?: Row[]; posts?: Row[]; conversations?: Row[] } = {}) {
   const messages = over.messages ?? [messageRow()];
+  const conversations = over.conversations ?? [{ id: CONVERSATION, title: 'Famille', deletedAt: null, purgeAfter: null }];
   const posts = over.posts ?? [
     { id: POST, content: 'Un long texte public', visibility: 'PUBLIC', deletedAt: null, author: awa },
     { id: STORY, content: 'Ma story', visibility: 'FRIENDS', deletedAt: null, author: jean },
@@ -113,7 +114,7 @@ function makePrisma(over: { messages?: Row[]; posts?: Row[] } = {}) {
     message: { findMany: jest.fn<any>(async (args: { where?: Row }) => pick(messages as any[], args.where)) },
     conversation: {
       findMany: jest.fn<any>(async (args: { where?: Row }) =>
-        pick([{ id: CONVERSATION, title: 'Famille' }], args.where)
+        pick(conversations as any[], args.where)
       ),
     },
     community: {
@@ -225,6 +226,76 @@ describe('signalements — l’entité signalée, genre par genre', () => {
     const row = await served(makePrisma({ messages: [messageRow({ deletedAt: new Date('2026-09-28') })] }), report());
 
     expect(row.reportedEntity).toMatchObject({ excerpt: null, deleted: true, isProtected: false });
+  });
+
+  describe('un message masqué par l’OBSOLESCENCE de sa conversation (#14689)', () => {
+    const OBSOLETED_AT = new Date('2026-11-25T08:00:00.000Z');
+    const obsoleteConversation = (over: Row = {}): Row => ({
+      id: CONVERSATION,
+      title: 'Famille',
+      deletedAt: OBSOLETED_AT,
+      purgeAfter: new Date('2026-11-27T08:00:00.000Z'),
+      ...over,
+    });
+    const frozen = (conversation: Row = obsoleteConversation(), message: Row = {}) =>
+      makePrisma({ messages: [messageRow({ deletedAt: OBSOLETED_AT, ...message })], conversations: [conversation] });
+
+    it.each(['pending', 'under_review'])(
+      'un signalement %s rend l’extrait au modérateur, et la réponse dit le message supprimé',
+      async (status) => {
+        const row = await served(frozen(), report({ status }));
+
+        expect(row.reportedEntity).toMatchObject({
+          excerpt: 'Tu es nul et tout le monde le sait',
+          deleted: true,
+          isProtected: false,
+        });
+      }
+    );
+
+    it.each(['resolved', 'rejected', 'dismissed', 'statut-inconnu'])(
+      'un signalement %s ne rend plus l’extrait',
+      async (status) => {
+        const row = await served(frozen(), report({ status }));
+
+        expect(row.reportedEntity).toMatchObject({ excerpt: null, deleted: true });
+      }
+    );
+
+    it('un message retiré AVANT l’obsolescence (retrait de modération ou de son auteur) reste sans extrait', async () => {
+      const row = await served(frozen(obsoleteConversation(), { deletedAt: new Date('2026-11-20T08:00:00.000Z') }), report());
+
+      expect(row.reportedEntity).toMatchObject({ excerpt: null, deleted: true });
+    });
+
+    it('une conversation supprimée sans purge programmée n’est pas obsolète : pas d’extrait', async () => {
+      const row = await served(frozen(obsoleteConversation({ purgeAfter: null })), report());
+
+      expect(row.reportedEntity).toMatchObject({ excerpt: null, deleted: true });
+    });
+
+    it.each([
+      ['à vue unique', { isViewOnce: true }],
+      ['flouté', { isBlurred: true }],
+      ['chiffré', { isEncrypted: true }],
+    ])('un message %s reste masqué', async (_nom, flags) => {
+      const row = await served(frozen(obsoleteConversation(), flags), report());
+
+      expect(row.reportedEntity).toMatchObject({ excerpt: null, isProtected: true });
+      expect(JSON.stringify(row)).not.toContain('Tu es nul');
+    });
+
+    it('la conversation signalée ELLE-MÊME sert aussi l’obsolescence de ses messages signalés', async () => {
+      listReports.mockResolvedValue({
+        reports: [report(), report({ id: ID(51), reportedType: 'conversation', reportedEntityId: CONVERSATION })],
+        total: 2,
+      });
+      const app = await buildApp(frozen());
+      const res = await app.inject({ method: 'GET', url: '/' });
+      await app.close();
+
+      expect(JSON.parse(res.body).data.reports[0].reportedEntity.excerpt).toBe('Tu es nul et tout le monde le sait');
+    });
   });
 
   it('tronque l’extrait à 120 caractères', async () => {
