@@ -440,7 +440,7 @@ jobs:
       # fichiers ne porte — pour qu'un `bun.lock` ne puisse plus être commité
       # sans l'arbre qu'il décrit.
       - name: Lockfile alignment guard
-        run: node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
+        run: node --test scripts/__tests__/check-lockfile-alignment.test.mjs && node scripts/check-lockfile-alignment.mjs --self-test && node scripts/check-lockfile-alignment.mjs
 
       # #20026 — un bun plus récent que BUN_VERSION réécrit bun.lock dans un
       # format que ce bun-ci ne relit pas (lockfileVersion 1 -> 3), sans changer

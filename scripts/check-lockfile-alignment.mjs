@@ -703,6 +703,105 @@ const firstPnpmProbeTarget = (world) => {
   return null;
 };
 
+/**
+ * LE MONDE DES SONDES, ÉCRIT ICI — jamais lu sur le disque (#19612).
+ *
+ * Les sondes se posaient sur les manifestes RÉELS du dépôt : un dépôt
+ * réellement désaligné faisait tomber la sonde TOLÉRÉE, et le self-test
+ * accusait le vérificateur (« TROP STRICT ») d'une faute du dépôt. Le
+ * self-test répond à UNE question — le vérificateur dit-il vrai ? — et le run
+ * réel à l'autre — le dépôt est-il aligné ? Lequel tombe dit où chercher.
+ *
+ * Chaque champ en est une COPIE : `structuredClone` garde les références
+ * partagées, et une sonde qui muterait le manifeste muterait aussi le lock.
+ *
+ * Ce monde est aligné par construction (le self-test le vérifie avant toute
+ * sonde) et porte de quoi exercer chaque garde : les paquets suivis résolus
+ * une fois, un override suivi, les deux retards déclarés, et les deux
+ * lockfiles.
+ */
+const pnpmEntry = (specifier, version) => ({ specifier, version });
+const lockPackage = (name, version) => [`${name}@${version}`, '', {}, 'sha512-fixture'];
+
+const WEB_DEPENDENCIES = {
+  react: '^19.1.0',
+  'react-dom': '^19.1.0',
+  preact: '^10.27.0',
+  'idb-keyval': '^6.2.1',
+  uuid: '^11.1.0',
+  dompurify: '^3.2.6',
+  '@tanstack/react-virtual': '^3.13.0',
+};
+const WEB_DEV_DEPENDENCIES = { '@playwright/test': '^1.55.0' };
+const SHARED_DEV_DEPENDENCIES = { typescript: '^5.6.0' };
+const ROOT_OVERRIDES = { react: '19.1.0', uuid: '9.0.1', dompurify: '3.0.0' };
+
+const FIXTURE_WORLD = {
+  manifests: [
+    {
+      directory: '',
+      document: {
+        name: 'meeshy-fixture',
+        workspaces: ['apps/*', 'packages/*'],
+        overrides: { ...ROOT_OVERRIDES },
+      },
+    },
+    {
+      directory: 'apps/web',
+      document: {
+        name: '@meeshy/web',
+        version: '2.0.0',
+        dependencies: { ...WEB_DEPENDENCIES },
+        devDependencies: { ...WEB_DEV_DEPENDENCIES },
+      },
+    },
+    {
+      directory: 'packages/shared',
+      document: { name: '@meeshy/shared', version: '1.0.0', devDependencies: { ...SHARED_DEV_DEPENDENCIES } },
+    },
+  ],
+  lock: {
+    lockfileVersion: 1,
+    workspaces: {
+      '': { name: 'meeshy-fixture' },
+      'apps/web': {
+        name: '@meeshy/web',
+        version: '2.0.0',
+        dependencies: { ...WEB_DEPENDENCIES },
+        devDependencies: { ...WEB_DEV_DEPENDENCIES },
+      },
+      'packages/shared': { name: '@meeshy/shared', version: '1.0.0', devDependencies: { ...SHARED_DEV_DEPENDENCIES } },
+    },
+    overrides: { ...ROOT_OVERRIDES },
+    packages: {
+      react: lockPackage('react', '19.1.0'),
+      'react-dom': lockPackage('react-dom', '19.1.1'),
+      preact: lockPackage('preact', '10.27.2'),
+      'idb-keyval': lockPackage('idb-keyval', '6.2.2'),
+      uuid: lockPackage('uuid', '9.0.1'),
+      dompurify: lockPackage('dompurify', '3.0.0'),
+      '@tanstack/react-virtual': lockPackage('@tanstack/react-virtual', '3.13.12'),
+      '@playwright/test': lockPackage('@playwright/test', '1.55.1'),
+      typescript: lockPackage('typescript', '5.9.3'),
+    },
+  },
+  pnpm: {
+    'apps/web': {
+      dependencies: {
+        react: pnpmEntry('^19.1.0', '19.1.0'),
+        'react-dom': pnpmEntry('^19.1.0', '19.1.1(react@19.1.1)'),
+        preact: pnpmEntry('^10.27.0', '10.27.2'),
+        'idb-keyval': pnpmEntry('^6.2.1', '6.2.2'),
+        uuid: pnpmEntry('^11.1.0', '11.1.0'),
+        dompurify: pnpmEntry('^3.2.6', '3.2.7'),
+        '@tanstack/react-virtual': pnpmEntry('^3.13.0', '3.13.12(react@19.1.1)'),
+      },
+      devDependencies: { '@playwright/test': pnpmEntry('^1.55.0', '1.55.1') },
+    },
+    'packages/shared': { devDependencies: { typescript: pnpmEntry('^5.6.0', '5.9.3') } },
+  },
+};
+
 const MUTATIONS = [
   [
     "un manifeste de workspace que le lock n'a jamais vu",
@@ -835,6 +934,13 @@ const TOLERATED_MUTATIONS = [
 ];
 
 const selfTest = (world) => {
+  const baseline = inspect(world);
+  if (baseline.length > 0) {
+    baseline.forEach((failure) => console.error(`FIXTURE DÉSALIGNÉE : ${failure}`));
+    console.error('\nLe monde des sondes doit être aligné avant toute sonde.');
+    return 1;
+  }
+
   const blind = MUTATIONS.filter(
     ([, apply, expected]) =>
       !inspect(mutate(world, apply)).some((failure) => failure.includes(expected)),
@@ -859,10 +965,10 @@ const selfTest = (world) => {
 };
 
 const main = () => {
-  const world = readWorld(REPO_ROOT);
   if (process.argv.includes('--self-test')) {
-    return selfTest(world);
+    return selfTest(FIXTURE_WORLD);
   }
+  const world = readWorld(REPO_ROOT);
   const failures = inspect(world);
   if (failures.length > 0) {
     failures.forEach((failure) => console.error(failure));
