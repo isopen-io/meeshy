@@ -92,10 +92,21 @@ final class TalkieSenderTests: XCTestCase {
         let failed = PassthroughSubject<Void, Never>()
         var failures: AnyPublisher<Void, Never> { failed.eraseToAnyPublisher() }
 
+        /// Tient l'envoi de la copie sans réponse, comme un réseau lent : l'émetteur attend pendant.
+        var holdSend = false
+        private var sendWaiter: CheckedContinuation<Void, Never>?
+
         func send(_ frames: [Data], toUserId: String, conversationId: String?) async -> Bool {
             sent.append((frames, toUserId))
             conversations.append(conversationId)
+            if holdSend { await withCheckedContinuation { sendWaiter = $0 } }
             return succeeds
+        }
+
+        func letSendFinish() {
+            holdSend = false
+            sendWaiter?.resume()
+            sendWaiter = nil
         }
     }
 
@@ -278,6 +289,51 @@ final class TalkieSenderTests: XCTestCase {
         XCTAssertTrue(rig.emitter.ends.isEmpty)
         XCTAssertEqual(rig.capture.stops, 1)
         XCTAssertEqual(rig.sut.phase, .idle)
+    }
+
+    /// Le micro arrêté, la voix sortante quitte le registre AVANT l'envoi de la copie : sinon le lecteur croit le micro
+    /// encore ouvert et garde muette la voix reçue sur le haut-parleur tout le temps que le réseau répond.
+    func test_finishCopy_whileTheCopyIsStillSending_theOutgoingVoiceHasLeftTheStage() async {
+        let rig = makeRig()
+        rig.copier.holdSend = true
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+        XCTAssertEqual(rig.stage.direction(for: "bob"), .outgoing)
+
+        let releasing = Task { await rig.sut.release() }
+        await settle()
+
+        XCTAssertEqual(rig.copier.sent.count, 1)
+        XCTAssertEqual(rig.sut.phase, .recordingCopy(toUserId: "bob"))
+        XCTAssertNil(rig.stage.direction(for: "bob"))
+
+        rig.copier.letSendFinish()
+        await releasing.value
+
+        XCTAssertEqual(rig.sut.phase, .idle)
+        XCTAssertEqual(rig.sut.notice, .voice)
+    }
+
+    /// La voix sortante ne se rend qu'UNE fois par prise de parole : une autre tenue de la même voix (la bulle qui la
+    /// montre) survit à l'arrêt du micro comme à la fin de l'envoi.
+    func test_finishCopy_whenAnotherHolderKeepsTheVoice_releasesOnlyItsOwnHold() async {
+        let rig = makeRig()
+        rig.stage.begin(userId: "bob", direction: .outgoing, at: Date())
+        rig.sut.press(toUserId: "bob")
+        await settle()
+        rig.capture.speak(frames: 3)
+        rig.emitter.resolve(.refused(.voice))
+        await settle()
+
+        await rig.sut.release()
+
+        XCTAssertEqual(rig.sut.phase, .idle)
+        XCTAssertEqual(rig.stage.direction(for: "bob"), .outgoing)
+        rig.stage.end(userId: "bob", direction: .outgoing)
+        XCTAssertNil(rig.stage.direction(for: "bob"))
     }
 
     func test_aFallbackAfterRelease_sendsWhatWasCapturedAtOnce() async {

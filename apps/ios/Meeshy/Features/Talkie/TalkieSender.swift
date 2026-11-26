@@ -73,6 +73,8 @@ final class TalkieSender: ObservableObject {
         var accepting = true
         var released = false
         var finishing = false
+        /// La voix sortante tient le registre pour cette prise de parole ; elle ne le rend qu'une fois.
+        var onStage = false
         var copying = false
         var copied: [Data] = []
         /// La conversation que la passerelle a nommée pour la copie (`TALKIE_FALLBACK_VOICE` + `conversationId`).
@@ -101,7 +103,8 @@ final class TalkieSender: ObservableObject {
     private let copier: TalkieVoiceCopying
     private let now: () -> Date
     private let schedule: TalkieDeadlineScheduler
-    /// La voix qui part s'y inscrit sous son destinataire, de l'appui à la fin (#20531).
+    /// La voix qui part s'y inscrit sous son destinataire, de l'appui à l'arrêt du micro (#20531) : une copie qui
+    /// attend encore le réseau ne tient plus le micro pour ouvert, et la voix reçue redevient audible.
     private let stage: TalkieVoiceStage
     private var session: Session?
     /// Les voix réveillées closes, gardées jusqu'au verdict `joined` de la passerelle. Bornées : rien ne grossit.
@@ -172,7 +175,7 @@ final class TalkieSender: ObservableObject {
         let current = Session(toUserId: toUserId, pressedAt: now())
         session = current
         phase = .starting(toUserId: toUserId)
-        stage.begin(userId: toUserId, direction: .outgoing, at: now())
+        enterStage(current)
         let verdict = Task { () -> TalkieStartVerdict in
             let verdict = await self.emitter.start(toUserId: toUserId)
             current.latency.mark(.opened, at: self.now())
@@ -190,7 +193,7 @@ final class TalkieSender: ObservableObject {
         current.voiceMessage = true
         session = current
         phase = .recordingCopy(toUserId: toUserId)
-        stage.begin(userId: toUserId, direction: .outgoing, at: now())
+        enterStage(current)
         Task {
             await Task.yield()
             guard await self.openMic(current) else {
@@ -350,6 +353,18 @@ final class TalkieSender: ObservableObject {
             await capture.stop()
         }
         current.accepting = false
+        leaveStage(current)
+    }
+
+    private func enterStage(_ current: Session) {
+        stage.begin(userId: current.toUserId, direction: .outgoing, at: now())
+        current.onStage = true
+    }
+
+    private func leaveStage(_ current: Session) {
+        guard current.onStage else { return }
+        current.onStage = false
+        stage.end(userId: current.toUserId, direction: .outgoing)
     }
 
     /// Ferme une prise de parole OUVERTE : micro arrêté, reste vidé, `talkie:end` (sauf si le serveur l'a déjà close).
@@ -416,13 +431,13 @@ final class TalkieSender: ObservableObject {
     private func settle(_ current: Session, _ outcome: TalkieSendOutcome?) {
         current.cancelDeadline?()
         current.cancelDeadline = nil
+        leaveStage(current)
         if let opened = current.opened, opened.delivery == .waking, !current.copied.isEmpty {
             awaitingJoin = Array((awaitingJoin + [(opened.talkieId, current.toUserId, current.copied)]).suffix(Self.awaitingJoinCap))
             current.copied = []
         }
         if session === current {
             session = nil
-            stage.end(userId: current.toUserId, direction: .outgoing)
             phase = .idle
             waking = false
             talkWindow = nil
