@@ -12,18 +12,10 @@ import MeeshyUI
 // at the root. `postsContent` hands the list its way out (`leavingHost`) and
 // the list opens the content itself once its sheet has LEFT
 // (`ProfileSheetDeparture`) — through the Router for a post, the immersive
-// viewer for a reel. `openReel(_:in:dismiss:)` stays for the hosts that build
-// the list themselves.
+// viewer for a reel. Hosts that build the list themselves hand it the same way
+// out (`leavingHost`) and let it open the reel at the sheet's departure (#18690).
 @MainActor
 enum ProfilePostsOpener {
-    static func openReel(_ reel: FeedPost, in reels: [FeedPost], dismiss: @escaping () -> Void) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            HapticFeedback.medium()
-            ReelsPresenter.shared.present(posts: reels, startId: reel.id)
-        }
-    }
-
     static func postsContent(dismiss: @escaping () -> Void) -> (String) -> AnyView {
         { uid in AnyView(ProfileUserPostsList(userId: uid, leavingHost: dismiss)) }
     }
@@ -60,6 +52,17 @@ enum ProfileAuthorTap {
         guard !authorId.isEmpty, authorId != listedUserId else { return nil }
         let username = post.repost?.authorId == authorId ? post.repost?.authorUsername : post.authorUsername
         return ProfileSheetUser(userId: authorId, username: username ?? authorId)
+    }
+
+    /// Le toucher de l'auteur d'une carte (#18690) : `nil` quand l'auteur AFFICHÉ est celui
+    /// de la liste — la carte ne dessine alors aucun bouton.
+    static func action(for post: FeedPost, listedUserId: String,
+                       open: @escaping (ProfileSheetUser) -> Void) -> ((String) -> Void)? {
+        guard profile(of: ReelAuthorAttribution.authorId(of: post), in: post, listedUserId: listedUserId) != nil else { return nil }
+        return { authorId in
+            guard let author = profile(of: authorId, in: post, listedUserId: listedUserId) else { return }
+            open(author)
+        }
     }
 }
 

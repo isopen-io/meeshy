@@ -171,10 +171,7 @@ struct iPadSheetsLayer: ViewModifier {
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.deepLinkProfileUser = nil
                             router.push(.postDetail(post.id, post))
-                        }, onOpenReel: { reel, reels in
-                            // Parité RootView : un réel s'ouvre dans le lecteur, pas en détail plat.
-                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
-                        }))
+                        }, leavingHost: { router.deepLinkProfileUser = nil }))
                     },
                     onCall: { request in
                         router.deepLinkProfileUser = nil

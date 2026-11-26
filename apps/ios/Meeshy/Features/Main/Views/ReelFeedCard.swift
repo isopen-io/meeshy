@@ -113,7 +113,10 @@ struct ReelFeedCard: View, Equatable {
     var onQuote: ((String) -> Void)? = nil
     let onBookmark: (String) -> Void
     let onShare: (String) -> Void
-    let onTapAuthor: (String) -> Void
+    /// L'auteur touché — `nil` quand il ne mène nulle part : la rangée n'est alors pas un bouton (#18690).
+    var onTapAuthor: ((String) -> Void)? = nil
+    /// Un spectateur touché dans « Vues » — `nil` ⇒ `onTapAuthor` le reçoit.
+    var onOpenViewer: ((StoryViewerItem) -> Void)? = nil
     /// Menu « … » (parité avec `FeedPostCard`) — `nil` = action indisponible.
     var onEdit: ((FeedPost) -> Void)? = nil
     var onDelete: ((String) -> Void)? = nil
@@ -139,6 +142,7 @@ struct ReelFeedCard: View, Equatable {
             && lhs.post.translatedContent == rhs.post.translatedContent
             && lhs.post.commentsDisabled == rhs.post.commentsDisabled
             && (lhs.onToggleComments == nil) == (rhs.onToggleComments == nil)
+            && (lhs.onTapAuthor == nil) == (rhs.onTapAuthor == nil)
     }
 
     // Repost-aware: a republished reel has no media on the outer post — resolve
@@ -183,10 +187,7 @@ struct ReelFeedCard: View, Equatable {
     /// Non-nil when this card displays a REPUBLISHED reel: the outer post has no
     /// media (content sourced from the reposted reel). Drives author attribution
     /// + caption so the card shows the ORIGINAL author, not just the re-poster.
-    private var repostedReel: RepostContent? {
-        guard post.media.isEmpty, let reposted = post.repost, !reposted.media.isEmpty else { return nil }
-        return reposted
-    }
+    private var repostedReel: RepostContent? { ReelAuthorAttribution.reposted(in: post) }
     private var displayAuthor: String { repostedReel?.author ?? post.author }
     private var displayAuthorColor: String { repostedReel?.authorColor ?? accentHex }
     private var displayAvatarURL: String? { repostedReel?.authorAvatarURL ?? post.authorAvatarURL }
@@ -255,7 +256,7 @@ struct ReelFeedCard: View, Equatable {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "feed.reel.card.a11y", defaultValue: "Réel de \(displayAuthor)", bundle: .main))
         .onReceive(ReelFeedSoundIntent.shared.$audioTrackPresence) { soundTrackPresence = $0 }
-        .publicationViewersSheet(isPresented: $showViewersSheet, post: post) { onTapAuthor($0.id) }
+        .publicationViewersSheet(isPresented: $showViewersSheet, post: post) { viewer in openViewer(viewer) }
         .fullScreenCover(item: $reelCardFullscreenPlace) { item in
             LocationFullscreenView(
                 latitude: item.place.latitude,
@@ -459,33 +460,49 @@ struct ReelFeedCard: View, Equatable {
 
     private var displayUsername: String? { repostedReel?.authorUsername ?? post.authorUsername }
 
-    private var authorRow: some View {
-        Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
-            HStack(spacing: MeeshySpacing.sm) {
-                LivePresence { MeeshyAvatar(
-                    name: displayAuthor,
-                    context: .custom(34),
-                    accentColor: displayAuthorColor,
-                    avatarURL: displayAvatarURL,
-                    presenceState: PresenceManager.shared.knownPresenceState(for: repostedReel?.authorId ?? post.authorId),
-                    ring: repostedReel == nil ? post.authorRing : repostedReel?.authorRing
-                ) }
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(displayAuthor)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Color.white)
-                    authorMetaLine
-                }
-                // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
-                // posée sur un conteneur, `.shadow` se répète sur chaque feuille,
-                // et chaque passe se recompose au-dessus de la vidéo qui joue.
-                // Les feuilles ne se chevauchent pas : le rendu est le même.
-                .compositingGroup()
-                .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
-            }
+    private func openViewer(_ viewer: StoryViewerItem) {
+        guard let onOpenViewer else {
+            onTapAuthor?(viewer.id)
+            return
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "feed.reel.author.a11y", defaultValue: "Profil de \(displayAuthor)", bundle: .main))
+        onOpenViewer(viewer)
+    }
+
+    /// L'auteur : un bouton s'il mène à une fiche, sinon une simple identité (loi 4).
+    @ViewBuilder
+    private var authorRow: some View {
+        if let onTapAuthor {
+            Button { onTapAuthor(ReelAuthorAttribution.authorId(of: post)) } label: { authorIdentity }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "feed.reel.author.a11y", defaultValue: "Profil de \(displayAuthor)", bundle: .main))
+        } else {
+            authorIdentity.accessibilityElement(children: .combine)
+        }
+    }
+
+    private var authorIdentity: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            LivePresence { MeeshyAvatar(
+                name: displayAuthor,
+                context: .custom(34),
+                accentColor: displayAuthorColor,
+                avatarURL: displayAvatarURL,
+                presenceState: PresenceManager.shared.knownPresenceState(for: repostedReel?.authorId ?? post.authorId),
+                ring: repostedReel == nil ? post.authorRing : repostedReel?.authorRing
+            ) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(displayAuthor)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.white)
+                authorMetaLine
+            }
+            // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
+            // posée sur un conteneur, `.shadow` se répète sur chaque feuille,
+            // et chaque passe se recompose au-dessus de la vidéo qui joue.
+            // Les feuilles ne se chevauchent pas : le rendu est le même.
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
+        }
     }
 
     /// Username, then (AUTHOR ONLY) the reach analytics — impressions then views,
@@ -732,5 +749,18 @@ struct ReelFeedCard: View, Equatable {
         .accessibilityLabel(label)
         .accessibilityHint(hint ?? "")
         .accessibilityAddTraits(participated ? .isSelected : [])
+    }
+}
+
+/// **À qui revient un réel affiché** (#18690) : un réel republié sans média propre montre
+/// celui qu'il reprend — sa légende, son auteur. Une seule règle pour la carte et ses hôtes.
+enum ReelAuthorAttribution {
+    static func reposted(in post: FeedPost) -> RepostContent? {
+        guard post.media.isEmpty, let reposted = post.repost, !reposted.media.isEmpty else { return nil }
+        return reposted
+    }
+
+    static func authorId(of post: FeedPost) -> String {
+        reposted(in: post)?.authorId ?? post.authorId
     }
 }

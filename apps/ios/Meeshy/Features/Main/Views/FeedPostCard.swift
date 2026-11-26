@@ -776,9 +776,7 @@ struct FeedPostCard: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { tapped in
                         selectedProfileUser = nil
                         onTapPost?(tapped)
-                    }, onOpenReel: { reel, reels in
-                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
-                    }))
+                    }, leavingHost: { selectedProfileUser = nil }))
                 }, dependencies: .live
             )
             .closesForConversationOpening(.sheet)

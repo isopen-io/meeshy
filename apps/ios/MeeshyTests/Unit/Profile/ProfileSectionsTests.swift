@@ -417,7 +417,7 @@ final class ProfileSectionsTests: XCTestCase {
     func test_postsList_authorTap_isNeverAnInertButton_andTheFilterUsesAMotionToken() throws {
         let list = try code("Meeshy/Features/Profile/Views/ProfileUserPostsList.swift")
         XCTAssertFalse(list.contains("onTapAuthor: { _ in }"))
-        XCTAssertTrue(list.contains("onTapAuthor: { authorId in openAuthor(authorId, of: post) }"))
+        XCTAssertTrue(list.contains("onTapAuthor: ProfileAuthorTap.action(for: post, listedUserId: userId) { openProfile($0) }"))
         XCTAssertFalse(list.contains("withAnimation(.spring("))
     }
 

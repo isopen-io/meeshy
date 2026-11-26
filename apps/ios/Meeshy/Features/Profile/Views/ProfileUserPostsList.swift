@@ -353,8 +353,9 @@ struct ProfileUserPostsList: View {
             onBookmark: { id in Task { await viewModel.toggleBookmark(id) } },
             onShare: { id in Task { await share(id) } },
             // L'auteur d'un réel republié ouvre SA fiche à la place de celle-ci ;
-            // l'auteur de la liste n'ouvre rien, sa fiche est déjà là.
-            onTapAuthor: { authorId in openAuthor(authorId, of: post) },
+            // l'auteur de la liste n'est pas un bouton, sa fiche est déjà là (#18690).
+            onTapAuthor: ProfileAuthorTap.action(for: post, listedUserId: userId) { openProfile($0) },
+            onOpenViewer: { openViewer($0) },
             onEdit: isOwnPost ? { post in editingPost = post } : nil,
             onDelete: isOwnPost ? { id in Task { await viewModel.deletePost(id) } } : nil,
             onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
@@ -451,10 +452,14 @@ struct ProfileUserPostsList: View {
         }
     }
 
-    private func openAuthor(_ authorId: String, of post: FeedPost) {
-        guard let author = ProfileAuthorTap.profile(of: authorId, in: post, listedUserId: userId) else { return }
+    private func openViewer(_ viewer: StoryViewerItem) {
+        openProfile(ProfileSheetUser(userId: viewer.id, username: viewer.username,
+                                     displayName: viewer.displayName, avatarURL: viewer.avatarUrl))
+    }
+
+    private func openProfile(_ user: ProfileSheetUser) {
         let router = router
-        departure.leave(dismissing: dismissHost) { router.openProfileSheet(author) }
+        departure.leave(dismissing: dismissHost) { router.openProfileSheet(user) }
     }
 
     private func openPost(_ post: FeedPost) {

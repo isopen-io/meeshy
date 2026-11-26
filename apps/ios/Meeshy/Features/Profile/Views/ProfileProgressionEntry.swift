@@ -35,9 +35,9 @@ struct ProfileProgressionEntry: View {
                 }
             }
             .contentShape(Rectangle())
+            .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme, isInteractive: true)
         }
-        .buttonStyle(.plain)
-        .meeshyGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg), tone: .theme)
+        .buttonStyle(MeeshyGlassPressStyle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(ProfileLegendCopy.title)
         .accessibilityValue(ProfileLegendSummary.spokenValue(for: summary))

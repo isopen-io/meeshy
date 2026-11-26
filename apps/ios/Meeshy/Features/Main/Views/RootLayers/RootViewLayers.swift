@@ -334,9 +334,7 @@ struct RootSheetsLayer: ViewModifier {
                     postsContent: { uid in
                         AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                             router.push(.postDetail(post.id, post)) // la fiche part d'abord (#16676)
-                        }, onOpenReel: { reel, reels in
-                            ProfilePostsOpener.openReel(reel, in: reels) { router.deepLinkProfileUser = nil }
-                        }))
+                        }, leavingHost: { router.deepLinkProfileUser = nil }))
                     },
                     onCall: dialFromProfile, dependencies: .live
                 )

@@ -21,6 +21,8 @@ struct GlobalSearchView: View {
 
     // Profile sheet
     @State private var selectedProfileUser: ProfileSheetUser?
+    /// Le réel touché s'ouvre au DÉPART de la recherche, jamais après un délai (#18690).
+    @State private var departure = ProfileSheetDeparture()
 
     var body: some View {
         ZStack {
@@ -44,14 +46,13 @@ struct GlobalSearchView: View {
                     AnyView(ProfileUserPostsList(userId: uid, onOpenPost: { post in
                         selectedProfileUser = nil
                         router.push(.postDetail(post.id, post))
-                    }, onOpenReel: { reel, reels in
-                        ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil }
-                    }))
+                    }, leavingHost: { selectedProfileUser = nil }))
                 }, dependencies: .live
             )
         }
         .withStatusBubble()
         .closesForConversationOpening(.search)
+        .onDisappear { departure.sheetDidLeave() }
     }
 
     // MARK: - Header Bar
@@ -627,7 +628,10 @@ struct GlobalSearchView: View {
         switch result.kind {
         case .reel:
             let reels = viewModel.postResults.filter { $0.kind == .reel }.map(\.post)
-            ProfilePostsOpener.openReel(result.post, in: reels) { dismiss() }
+            departure.leave(dismissing: { dismiss() }) {
+                HapticFeedback.medium()
+                ReelsPresenter.shared.present(posts: reels, startId: result.post.id)
+            }
         case .story:
             dismiss()
             DeepLinkRouter.shared.pendingDeepLink = .storyDetail(postId: result.id)
