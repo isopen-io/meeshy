@@ -25,9 +25,15 @@
  *  5. les cotes du plateau sont celles d'iOS, NOMMÉES en bornes absolues
  *     (#6133) — jamais un rapport entre deux mesures de la même page.
  *
+ * Le tout dans les DEUX états du bandeau du haut (#9942, `lib/screen-top.mjs`) :
+ * « bannière » — la bannière du joueur PEINTE et le haut réservé qui la
+ * COUVRE, le couloir descendu d'autant — et « Jeu masqué » — bandeau vide,
+ * rien de réservé. Chaque relevé attend le bandeau ASSIS : pris avant le
+ * report de `--top-band`, il confondrait les deux états.
+ *
  * GARDES DE VACUITÉ — un témoin d'absence est vert sur une page vide : chaque
  * relevé exige deux disques posés à leur couloir, au moins un texte, un
- * contrôle et une tuile mesurés.
+ * contrôle et une tuile mesurés ; chaque état du bandeau, au moins un relevé.
  *
  * `CAPTURE_DIR=<dossier>` écrit les captures de recette de chaque état.
  */
@@ -37,6 +43,7 @@ import { join } from 'node:path';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { INSTANT } from './lib/instant.mjs';
+import { BANDEAUX, bandeauVerdict, poseBandeau, screenTop, topBandSettled } from './lib/screen-top.mjs';
 
 /** Les cotes d'iOS, nommées une fois. */
 const IOS = {
@@ -72,6 +79,15 @@ const constate = (ok, what) => {
   if (!ok) failures.push(what);
 };
 const bilan = { textes: 0, points: 0, controles: 0, tuiles: 0 };
+const relevesBandeau = new Map(BANDEAUX.map((b) => [b.nom, 0]));
+
+/** Le bandeau ASSIS, puis son verdict dans l'état joué. */
+const exigeBandeau = async (page, bandeau, tag) => {
+  await topBandSettled(page);
+  const mesure = await screenTop(page);
+  for (const echec of bandeauVerdict(bandeau, mesure)) failures.push(`${tag} : ${echec}`);
+  if (mesure !== null) relevesBandeau.set(bandeau.nom, (relevesBandeau.get(bandeau.nom) ?? 0) + 1);
+};
 
 /**
  * LE RELEVÉ, dans la page. `chrome` désigne les contrôles du chrome à mesurer
@@ -216,13 +232,15 @@ const defile = async (page, top) => {
 
 const attend = (page, fn) => page.waitForFunction(fn, undefined, { timeout: 3_000 }).then(() => true, () => false);
 
-for (const scheme of ['light', 'dark']) {
+for (const bandeau of BANDEAUX) for (const scheme of ['light', 'dark']) {
   for (const viewport of [
     { width: 390, height: 844 },
     { width: 320, height: 568 },
   ]) {
-    const gabarit = `${scheme} ${viewport.width}×${viewport.height}`;
+    const gabarit = `${bandeau.nom} ${scheme} ${viewport.width}×${viewport.height}`;
+    const fichier = `${bandeau.masque ? 'masked.' : ''}${scheme}.${viewport.width}x${viewport.height}`;
     const context = await browser.newContext({ viewport, colorScheme: scheme });
+    await poseBandeau(context, bandeau);
     const page = await context.newPage();
     await page.clock.setFixedTime(INSTANT);
 
@@ -230,6 +248,7 @@ for (const scheme of ['light', 'dark']) {
     await page.goto(`${BASE}/feed`, { waitUntil: 'load' });
     await page.waitForSelector('[data-feed-card]');
     await page.waitForSelector('.floating-disc');
+    await exigeBandeau(page, bandeau, `Flux ${gabarit}`);
     await page.waitForTimeout(300);
 
     const tagFlux = `Flux ${gabarit}`;
@@ -258,7 +277,7 @@ for (const scheme of ['light', 'dark']) {
       `${tagFlux} : l'anneau du grand plateau ne vaut pas ringSize (${IOS.storyTray + IOS.ringOutset}) — ${grandeFlux.anneau}`,
     );
     constate(grandeFlux.cellule === IOS.grandeCell, `${tagFlux} : la cellule du grand plateau ne vaut pas ${IOS.grandeCell} — ${grandeFlux.cellule}`);
-    await capture(page, `feed-rest.${scheme}.${viewport.width}x${viewport.height}`);
+    await capture(page, `feed-rest.${fichier}`);
 
     await defile(page, 600);
     const bandeVenue = await attend(page, () => {
@@ -279,7 +298,7 @@ for (const scheme of ['light', 'dark']) {
       pinnedFlux.anneauH !== null && pinnedFlux.fenteH !== null && pinnedFlux.anneauH <= pinnedFlux.fenteH,
       `${tagFlux} : la bande déborde de la fente du titre (${pinnedFlux.anneauH} > ${pinnedFlux.fenteH})`,
     );
-    await capture(page, `feed-scrolled.${scheme}.${viewport.width}x${viewport.height}`);
+    await capture(page, `feed-scrolled.${fichier}`);
 
     await defile(page, 0);
     const bandeRendue = await attend(page, () => {
@@ -292,6 +311,7 @@ for (const scheme of ['light', 'dark']) {
     await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
     await page.waitForSelector('[data-row]');
     await page.waitForSelector('.floating-disc');
+    await exigeBandeau(page, bandeau, `Liste ${gabarit}`);
     await page.waitForTimeout(300);
 
     const tagListe = `Liste ${gabarit}`;
@@ -302,7 +322,7 @@ for (const scheme of ['light', 'dark']) {
       grandeListe.avatar === grandeFlux.avatar && grandeListe.cellule === grandeFlux.cellule,
       `${tagListe} : le rail de la liste n'a pas la cote de celui du Flux (${JSON.stringify(grandeListe)} ≠ ${JSON.stringify(grandeFlux)})`,
     );
-    await capture(page, `list-rest.${scheme}.${viewport.width}x${viewport.height}`);
+    await capture(page, `list-rest.${fichier}`);
 
     await defile(page, 600);
     await attend(page, () => document.querySelector('header [data-rail="pinned"] [data-rail-tile]') !== null);
@@ -311,7 +331,7 @@ for (const scheme of ['light', 'dark']) {
       pinnedListe.avatar === pinnedFlux.avatar && pinnedListe.anneau === pinnedFlux.anneau,
       `${tagListe} : la bande de la liste n'a pas la cote de celle du Flux (${JSON.stringify(pinnedListe)} ≠ ${JSON.stringify(pinnedFlux)})`,
     );
-    await capture(page, `list-scrolled.${scheme}.${viewport.width}x${viewport.height}`);
+    await capture(page, `list-scrolled.${fichier}`);
 
     await context.close();
   }
@@ -320,6 +340,8 @@ for (const scheme of ['light', 'dark']) {
 await browser.close();
 served.close();
 
+for (const [nom, n] of relevesBandeau) constate(n > 0, `état « ${nom} » du bandeau : aucun relevé — l'état n'a pas été joué`);
+
 if (failures.length > 0) {
   console.error(`check-floating-clearance : ${failures.length} échec(s)`);
   for (const f of failures) console.error(`  ✗ ${f}`);
@@ -327,5 +349,5 @@ if (failures.length > 0) {
 }
 console.log(
   `check-floating-clearance : vert — ${bilan.textes} textes de carte (${bilan.points} points), ` +
-    `${bilan.controles} contrôles, ${bilan.tuiles} tuiles, 2 schémas × 2 gabarits, aucun disque au repos sur un texte ni un contrôle.`,
+    `${bilan.controles} contrôles, ${bilan.tuiles} tuiles, ${BANDEAUX.length} états du bandeau × 2 schémas × 2 gabarits, aucun disque au repos sur un texte ni un contrôle.`,
 );
