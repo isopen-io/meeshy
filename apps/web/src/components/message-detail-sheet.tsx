@@ -68,9 +68,8 @@ import { Sheet } from './sheet';
  * jamais sur son propre message (`reportOffered`) : il referme la feuille puis
  * ouvre la feuille des motifs.
  *
- * CE QUI RESTE FRANÇAIS ICI n'appartient pas à cette feuille : le bouton de
- * fermeture vient de `Sheet` (`aria-label="Fermer"`, en dur, partagé par
- * TOUTES les feuilles) — #7566 porte cet inventaire.
+ * Le bouton de fermeture vient de `Sheet`, qui le nomme depuis le catalogue
+ * (`common.close`) pour TOUTES les feuilles (#7566).
  */
 export function MessageDetailSheet({
   choices,

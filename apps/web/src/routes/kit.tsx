@@ -13,6 +13,8 @@ import {
   type MeeshyKitCatalogState,
   type MeeshyKitCatalogTile,
 } from '@/components/kit/meeshy-kit-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { navigate, useOptionalRoute } from '@/lib/router';
 import { applyScheme, currentScheme } from '@/lib/scheme';
 
@@ -156,7 +158,7 @@ function KitCatalogDetail({ entry, content }: { readonly entry: MeeshyKitCatalog
       <h1 data-kit-name={entry.name} className="text-screen font-bold text-ink">
         {accessibilityName(entry)}
       </h1>
-      <div role="group" aria-label="Réglages" className="flex flex-wrap gap-2">
+      <div role="group" aria-label={translate(currentInterfaceLanguage(), 'settings.title')} className="flex flex-wrap gap-2">
         <KitSetting name="dark" label="dark" checked={dark} onToggle={toggleDark} />
         <KitSetting name="rtl" label="rtl" checked={rtl} onToggle={toggleRtl} />
         <KitSetting name="large-font" label={`zoom ${LARGE_FONT_ZOOM}`} checked={largeFont} onToggle={toggleLargeFont} />

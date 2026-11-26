@@ -3,6 +3,7 @@ import { act, type ReactElement, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 
 import { kitCatalogEntry, kitCatalogState, type MeeshyKitCatalogEntry, type MeeshyKitCatalogState } from '@/components/kit/meeshy-kit-catalog';
+import { setInterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { KitCatalogScreen } from './kit';
@@ -183,6 +184,16 @@ describe('le catalogue, les réglages du détail', () => {
     expect(controls.map((control) => control.closest('label')?.textContent)).toEqual(['dark', 'rtl', 'zoom 2']);
     expect(controls.every((control) => control.type === 'checkbox' && control.getAttribute('role') === 'switch' && !control.checked)).toBe(true);
     expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Réglages');
+  });
+
+  test('le groupe des réglages se nomme dans la langue d’interface, pas en français', async () => {
+    await setInterfaceLanguage('en');
+    try {
+      const container = mount(<KitCatalogScreen composant="k02" entries={ENTRIES} content={content} />);
+      expect(container.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('Settings');
+    } finally {
+      await setInterfaceLanguage('fr');
+    }
   });
 
   test('le sombre pose le schéma sur le document et le rend en quittant le détail', () => {
