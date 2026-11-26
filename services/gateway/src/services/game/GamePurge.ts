@@ -11,6 +11,10 @@
  * conversation du calque par post. Une conversation, elle, ne se détruit que VIDE
  * (purge du monde refusée dès qu'elle porte un message, groupe d'appel jamais
  * annoncé) : aucun crédit n'y a été écrit, ses lignes n'ont donc pas de sort à part.
+ * Ses deux gardes de crédit partent avec elle : `EngagementConversationCredit` (quelles
+ * conversations ont crédité quel axe) et `EngagementSignatureCredit` (l'empreinte des
+ * ensembles de membres avec qui il a écrit, que des identifiants connus suffisent à
+ * reconnaître).
  *
  * Ce que la purge garantit au-delà de l'effacement (intégrité référentielle) :
  *  - un duo OUVERT est terminé proprement avant d'être effacé : le partenaire qui
@@ -64,6 +68,8 @@ export const GAME_PURGED_MODELS = [
   'gamePhotoMoment',
   'engagementActStreak',
   'conversationEngagement',
+  'engagementConversationCredit',
+  'engagementSignatureCredit',
 ] as const;
 
 /** Les modèles de jeu par compte qui ne se purgent PAS par `deleteMany({ userId })`, et la raison. */
@@ -212,6 +218,8 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
     prisma.gamePhotoMoment.deleteMany({ where }),
     prisma.engagementActStreak.deleteMany({ where }),
     prisma.conversationEngagement.deleteMany({ where }),
+    prisma.engagementConversationCredit.deleteMany({ where }),
+    prisma.engagementSignatureCredit.deleteMany({ where }),
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 

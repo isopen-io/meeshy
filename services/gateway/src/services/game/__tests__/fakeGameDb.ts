@@ -261,6 +261,8 @@ export type FakeGameDb = {
   readonly participant: Model;
   readonly message: Model;
   readonly conversationEngagement: Model;
+  readonly engagementConversationCredit: Model;
+  readonly engagementSignatureCredit: Model;
   readonly engagementPostPoints: Model;
   readonly gameProfile: Model;
   readonly leaguePseudonym: Model;
@@ -302,6 +304,8 @@ export function fakeGameDb(): FakeGameDb {
   const participant = new Model();
   const message = new Model();
   const conversationEngagement = flattenCompound(new Model({ uniques: [['userId', 'conversationId']] }));
+  const engagementConversationCredit = flattenCompound(new Model({ uniques: [['userId', 'axisKey', 'conversationId']] }));
+  const engagementSignatureCredit = flattenCompound(new Model({ uniques: [['userId', 'axisKey', 'signature']] }));
   const engagementPostPoints = flattenCompound(new Model({ uniques: [['userId', 'postId']] }));
   const gameProfile = flattenCompound(new Model({ uniques: [['userId']] }));
   const leaguePseudonym = flattenCompound(new Model({ uniques: [['userId'], ['pseudonymKey']] }));
@@ -353,6 +357,8 @@ export function fakeGameDb(): FakeGameDb {
     participant,
     message,
     conversationEngagement,
+    engagementConversationCredit,
+    engagementSignatureCredit,
     engagementPostPoints,
     gameProfile,
     leaguePseudonym,
