@@ -16,6 +16,7 @@ import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { evaluerLoiDesChamps, champsDeLaFamille } from './user-field-law';
 import { logError } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
+import { replyEmailDomainRefused } from '../../services/auth/email-domain-guard';
 import { refreshParticipantNameSnapshots, type AccountNameFields } from '../../services/participantNameSnapshots';
 import { evictFromAdminRooms, isAdminRank } from '../../socketio/evictFromAdminRooms';
 import { changedNameViolations, sendLengthFloorRefusal, sendZodRefusal } from '../../utils/identity-name-floor';
@@ -231,6 +232,7 @@ function rendreErreur(
     return;
   }
   if (replyIdentifierTaken(reply, error)) return;
+  if (replyEmailDomainRefused(reply, error)) return;
   logError(fastify.log, message, error);
   sendInternalError(reply, 'Internal server error', { message });
 }

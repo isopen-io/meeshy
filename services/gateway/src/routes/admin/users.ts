@@ -59,6 +59,7 @@ import { CONVERSATION_METADATA_SELECT, serveConversationMetadata } from './conve
 import { registerConversationSettingsSovereignRoutes } from './conversation-settings-sovereign';
 import { logError, logWarn } from '../../utils/logger.js';
 import { replyIdentifierTaken } from '../../services/admin/admin-identifier-taken';
+import { replyEmailDomainRefused } from '../../services/auth/email-domain-guard';
 import { sendZodRefusal } from '../../utils/identity-name-floor';
 import { forgetTeamCircles } from '../../services/relations/relationCaches';
 import { revokeTeamSharesOf } from '../../services/relations/teamShareGrant';
@@ -392,6 +393,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
       if (replyIdentifierTaken(reply, error)) return;
+      if (replyEmailDomainRefused(reply, error)) return;
 
       logError(fastify.log, 'Error creating user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });

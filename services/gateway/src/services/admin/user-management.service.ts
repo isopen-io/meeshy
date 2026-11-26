@@ -12,6 +12,7 @@ import { withdrawRitualSharesOfUser } from '../relations/ritualShareWithdrawal';
 import { hashPassword } from '../../utils/password-hash';
 import { normalizeEmail } from '../../utils/normalize';
 import { AdminIdentifierTakenError, rethrowIdentifierTaken } from './admin-identifier-taken';
+import { assertEmailDomainAllowed } from '../auth/email-domain-guard';
 import { logger, logWarn } from '../../utils/logger';
 import { recipientLanguage } from '../../utils/recipient-language';
 import { searchTokensFor } from '../../utils/search-tokens';
@@ -253,6 +254,7 @@ export class UserManagementService {
     // porte publique, sans que rien ne le signale. Le facteur vit désormais dans
     // `utils/password-hash`, et il n'y a plus de site où le retaper.
     const email = normalizeEmail(data.email);
+    assertEmailDomainAllowed(email);
     await this.assertEmailAvailable(email);
     await this.assertUsernameAvailable(data.username);
 
@@ -322,6 +324,7 @@ export class UserManagementService {
 
     const email = data.email === undefined ? undefined : normalizeEmail(data.email);
     const emailChanges = email !== undefined && await this.emailDiffersFromCurrent(userId, email);
+    if (email !== undefined && emailChanges) assertEmailDomainAllowed(email);
     const phoneChanges = data.phoneNumber !== undefined && await this.phoneDiffersFromCurrent(userId, data.phoneNumber);
     if (email !== undefined) await this.assertEmailAvailable(email, userId);
     if (data.username !== undefined) await this.assertUsernameAvailable(data.username, userId);
