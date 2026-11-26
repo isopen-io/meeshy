@@ -27,6 +27,7 @@ import { currentThemePreference, setThemePreference, type ThemePreference } from
 import { href, navigate } from '@/routes/route-table';
 import { AccountSwitcherSheet, SwitchAccountButton } from '@/routes/settings-accounts';
 import { CircleNotifySection } from '@/routes/settings-circle-notify';
+import { PublisherPageSection } from '@/routes/settings-publisher-page';
 import {
   AboutSection,
   AccountSection,
@@ -286,6 +287,14 @@ function SettingsHome() {
           />
           <DataSection language={language} deviceTranslation={deviceTranslation} />
           <PacksSection language={language} />
+          <PublisherPageSection
+            language={language}
+            enabled={enabled}
+            online={online}
+            onOutcome={(outcome) => {
+              if (outcome.status !== 'saved') setNotice(translate(language, notices[outcome.status]));
+            }}
+          />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           {sessionUser === null ? null : <SwitchAccountButton language={language} onPress={() => setSwitchingAccount(true)} />}
