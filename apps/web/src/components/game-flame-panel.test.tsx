@@ -293,10 +293,15 @@ describe('l’objectif de Flamme (#20521)', () => {
     expect(closed).toEqual([7]);
   });
 
-  test('le signe déjà fermé ne se redit pas', () => {
-    const html = renderToStaticMarkup(<GameFlamePanel {...props(reached, { goalSignSeen: true })} />);
-    expect(html).not.toContain('data-game-flame-goal-sign');
-    expect(html).not.toContain('data-game-flame-goal="');
+  test('le signe déjà fermé, ou déjà dit par Mee et Meo, ne se redit pas ; la marche suivante reste à portée', async () => {
+    const chosen: number[] = [];
+    const host = await mount(<GameFlamePanel {...props(reached, { goalSignSeen: true, onChooseGoal: (target) => chosen.push(target) })} />);
+    expect(host.querySelector('[data-game-flame-goal-sign]')).toBeNull();
+    expect(host.querySelector('[data-game-flame-goal-later]')).toBeNull();
+    expect(host.textContent).not.toContain('Tes aïeux saluent');
+    expect(host.textContent).toContain('Objectif de 7 jours tenu.');
+    await click(host.querySelector('[data-game-flame-goal="14"]'));
+    expect(chosen).toEqual([14]);
   });
 
   test('une Flamme cassée fait tomber l’objectif sans le dire comme un échec', () => {

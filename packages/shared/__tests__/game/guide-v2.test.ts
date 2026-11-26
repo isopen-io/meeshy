@@ -11,8 +11,10 @@ import {
   GUIDE_MOMENT_PRIORITY_ALL,
   chooseGuideMomentAny,
   guideMomentV2,
+  guideSeenKeyV2,
   type GuideEventV2,
 } from '../../utils/game/guide-v2.js';
+import { flameGoalNextSeenKey } from '../../utils/game/flame-goal.js';
 import { GUIDE_ACTIONS, GUIDE_MOMENT_KEYS, GUIDE_MOMENT_PRIORITY } from '../../utils/game/guide.js';
 import { FLAME_FREEZE_GIFT_SEEN_KEY } from '../../utils/game/flame.js';
 import { photoMomentId, photoMomentOfGuideEvent } from '../../utils/game/photo-moments.js';
@@ -28,10 +30,11 @@ const events: readonly GuideEventV2[] = [
   { kind: 'atlas-stamp', language: 'ja', stamped: 4, total: 89 },
   { kind: 'flame-freeze-gift', freezes: 1 },
   { kind: 'offering-kept', easedDays: 3 },
+  { kind: 'flame-goal-reached', target: 7, next: 14 },
 ];
 
 describe('les moments de la vague 2', () => {
-  it('couvrent les dix moments de la conception, sans toucher aux douze premiers', () => {
+  it('couvrent les onze moments de la conception, sans toucher aux douze premiers', () => {
     expect([...GUIDE_MOMENT_KEYS_V2].sort()).toEqual(events.map((e) => e.kind).sort());
     expect(GUIDE_MOMENT_KEYS).toHaveLength(12);
     expect(GUIDE_MOMENT_KEYS_V2.some((key) => (GUIDE_MOMENT_KEYS as readonly string[]).includes(key))).toBe(false);
@@ -181,5 +184,49 @@ describe('le moment « Les aïeux t\'ont gardé ton Offrande » (#20327, #17373)
 
   it('ne se photographie pas', () => {
     expect(photoMomentOfGuideEvent(kept)).toBeNull();
+  });
+});
+
+describe('le moment « Tes aïeux saluent ta Flamme » (#20546, #20548)', () => {
+  const reached: GuideEventV2 = { kind: 'flame-goal-reached', target: 7, next: 14 };
+
+  it('fait parler Mee et Meo ensemble, fiers, et mène à la Flamme où la marche suivante se choisit', () => {
+    expect(guideMomentV2(reached, [])).toEqual({
+      key: 'flame-goal-reached',
+      speaker: 'duo',
+      mood: 'proud',
+      data: { target: 7, next: 14 },
+      action: 'see-flame',
+      presentation: 'full',
+    });
+  });
+
+  it('se dit « vu » par la clé de l\'objectif atteint, celle que la carte de la Flamme lit aussi', () => {
+    expect(guideSeenKeyV2(reached)).toBe(flameGoalNextSeenKey(7));
+    expect(guideSeenKeyV2({ kind: 'flame-goal-reached', target: 30, next: 100 })).toBe('flame-goal-next-30');
+    expect(guideMomentV2(reached, [flameGoalNextSeenKey(7)]).presentation).toBe('short');
+    expect(guideMomentV2(reached, ['flame-goal-reached']).presentation).toBe('full');
+  });
+
+  it('garde la clé de chaque autre moment : son genre', () => {
+    for (const event of events.filter((e) => e.kind !== 'flame-goal-reached')) expect(guideSeenKeyV2(event)).toBe(event.kind);
+    expect(guideSeenKeyV2({ kind: 'flame-at-risk', days: 3 })).toBe('flame-at-risk');
+  });
+
+  it('passe après la Veilleuse offerte, avant une montée de ligue', () => {
+    const rank = (key: string): number => (GUIDE_MOMENT_PRIORITY_ALL as readonly string[]).indexOf(key);
+    expect(rank('flame-goal-reached')).toBe(rank('flame-freeze-gift') + 1);
+    expect(rank('flame-goal-reached')).toBeLessThan(rank('league-promoted'));
+  });
+
+  it('un objectif déjà salué cède la place à un moment inédit, et se redit en court s\'il est seul', () => {
+    const stamp: GuideEventV2 = { kind: 'atlas-stamp', language: 'ja', stamped: 1, total: 89 };
+    expect(chooseGuideMomentAny([stamp, reached], [])?.key).toBe('flame-goal-reached');
+    expect(chooseGuideMomentAny([stamp, reached], [flameGoalNextSeenKey(7)])?.key).toBe('atlas-stamp');
+    expect(chooseGuideMomentAny([reached], [flameGoalNextSeenKey(7)])?.presentation).toBe('short');
+  });
+
+  it('ne se photographie pas : la Flamme a ses propres formes', () => {
+    expect(photoMomentOfGuideEvent(reached)).toBeNull();
   });
 });

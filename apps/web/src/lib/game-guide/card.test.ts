@@ -9,6 +9,8 @@ import {
   type GuideSpeaker,
 } from '@meeshy/shared/utils/game/guide';
 
+import { guideMomentV2 } from '@meeshy/shared/utils/game/guide-v2';
+
 import { GAME_BIRD_KEYS } from '@/lib/game/birds';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
@@ -153,5 +155,15 @@ describe('une étape qui attend son geste', () => {
     expect(cardOfStep(stepOf('levels')).awaiting).toBe(false);
     expect(cardOfStep(stepOf('missions')).awaiting).toBe(false);
     expect(cardOfStep(stepOf('levels'), view({})).awaiting).toBe(false);
+  });
+});
+
+describe('la carte de l’objectif de Flamme atteint (#20548)', () => {
+  test('se marque vue par la clé de l’objectif, celle que la carte de la Flamme lit, et ne se photographie pas', () => {
+    const card = cardOfMoment(guideMomentV2({ kind: 'flame-goal-reached', target: 14, next: 30 }, []));
+    expect(card.key).toBe('flame-goal-next-14');
+    expect(card.speaker).toBe('duo');
+    expect(card.action).toBe('see-flame');
+    expect(card.photo).toBe(false);
   });
 });
