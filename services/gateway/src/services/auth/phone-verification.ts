@@ -12,6 +12,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 import { generateNumericCode } from '../../utils/verification-code';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { redactPhoneForLog } from '../../utils/log-redaction';
 import { smsService } from '../SmsService';
 import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
 
@@ -42,7 +43,7 @@ export async function sendPhoneVerificationCode(
 
     if (!user) {
       // Don't reveal if phone exists - but we need a user for verification
-      logger.warn(`[AUTH_SERVICE] ⚠️ Numéro non trouvé cleanPhone=${cleanPhone}`);
+      logger.warn(`[AUTH_SERVICE] ⚠️ Numéro non trouvé ${redactPhoneForLog(cleanPhone)}`);
       return { success: false, error: 'Numéro de téléphone non associé à un compte.' };
     }
 
@@ -135,7 +136,7 @@ export async function verifyPhoneCode(
       }
     });
 
-    logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié pour user.phoneNumber=${user.phoneNumber}`);
+    logger.info(`[AUTH_SERVICE] ✅ Téléphone vérifié userId=${user.id}`);
     creditContactProof({ prisma, engagement: options.engagement }, user.id, 'profile.phone_verified');
     // `verifiedUserId` n'est posé que sur une vérification NEUVE : c'est elle, et
     // elle seule, qui peut annoncer une arrivée aux carnets (#8105).

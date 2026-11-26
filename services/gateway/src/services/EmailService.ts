@@ -13,6 +13,7 @@
 import crypto from 'crypto';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { redactEmailForLog } from '../utils/log-redaction';
 import {
   getAccountDeletionConfirmTranslations,
   getAccountDeletionReminderTranslations,
@@ -39,7 +40,6 @@ import { claimWarningFor } from './email/claim-warning';
 import { emailMayLeave, registeredEmailRecipientLookup, type RecipientAddressLookup } from './email/recipient-policy';
 import { invitationOptOutParts } from './email/invitationOptOut';
 
-// Logger dédié pour EmailService
 const logger = enhancedLogger.child({ module: 'EmailService' });
 
 /**
@@ -364,7 +364,7 @@ export class EmailService {
     const { to } = data;
 
     if (this.providers.length === 0) {
-      logger.warn(`[EmailService] ❌ No providers configured - email not sent to to=${to}`);
+      logger.warn(`[EmailService] ❌ No providers configured - email not sent to ${redactEmailForLog(to)}`);
       return { success: false, error: 'No email providers configured' };
     }
 
@@ -382,7 +382,7 @@ export class EmailService {
         }
         if (result.success) {
           logger.info(`[EmailService] ✅ Email sent successfully via ${provider.name}`);
-          logger.info(`[EmailService] ✅ Recipient: ${to}`);
+          logger.info(`[EmailService] ✅ Recipient: ${redactEmailForLog(to)}`);
           logger.info(`[EmailService] ✅ Message ID: ${result.messageId || 'N/A'}`);
           return { ...result, provider: provider.name };
         }
@@ -397,7 +397,7 @@ export class EmailService {
         errors.push(`${provider.name}: ${errorMsg}`);
       }
     }
-    logger.error('[EmailService] ❌ All providers failed for', to);
+    logger.error('[EmailService] ❌ All providers failed for', redactEmailForLog(to));
     logger.error('[EmailService] ❌ Errors', errors.join(' | '));
     return { success: false, error: `All providers failed: ${errors.join('; ')}` };
   }
