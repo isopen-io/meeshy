@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-o90to9` |
+| Branche de travail de la session courante | `claude/practical-fermat-h4rohp` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -59,7 +59,7 @@ normal.
 | **92w** | 2026-11-22 | `claude/practical-fermat-xtlc3p` | [#20325](https://github.com/isopen-io/meeshy/pull/20325) → `dev` | ✅ mergé |
 | **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ✅ mergé |
 | **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
-| **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ⏳ ouverte |
+| **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
 
 **95w** — a11y / i18n / maintenabilité (**FIN du filon #20326**, suite de 92w→94w) :
 les DEUX derniers segments à PLURIEL de `composeMessageLabel`
