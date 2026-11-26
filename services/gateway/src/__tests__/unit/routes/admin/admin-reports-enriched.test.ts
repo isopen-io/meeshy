@@ -81,6 +81,8 @@ const report = (over: Row = {}): Row => ({
 
 const inIds = (where: Row | undefined): string[] => ((where?.id as { in?: string[] } | undefined)?.in ?? []);
 const pick = <T extends { id: string }>(rows: T[], where: Row | undefined): T[] => rows.filter((r) => inIds(where).includes(r.id));
+const selected = (rows: Row[], select: Row | undefined): Row[] =>
+  select ? rows.map((row) => Object.fromEntries(Object.keys(select).filter((key) => key in row).map((key) => [key, row[key]]))) : rows;
 
 const messageRow = (over: Row = {}): Row => ({
   id: MESSAGE,
@@ -113,8 +115,8 @@ function makePrisma(over: { messages?: Row[]; posts?: Row[]; conversations?: Row
     },
     message: { findMany: jest.fn<any>(async (args: { where?: Row }) => pick(messages as any[], args.where)) },
     conversation: {
-      findMany: jest.fn<any>(async (args: { where?: Row }) =>
-        pick(conversations as any[], args.where)
+      findMany: jest.fn<any>(async (args: { where?: Row; select?: Row }) =>
+        selected(pick(conversations as any[], args.where), args.select)
       ),
     },
     community: {

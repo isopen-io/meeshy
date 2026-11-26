@@ -51,10 +51,11 @@ import {
   toAdminPerson,
   type AdminPersonRef,
 } from './oversight-people';
+import { OPEN_REPORT_STATUSES } from '../../services/reports/priorityQueue';
 
 const EXCERPT_LENGTH = 120;
 const POST_KINDS: ReadonlySet<string> = new Set(['post', 'story', 'reel', 'status']);
-const OPEN_REPORT_STATUSES: ReadonlySet<string> = new Set(['pending', 'under_review']);
+const OPEN_STATUSES: ReadonlySet<string> = new Set(OPEN_REPORT_STATUSES);
 const RESTRICTED_AUDIENCES: ReadonlySet<string> = new Set(['PRIVATE', 'ONLY', 'EXCEPT', 'CLOSE', 'BLOOD']);
 
 export type ReportedEntity = {
@@ -344,7 +345,7 @@ export async function enrichReports<Row extends RawReport>(
 
   const resolvedByReport = reports.map((report) =>
     report.reportedType && report.reportedEntityId
-      ? resolve(report.reportedType, report.reportedEntityId, OPEN_REPORT_STATUSES.has(report.status ?? ''))
+      ? resolve(report.reportedType, report.reportedEntityId, OPEN_STATUSES.has(report.status ?? ''))
       : null
   );
 
