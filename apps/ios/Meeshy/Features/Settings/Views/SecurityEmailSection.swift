@@ -21,6 +21,7 @@ struct SecurityEmailSection: View {
     @State private var emailError: String?
     @State private var resendCooldown = 0
     @State private var resendTimer: Timer?
+    @StateObject private var confirmation = EmailChangeConfirmation()
 
     private let accentColor = "6366F1"
 
@@ -204,6 +205,8 @@ struct SecurityEmailSection: View {
             EmailSpamFolderHint()
                 .padding(.horizontal, MeeshySpacing.mdPlus)
 
+            linkConfirmationRow
+
             Button {
                 HapticFeedback.light()
                 resendEmailVerification()
@@ -219,7 +222,67 @@ struct SecurityEmailSection: View {
         }
     }
 
+    /// Le lien reçu sur la nouvelle adresse, collé ici, termine le changement
+    /// sans quitter l'application (#4362).
+    private var linkConfirmationRow: some View {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            Text(String(localized: "settings.security.email.paste_hint", defaultValue: "Copiez le lien de l'e-mail reçu sur la nouvelle adresse et collez-le ici pour terminer.", bundle: .main))
+                .font(.caption)
+                .foregroundStyle(theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: MeeshySpacing.smPlus) {
+                TextField(String(localized: "settings.security.email.paste_link", defaultValue: "Coller le lien reçu", bundle: .main), text: $confirmation.pastedLink)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .textContentType(.URL)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
+                    .submitLabel(.done)
+                    .onSubmit(confirmEmailChange)
+                    .accessibilityIdentifier("settings.security.email.pasteLink")
+
+                Button(action: confirmEmailChange) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
+                        if confirmation.isConfirming {
+                            ProgressView().scaleEffect(0.7).tint(.white)
+                        }
+                        Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
+                            .font(.footnote.weight(.bold))
+                    }
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.sm)
+                    .background(Capsule().fill(MeeshyColors.indigo500.opacity(confirmation.canConfirm ? 1 : 0.4)))
+                }
+                .disabled(!confirmation.canConfirm)
+                .accessibilityIdentifier("settings.security.email.confirmLink")
+            }
+
+            if let error = confirmation.error {
+                Text(error)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MeeshyColors.error)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+    }
+
     // MARK: - Actions
+
+    private func confirmEmailChange() {
+        Task {
+            guard await confirmation.confirm() else { return }
+            resendTimer?.invalidate()
+            resendTimer = nil
+            resendCooldown = 0
+            animate {
+                emailSent = false
+                newEmail = ""
+            }
+        }
+    }
 
     /// Un changement d'étape se fond ; sous « Réduire les animations », un
     /// fondu court remplace le ressort.

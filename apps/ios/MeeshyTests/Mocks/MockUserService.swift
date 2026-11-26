@@ -83,6 +83,7 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
     var changeEmailCallCount = 0
     var verifyEmailChangeCallCount = 0
+    var lastVerifyEmailChangeToken: String?
     var resendEmailChangeVerificationCallCount = 0
     var changePhoneCallCount = 0
     var verifyPhoneChangeCallCount = 0
@@ -176,6 +177,7 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
     func verifyEmailChange(_ request: VerifyEmailChangeRequest) async throws -> VerifyEmailChangeResponse {
         verifyEmailChangeCallCount += 1
+        lastVerifyEmailChangeToken = request.token
         return try verifyEmailChangeResult.get()
     }
 
@@ -250,6 +252,7 @@ final class MockUserService: UserServiceProviding, @unchecked Sendable {
 
         verifyEmailChangeResult = .success(stubVerifyEmailChangeResponse)
         verifyEmailChangeCallCount = 0
+        lastVerifyEmailChangeToken = nil
 
         resendEmailChangeVerificationResult = .success(stubChangeEmailResponse)
         resendEmailChangeVerificationCallCount = 0
