@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Let it rest · %1$s</string>
     <string name="game_flame_panel_pause_days">Rest length</string>
     <string name="game_flame_panel_pause_intro">Need a break? Your Flame waits up to %1$s, once a quarter.</string>
+    <string name="game_flame_panel_pause_next">Your Flame can rest again from %1$s.</string>
     <string name="game_flame_panel_paused">Your Flame is resting until %1$s.</string>
     <string name="game_flame_panel_paused_soon">Your Flame starts resting tomorrow, until %1$s.</string>
     <string name="game_flame_panel_relight">Relight the Flame · %1$s</string>

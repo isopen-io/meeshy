@@ -53,6 +53,10 @@ public object GameCopyLaws {
         GameTextArg.Verbatim(dayLabel),
     )
 
+    /** Le trimestre pris : « Ta prochaine veille sera possible dès le 1 janvier. », [dayLabel] sans jour de semaine. */
+    public fun flamePauseNext(dayLabel: String): GameText =
+        GameText.of(GameTextKey.FlamePauseNext, GameTextArg.Verbatim(dayLabel))
+
     /** Le refus d'une veille dit sa raison ; une raison inconnue ou absente rend `null` (la phrase générale du refus). */
     public fun flamePauseRefusal(reason: String?): GameText? = when (FlamePauseRefusal.fromWire(reason)) {
         FlamePauseRefusal.QuarterlyLimit -> GameText(GameTextKey.FlamePauseQuarterlyLimit)

@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">دعه يستريح · %1$s</string>
     <string name="game_flame_panel_pause_days">مدة الاستراحة</string>
     <string name="game_flame_panel_pause_intro">استراحة؟ ينتظرك لهبك حتى %1$s، مرة واحدة كل ثلاثة أشهر.</string>
+    <string name="game_flame_panel_pause_next">يستطيع لهبك أن يستريح من جديد ابتداءً من %1$s.</string>
     <string name="game_flame_panel_paused">يستريح لهبك حتى %1$s.</string>
     <string name="game_flame_panel_paused_soon">يبدأ لهبك استراحته غدًا، حتى %1$s.</string>
     <string name="game_flame_panel_relight">أعد إشعال اللهب · %1$s</string>

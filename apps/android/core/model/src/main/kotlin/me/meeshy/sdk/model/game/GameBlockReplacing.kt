@@ -194,6 +194,7 @@ public fun GameFlame.replacing(
     effortRelight: Put<GameEffortRelight?>? = null,
     pause: Put<GameFlamePause?>? = null,
     goal: Put<GameServedFlameGoal?>? = null,
+    nextPauseFrom: Put<String?>? = null,
 ): GameFlame = GameFlame(
     days = days ?: this.days,
     form = if (form != null) form.value else this.form,
@@ -208,6 +209,7 @@ public fun GameFlame.replacing(
     effortRelight = if (effortRelight != null) effortRelight.value else this.effortRelight,
     pause = if (pause != null) pause.value else this.pause,
     goal = if (goal != null) goal.value else this.goal,
+    nextPauseFrom = if (nextPauseFrom != null) nextPauseFrom.value else this.nextPauseFrom,
 )
 
 public fun GameBoosts.replacing(tailwind: Double? = null): GameBoosts =
