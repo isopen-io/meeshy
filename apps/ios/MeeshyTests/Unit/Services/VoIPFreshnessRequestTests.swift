@@ -52,4 +52,23 @@ final class VoIPFreshnessRequestTests: XCTestCase {
         let request = try XCTUnwrap(makeRequest())
         XCTAssertEqual(request.url?.absoluteString, "https://gate.meeshy.me/api/v1/calls/65f0c0ffee0000000000abcd")
     }
+
+    func test_leReveilVoIP_passeLIdentiteDeLAppAuConstructeur() throws {
+        let path = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Call/Services/CallCollaborators/CallIncomingRing.swift")
+        let code = AppSourceGuard.stripComments(try String(contentsOf: path, encoding: .utf8))
+        let call = try XCTUnwrap(code.range(of: "VoIPFreshnessRequest.make("), "La vérification ne passe plus par le constructeur")
+        let tail = code[call.upperBound...]
+        let closing = try XCTUnwrap(tail.range(of: ") else {"))
+        let arguments = tail[..<closing.lowerBound]
+        XCTAssertTrue(
+            arguments.contains("clientHeaders: await ClientInfoProvider.shared.buildHeaders()"),
+            "La requête de fraîcheur doit porter l'identité de l'app"
+        )
+        XCTAssertFalse(code.contains("URLRequest(url"), "Une requête écrite à la main contourne l'identité cliente")
+    }
 }
