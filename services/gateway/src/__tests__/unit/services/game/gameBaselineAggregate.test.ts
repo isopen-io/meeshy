@@ -1,5 +1,7 @@
 import { describe, it, expect } from '@jest/globals';
 import {
+  countAliveLongFlames,
+  summarizeDailyGameCounters,
   summarizeRollingRetention,
   signupWeekOf,
   type SignupActivityRow,
@@ -75,5 +77,79 @@ describe('summarizeRollingRetention', () => {
 
   it('rend une liste vide sans compte', () => {
     expect(summarizeRollingRetention({ rows: [], now })).toEqual([]);
+  });
+});
+
+describe('summarizeDailyGameCounters', () => {
+  const now = at('2026-11-26T15:00:00Z');
+
+  it('rend un jour UTC par entrée, du plus ancien à aujourd’hui, zéros compris', () => {
+    const daily = summarizeDailyGameCounters({ offeringsOpenedAt: [], ledger: [], days: 3, now });
+
+    expect(daily).toEqual([
+      { day: '2026-11-24', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
+      { day: '2026-11-25', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
+      { day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
+    ]);
+  });
+
+  it('compte les Offrandes ouvertes et les Meeshes frappées et dépensées en unités, par jour UTC', () => {
+    const daily = summarizeDailyGameCounters({
+      offeringsOpenedAt: [at('2026-11-25T23:59:00Z'), at('2026-11-26T00:01:00Z'), at('2026-11-26T09:00:00Z')],
+      ledger: [
+        { reason: 'mint', delta: 1, createdAt: at('2026-11-25T08:00:00Z') },
+        { reason: 'mint', delta: 2, createdAt: at('2026-11-25T09:00:00Z') },
+        { reason: 'spend', delta: -3, createdAt: at('2026-11-26T10:00:00Z') },
+        { reason: 'transfer_in', delta: 5, createdAt: at('2026-11-26T10:00:00Z') },
+      ],
+      days: 2,
+      now,
+    });
+
+    expect(daily).toEqual([
+      { day: '2026-11-25', offeringsOpened: 1, meeshesMinted: 3, meeshesSpent: 0 },
+      { day: '2026-11-26', offeringsOpened: 2, meeshesMinted: 0, meeshesSpent: 3 },
+    ]);
+  });
+
+  it('ignore ce qui tombe hors de la fenêtre', () => {
+    const daily = summarizeDailyGameCounters({
+      offeringsOpenedAt: [at('2026-11-20T12:00:00Z')],
+      ledger: [{ reason: 'mint', delta: 1, createdAt: at('2026-11-20T12:00:00Z') }],
+      days: 1,
+      now,
+    });
+
+    expect(daily).toEqual([{ day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 }]);
+  });
+});
+
+describe('countAliveLongFlames', () => {
+  const now = at('2026-11-26T15:00:00Z');
+  const flame = (streak: number, lastDay: string, freezes = 0) => ({
+    currentStreakDays: streak,
+    lastStreakDate: at(`${lastDay}T00:00:00Z`),
+    timezone: null,
+    flameFreezes: freezes,
+  });
+
+  it('compte une Flamme de sept jours ou plus allumée, à risque ou couverte par ses Veilleuses', () => {
+    const alive = countAliveLongFlames({
+      rows: [flame(7, '2026-11-26'), flame(12, '2026-11-25'), flame(30, '2026-11-23', 2)],
+      now,
+      minDays: 7,
+    });
+
+    expect(alive).toBe(3);
+  });
+
+  it('ne compte ni une Flamme éteinte ni une Flamme de moins de sept jours', () => {
+    const alive = countAliveLongFlames({
+      rows: [flame(20, '2026-11-20'), flame(6, '2026-11-26'), flame(9, '2026-11-23', 1)],
+      now,
+      minDays: 7,
+    });
+
+    expect(alive).toBe(0);
   });
 });

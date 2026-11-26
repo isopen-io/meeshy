@@ -15,6 +15,7 @@ import {
   type PlaybackQoeSummary,
 } from '@meeshy/shared/types/playback-qoe';
 import { requirePermission } from '../../middleware/authorize';
+import { registerGameBaselineRoute } from './analytics-game';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 
 const CACHE_TTL = {
@@ -523,4 +524,6 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       return sendInternalError(reply, 'Erreur lors de la récupération de la qualité de lecture');
     }
   });
+
+  registerGameBaselineRoute(fastify, requireAnalyticsPermission);
 }
