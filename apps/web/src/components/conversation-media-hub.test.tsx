@@ -16,6 +16,7 @@ import type { MessagesPage } from '@/lib/api/messages-pages';
 import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { MediaHubKind } from '@/lib/view/media-hub';
+import { ThreadMediaContext, type ThreadMediaContextValue } from '@/lib/view/thread-media-context';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -119,6 +120,7 @@ const mountHub = (options: {
   readonly client?: QueryClient;
   readonly onJump?: (messageId: string) => void;
   readonly canJumpTo?: (messageId: string) => boolean;
+  readonly imagerOf?: ThreadMediaContextValue['imagerOf'];
 }) => {
   const { deps, calls } = transportOf(options.replies);
   const client = options.client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -128,15 +130,17 @@ const mountHub = (options: {
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
-        <ConversationMediaHub
-          conversationId="c1"
-          viewerId="u-moi"
-          accent="#6366f1"
-          deps={deps}
-          onClose={() => {}}
-          {...(options.onJump === undefined ? {} : { onJumpToMessage: options.onJump })}
-          {...(options.canJumpTo === undefined ? {} : { canJumpTo: options.canJumpTo })}
-        />
+        <ThreadMediaContext.Provider value={options.imagerOf === undefined ? null : { viewerId: 'u-moi', onReplyToMedia: () => {}, imagerOf: options.imagerOf }}>
+          <ConversationMediaHub
+            conversationId="c1"
+            viewerId="u-moi"
+            accent="#6366f1"
+            deps={deps}
+            onClose={() => {}}
+            {...(options.onJump === undefined ? {} : { onJumpToMessage: options.onJump })}
+            {...(options.canJumpTo === undefined ? {} : { canJumpTo: options.canJumpTo })}
+          />
+        </ThreadMediaContext.Provider>
       </QueryClientProvider>,
     );
   });
@@ -360,6 +364,51 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     await settle(60);
     expect($('[data-viewer-action]')).toBeNull();
     expect($('[data-viewer-menu-button]')).toBeNull();
+  });
+});
+
+/**
+ * #16333 — LA BAGUETTE DU RAIL IMAGE LE MESSAGE REGARDÉ, depuis l'écran des
+ * médias comme depuis le fil : l'hôte prête `imagerOf` (le fil, par
+ * `ThreadMediaContext`). Sans fil, ou pour une pièce protégée, pas de baguette.
+ */
+describe('la baguette Imager de la visionneuse ouverte depuis l’écran (#16333)', () => {
+  const openFirst = async (messages: readonly unknown[], imagerOf?: ThreadMediaContextValue['imagerOf']) => {
+    mountHub({ replies: { [pathOf('visual')]: page(messages) }, ...(imagerOf === undefined ? {} : { imagerOf }) });
+    await until(() => $$('[data-media-hub-tile]').length === messages.length);
+    click($$('[data-media-hub-tile]')[0] ?? null);
+    await until(() => $('[data-media-viewer]') !== null);
+  };
+  afterEach(() => appQueryClient.clear());
+
+  test('la baguette image le message porteur et referme la visionneuse', async () => {
+    const imaged: string[] = [];
+    await openFirst([photoMessage('m2'), photoMessage('m1')], (message) => () => imaged.push(message.id));
+    await until(() => $('[data-viewer-action="imager"]') !== null);
+    click($('[data-viewer-action="imager"]'));
+    expect(imaged).toEqual(['m2']);
+    await until(() => $('[data-media-viewer]') === null);
+    expect($('[data-media-viewer]')).toBeNull();
+  });
+
+  test('hors du fil, aucune baguette', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="compose"]') !== null);
+    expect($('[data-viewer-action="imager"]')).toBeNull();
+  });
+
+  test('un message que le fil ne sait pas imager n’a pas de baguette', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')], () => null);
+    await until(() => $('[data-viewer-action="compose"]') !== null);
+    expect($('[data-viewer-action="imager"]')).toBeNull();
+  });
+
+  test('une pièce floutée n’a pas de baguette, même si le fil saurait imager son message', async () => {
+    const [piece] = photoMessage('m1').attachments as readonly Record<string, unknown>[];
+    await openFirst([wireMessage('m1', { attachments: [{ ...piece, isBlurred: true }] })], () => () => {});
+    await settle(60);
+    expect($('[data-viewer-action="imager"]')).toBeNull();
+    expect($('[data-viewer-menu-item="imager"]')).toBeNull();
   });
 });
 

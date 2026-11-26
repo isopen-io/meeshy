@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useContext, useMemo } from 'react';
 
 import { CaptureShieldOver } from '@/lib/capture/use-capture-shield';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -10,6 +10,8 @@ import { mediaHubViewerOf, type MediaHubItem } from '@/lib/view/media-hub';
 import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
+import { quotedIsProtected } from '@/lib/view/quoted-protection';
+import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 
 import { revealedAttachment } from './view-once-opened';
 
@@ -34,6 +36,11 @@ const MediaViewer = lazy(() => import('./media-viewer'));
  * révélée). Pas « Répondre » : l'écran ne tient pas le composeur du fil
  * (iOS `MediaHubGalleryCover` non plus) — loi 4, un contrôle existe s'il a un
  * effet. Réagir se relit dans l'index (`patchMediaHubMessages`).
+ *
+ * LA BAGUETTE « IMAGER » (#16333) — ouverte depuis la feuille d'un FIL, la
+ * visionneuse image le message regardé comme celle du fil : `imagerOf` est
+ * prêté par `ThreadMediaContext`. Hors du fil, pour un message que le fil ne
+ * tient pas, ou pour une pièce protégée, il n'y a pas de baguette.
  */
 export function carrierOfMessage(message: Message): MediaCarrier {
   const displayName = message.sender?.displayName;
@@ -70,6 +77,7 @@ export function MediaHubViewerHost({
   /** Le `<dialog>` de la feuille hôte — la visionneuse doit s'y poser (couche supérieure). */
   readonly container?: Element | null;
 }) {
+  const imagerOf = useContext(ThreadMediaContext)?.imagerOf;
   const viewer = useMemo(() => mediaHubViewerOf(items, openedKey), [items, openedKey]);
   const messages = useMemo(
     () => items.flatMap((item) => (item.kind === 'visual' ? [item.message] : [])),
@@ -108,6 +116,8 @@ export function MediaHubViewerHost({
           if (attachment === undefined || message === undefined) return null;
           const now = Date.now();
           const offers = mediaPageOffers({ attachment, message, capabilities, now });
+          const protectedPiece = quotedIsProtected(message) || quotedIsProtected(attachment);
+          const imageMessage = protectedPiece ? null : (imagerOf?.(message) ?? null);
           return {
             attachment,
             messageId: message.id,
@@ -115,6 +125,14 @@ export function MediaHubViewerHost({
             offers,
             transcribe: transcriptionOffered({ attachment, message }),
             ...(offers.share ? { share: attachmentSendRequest({ attachment, message, now }) } : {}),
+            ...(imageMessage === null
+              ? {}
+              : {
+                  imager: () => {
+                    onClose();
+                    imageMessage();
+                  },
+                }),
           };
         }}
         {...(deps === undefined ? {} : { deps })}
