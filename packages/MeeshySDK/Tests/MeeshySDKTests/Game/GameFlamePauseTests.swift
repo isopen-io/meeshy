@@ -83,6 +83,29 @@ struct GameFlamePauseTests {
         #expect(try #require(GameBlock.parse(GameBlockFixture.data)).flame.pause == nil)
     }
 
+    private static func withNextPauseFrom(_ served: String) -> Data {
+        Data(GameBlockFixture.json.replacingOccurrences(
+            of: "\"canRelight\":false}", with: "\"canRelight\":false,\"nextPauseFrom\":\(served)}"
+        ).utf8)
+    }
+
+    @Test("le trimestre pris se lit : le premier jour de la prochaine veille, qui survit à l'aller-retour")
+    func nextPauseFromIsRead() throws {
+        let flame = try #require(GameBlock.parse(Self.withNextPauseFrom(#""2027-01-01""#))).flame
+        #expect(flame.nextPauseFrom == "2027-01-01")
+        let roundTrip = try JSONDecoder().decode(GameBlock.Flame.self, from: JSONEncoder().encode(flame))
+        #expect(roundTrip == flame)
+    }
+
+    @Test("un serveur antérieur ou un jour illisible ne casse pas le bloc : l'annonce reste offerte",
+          arguments: [#""janvier""#, "42", "null", #"{"from":"2027-01-01"}"#])
+    func nextPauseFromIsTolerant(served: String) throws {
+        let block = try #require(GameBlock.parse(Self.withNextPauseFrom(served)))
+        #expect(block.flame.nextPauseFrom == nil)
+        #expect(block.flame.days == 4)
+        #expect(try #require(GameBlock.parse(GameBlockFixture.data)).flame.nextPauseFrom == nil)
+    }
+
     @Test("la réponse de l'annonce se décode, rejouée comprise")
     func responseDecodes() throws {
         let json = #"{"status":"already-paused","pause":{"from":"2026-11-24","until":"2026-11-30"}}"#
