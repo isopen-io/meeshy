@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.pause_next",
+          "androidName": "game_flame_panel_pause_next",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

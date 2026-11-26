@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Lasciala riposare · %1$s</string>
     <string name="game_flame_panel_pause_days">Durata del riposo</string>
     <string name="game_flame_panel_pause_intro">Una pausa? La tua Fiamma ti aspetta fino a %1$s, una volta a trimestre.</string>
+    <string name="game_flame_panel_pause_next">La tua Fiamma potrà riposare di nuovo dal %1$s.</string>
     <string name="game_flame_panel_paused">La tua Fiamma riposa fino a %1$s.</string>
     <string name="game_flame_panel_paused_soon">La tua Fiamma riposa da domani, fino a %1$s.</string>
     <string name="game_flame_panel_relight">Riaccendi la Fiamma · %1$s</string>

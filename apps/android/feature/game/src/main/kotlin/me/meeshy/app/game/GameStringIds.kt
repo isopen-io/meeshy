@@ -27,6 +27,7 @@ internal object GameStringIds {
         "game_flame_panel_pause" to R.string.game_flame_panel_pause,
         "game_flame_panel_paused_soon" to R.string.game_flame_panel_paused_soon,
         "game_flame_panel_paused" to R.string.game_flame_panel_paused,
+        "game_flame_panel_pause_next" to R.string.game_flame_panel_pause_next,
         "game_error_flame_pause_quarterly_limit" to R.string.game_error_flame_pause_quarterly_limit,
         "game_error_flame_pause_already_paused" to R.string.game_error_flame_pause_already_paused,
         "game_error_flame_pause_no_flame" to R.string.game_error_flame_pause_no_flame,

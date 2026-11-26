@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Dejarla descansar · %1$s</string>
     <string name="game_flame_panel_pause_days">Duración del descanso</string>
     <string name="game_flame_panel_pause_intro">¿Una pausa? Tu Llama te espera hasta %1$s, una vez por trimestre.</string>
+    <string name="game_flame_panel_pause_next">Tu Llama podrá descansar de nuevo a partir del %1$s.</string>
     <string name="game_flame_panel_paused">Tu Llama descansa hasta el %1$s.</string>
     <string name="game_flame_panel_paused_soon">Tu Llama descansa a partir de mañana, hasta el %1$s.</string>
     <string name="game_flame_panel_relight">Volver a encender la Llama · %1$s</string>
