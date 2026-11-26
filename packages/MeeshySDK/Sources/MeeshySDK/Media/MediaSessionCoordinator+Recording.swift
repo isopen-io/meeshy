@@ -20,13 +20,16 @@ extension MediaSessionCoordinator: RecordingSessionControlling {
     }
 
     /// Un son Meeshy qui joue encore retrouve sa session de lecture (le micro
-    /// se libère, PiP et arrière-plan gardent leur son) ; sinon la session se
-    /// rend avec `.notifyOthersOnDeactivation`. Call-aware, comme les deux
-    /// chemins qu'elle emprunte.
+    /// se libère, PiP et arrière-plan gardent leur son) ; une voix qui
+    /// interrompt et sonne encore retrouve la sienne ; sinon la session se
+    /// rend avec `.notifyOthersOnDeactivation`. Call-aware, comme les chemins
+    /// qu'elle emprunte.
     public nonisolated func handBackSession(_ handBack: RecordingSessionHandBack) {
         switch handBack {
         case .returnToContentPlayback:
             activateContentPlayback(.audible)
+        case .returnToInterruptingVoice:
+            returnToInterruptingVoicePlayback()
         case .releaseSession:
             onSessionQueue { [self] in
                 guard RecordingSessionLaw.mayReleaseSession(currentCategory: audioSession.category) else { return }

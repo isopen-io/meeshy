@@ -10,6 +10,7 @@ import AVFoundation
 ///   gardée telle quelle.
 /// - À la fin, la session se rend avec `.notifyOthersOnDeactivation` : l'autre app reprend.
 /// - Pendant un appel ou un enregistrement, la session n'est ni reconfigurée ni rendue : elle ne lui appartient pas.
+///   L'enregistrement fini, une voix qui sonne encore reprend la catégorie qu'elle aurait prise seule (`afterRecording`).
 public nonisolated enum InterruptingVoiceSessionLaw {
 
     public struct Configuration: Equatable, Sendable {
@@ -32,10 +33,17 @@ public nonisolated enum InterruptingVoiceSessionLaw {
         otherAudioPlaying: Bool
     ) -> Configuration? {
         if category == .ambient || category == .soloAmbient {
-            return Configuration(category: otherAudioPlaying ? .playback : .soloAmbient, options: [])
+            return afterRecording(otherAudioPlaying: otherAudioPlaying)
         }
         guard options.contains(.mixWithOthers) else { return nil }
         return Configuration(category: category, options: options.subtracting(.mixWithOthers))
+    }
+
+    /// La catégorie que reprend une voix qui sonnait dans la session d'un enregistrement quand le micro s'arrête
+    /// (#20579) : celle qu'elle aurait prise seule. `.playAndRecord` ignore le bouton silencieux, et
+    /// `activation` le garderait, faute de mélange à retirer.
+    public static func afterRecording(otherAudioPlaying: Bool) -> Configuration {
+        Configuration(category: otherAudioPlaying ? .playback : .soloAmbient, options: [])
     }
 
     /// La session peut-elle être reconfigurée, puis rendue, par la voix ?

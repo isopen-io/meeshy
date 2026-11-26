@@ -25,8 +25,8 @@ public protocol RecordingSessionControlling: Sendable {
 ///   sons extérieurs s'arrêtent) et BAISSE le son Meeshy qui joue, sans
 ///   l'arrêter ;
 /// - `finish` le REMONTE au volume qu'il avait, puis, pour un vocal, rend la
-///   session — à la lecture si un son Meeshy joue encore, aux autres apps
-///   sinon ;
+///   session — à la lecture si un son Meeshy joue encore, à la voix d'un
+///   talkie reçu si elle sonne encore, aux autres apps sinon ;
 /// - la caméra garde la session tant que le viseur est ouvert (`prepare`
 ///   quand son micro entre, `handBack` quand il se ferme) : changer la
 ///   catégorie sous une capture qui tourne la reconfigurerait.
@@ -104,17 +104,18 @@ public final class MeeshyRecordingSession {
     /// L'enregistrement se termine — envoi, annulation ou échec. Sans `begin`
     /// préalable, ne fait rien.
     ///
-    /// `alongsidePlayback` : un son Meeshy que le ducker ne connaît pas joue
-    /// encore (la voix d'un talkie reçu, #20579) — la session redevient celle
-    /// de la lecture au lieu d'être rendue sous lui.
-    public func finish(handingBackSession: Bool, alongsidePlayback: Bool = false) {
+    /// `alongsideInterruptingVoice` : une voix qui interrompt sonne encore
+    /// (la voix d'un talkie reçu, #20579), hors des lecteurs du ducker — la
+    /// session redevient la sienne au lieu d'être rendue sous elle, et
+    /// n'appartient plus à l'enregistrement.
+    public func finish(handingBackSession: Bool, alongsideInterruptingVoice: Bool = false) {
         guard isRecording else { return }
         isRecording = false
         recordingEpoch &+= 1
         ducker.restore()
         session.releaseRecordingHold()
         guard handingBackSession else { return }
-        handBackConfiguration(alongsidePlayback: alongsidePlayback)
+        handBackConfiguration(alongsideInterruptingVoice: alongsideInterruptingVoice)
     }
 
     /// La caméra arme son micro : la session devient capable d'enregistrer
@@ -138,11 +139,14 @@ public final class MeeshyRecordingSession {
         handBackConfiguration()
     }
 
-    private func handBackConfiguration(alongsidePlayback: Bool = false) {
+    private func handBackConfiguration(alongsideInterruptingVoice: Bool = false) {
         guard ownsRecordingConfiguration else { return }
         ownsRecordingConfiguration = false
         session.handBackSession(
-            RecordingSessionLaw.handBack(meeshySoundStillPlaying: alongsidePlayback || ducker.hasAudiblePlayback)
+            RecordingSessionLaw.handBack(
+                meeshySoundStillPlaying: ducker.hasAudiblePlayback,
+                interruptingVoiceStillPlaying: alongsideInterruptingVoice
+            )
         )
     }
 }

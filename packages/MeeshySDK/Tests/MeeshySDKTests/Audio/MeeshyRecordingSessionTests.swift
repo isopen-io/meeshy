@@ -96,14 +96,26 @@ final class MeeshyRecordingSessionTests: XCTestCase {
         XCTAssertEqual(session.configured.first?.0, RecordingSessionLaw.configuration(for: .voiceMessage, meeshySoundPlaying: false))
     }
 
-    /// #20579 — le micro s'arrête pendant qu'un son que le ducker ne connaît pas joue encore (la voix d'un talkie reçu) :
-    /// la session redevient celle de la lecture, jamais rendue sous ce son, et elle n'appartient plus à l'enregistrement.
-    func test_finish_alongsideAPlaybackTheDuckerDoesNotKnow_returnsToContentPlayback_andOwnsNothingAfter() async {
+    /// #20579 — le micro s'arrête pendant qu'une voix de talkie reçue sonne encore : la session redevient celle de la
+    /// voix (qui garde le bouton silencieux), jamais une lecture de contenu, jamais rendue sous elle — et elle
+    /// n'appartient plus à l'enregistrement : la caméra qui se ferme plus tard ne la rend pas une seconde fois.
+    func test_finish_alongsideAnInterruptingVoice_returnsToThatVoice_andOwnsNothingAfter() async {
         let (sut, session, _, _) = makeSUT()
         _ = await sut.begin(.voiceMessage, alongsidePlayback: true)
 
-        sut.finish(handingBackSession: true, alongsidePlayback: true)
+        sut.finish(handingBackSession: true, alongsideInterruptingVoice: true)
         sut.handBack()
+
+        XCTAssertEqual(session.holdReleases, 1)
+        XCTAssertEqual(session.handBacks, [.returnToInterruptingVoice])
+    }
+
+    func test_finish_alongsideAnInterruptingVoice_whileADuckedMeeshySoundPlays_returnsToContentPlayback() async {
+        let (sut, session, source, _) = makeSUT()
+        source.playing = [FakePlayer(volume: 1)]
+        _ = await sut.begin(.voiceMessage)
+
+        sut.finish(handingBackSession: true, alongsideInterruptingVoice: true)
 
         XCTAssertEqual(session.handBacks, [.returnToContentPlayback])
     }

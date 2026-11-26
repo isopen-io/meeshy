@@ -87,8 +87,10 @@ extension TalkieVoiceHostLaw {
 /// - Sur ces sorties-là, la voix reçue se tait tant que mon micro est ouvert, sans quoi il la renverrait à son
 ///   expéditeur ; son spectre continue de se voir. Elle se réentend dès que le micro se ferme (#20583 mesurera s'il
 ///   peut en être autrement).
-/// - Le micro qui s'arrête pendant qu'elle sonne ne rend pas la session sous elle : la session redevient celle de la
-///   lecture, et c'est la voix, à sa fin, qui la rend.
+/// - Le micro qui s'arrête pendant qu'elle sonne ne rend pas la session sous elle, et ne la passe pas en lecture de
+///   contenu (`.playback` ignorerait le bouton silencieux) : la session redevient celle de la voix
+///   (`RecordingSessionHandBack.returnToInterruptingVoice` — `.soloAmbient` quand rien d'autre ne joue), elle
+///   n'appartient plus au micro, et c'est la voix, à sa fin, qui la rend.
 nonisolated enum TalkieMicSessionLaw {
     private static let acousticPorts: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
 

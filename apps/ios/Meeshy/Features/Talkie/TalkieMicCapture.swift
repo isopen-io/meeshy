@@ -12,7 +12,7 @@ private extension Logger {
 ///
 /// La session audio se prend par `MeeshyRecordingSession`, le chemin des vocaux : le son Meeshy qui joue baisse sans
 /// s'arrêter, et pendant un appel rien ne se reconfigure (le micro ne s'ouvre pas). Une voix de talkie reçue qui sonne
-/// se traite selon la sortie pendant qu'on parle, et garde une session de lecture quand le micro s'arrête (#20579,
+/// se traite selon la sortie pendant qu'on parle, et retrouve sa propre session quand le micro s'arrête (#20579,
 /// `TalkieMicSessionLaw`).
 ///
 /// Chaque tampon du micro passe d'abord par le gain qui normalise la voix au réglage d'ENVOI (−22 / −7 dBFS : 6 dB
@@ -110,12 +110,14 @@ final class TalkieMicCapture: TalkieCapturing {
         Int((to.timeIntervalSince(from) * 1000).rounded())
     }
 
-    /// Une voix reçue qui sonne encore retrouve une session de lecture : c'est elle qui la rendra à sa fin (#20579).
+    /// Une voix reçue qui sonne encore retrouve SA session, qui garde le bouton silencieux : c'est elle qui la rendra à
+    /// sa fin (#20579).
     private func releaseSession() {
         guard holdsSession else { return }
         holdsSession = false
         MeeshyRecordingSession.shared.finish(
-            handingBackSession: true, alongsidePlayback: TalkieMicSessionLaw.alongsideIncoming(stage.cast().voices)
+            handingBackSession: true,
+            alongsideInterruptingVoice: TalkieMicSessionLaw.alongsideIncoming(stage.cast().voices)
         )
     }
 }

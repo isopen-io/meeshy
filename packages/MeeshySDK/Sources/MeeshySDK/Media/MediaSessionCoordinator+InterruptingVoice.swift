@@ -37,6 +37,27 @@ extension MediaSessionCoordinator {
         }
     }
 
+    /// Le micro s'arrête pendant que la voix sonne (#20579) : la session quitte
+    /// `.playAndRecord` pour la catégorie que la voix aurait prise seule, à son
+    /// rang, après que l'enregistrement l'a lâchée. Une session qu'un autre
+    /// composant a reprise entre-temps n'est pas touchée.
+    nonisolated func returnToInterruptingVoicePlayback() {
+        onSessionQueue { [self] in
+            guard InterruptingVoiceSessionLaw.mayManageSession(
+                callActive: isCallActive, recordingHoldsSession: recordingHoldsSession
+            ), RecordingSessionLaw.mayReleaseSession(currentCategory: audioSession.category) else { return }
+            let plan = InterruptingVoiceSessionLaw.afterRecording(
+                otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying
+            )
+            do {
+                try audioSession.setCategory(plan.category, mode: .default, options: plan.options)
+                try audioSession.setActive(true, options: InterruptingVoiceSessionLaw.activationOptions)
+            } catch {
+                voiceLogger.error("returnToInterruptingVoicePlayback failed — \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     /// Rend la session en prévenant les autres apps, qui reprennent.
     public nonisolated func releaseInterruptingVoicePlayback() {
         onSessionQueue { [self] in

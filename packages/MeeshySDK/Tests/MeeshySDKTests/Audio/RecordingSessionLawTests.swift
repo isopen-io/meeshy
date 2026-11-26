@@ -48,6 +48,22 @@ struct RecordingSessionLawTests {
         #expect(RecordingSessionLaw.handBack(meeshySoundStillPlaying: false) == .releaseSession)
     }
 
+    /// #20579 — une voix de talkie reçue sonne encore : la session redevient la sienne, qui garde le bouton silencieux,
+    /// jamais celle d'une lecture de contenu.
+    @Test func afterRecording_anInterruptingVoiceStillSounding_getsItsOwnSessionBack() {
+        #expect(
+            RecordingSessionLaw.handBack(meeshySoundStillPlaying: false, interruptingVoiceStillPlaying: true)
+                == .returnToInterruptingVoice
+        )
+    }
+
+    @Test func afterRecording_aMeeshySoundStillPlaying_winsOverAnInterruptingVoice() {
+        #expect(
+            RecordingSessionLaw.handBack(meeshySoundStillPlaying: true, interruptingVoiceStillPlaying: true)
+                == .returnToContentPlayback
+        )
+    }
+
     @Test func theSessionIsReleasedOnlyIfItIsStillTheRecordingOne() {
         #expect(RecordingSessionLaw.mayReleaseSession(currentCategory: .playAndRecord))
         #expect(!RecordingSessionLaw.mayReleaseSession(currentCategory: .playback))

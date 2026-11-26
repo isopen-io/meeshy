@@ -60,7 +60,7 @@ final class TalkieDuplexTests: XCTestCase {
 
     // MARK: - La session audio partagée par le micro et la voix reçue
 
-    func test_theMicStopping_alongsideAVoiceThatSounds_keepsAPlaybackSession() {
+    func test_theMicStopping_alongsideAVoiceThatSounds_handsTheSessionBackToThatVoice() {
         XCTAssertTrue(TalkieMicSessionLaw.alongsideIncoming([TalkieVoiceKey(userId: awa, direction: .incoming)]))
         XCTAssertFalse(TalkieMicSessionLaw.alongsideIncoming([TalkieVoiceKey(userId: awa, direction: .outgoing)]))
         XCTAssertFalse(TalkieMicSessionLaw.alongsideIncoming([]))

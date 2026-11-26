@@ -22,6 +22,11 @@ public enum RecordingSessionHandBack: Sendable, Equatable {
     /// Un son Meeshy joue encore : la session redevient celle d'une lecture
     /// de contenu (`.playback` non mélangeable), le micro se libère.
     case returnToContentPlayback
+    /// Une voix qui interrompt (talkie reçu, #20579) sonne encore : la session
+    /// reprend la catégorie de la voix (`InterruptingVoiceSessionLaw.afterRecording`),
+    /// qui garde le bouton silencieux quand rien d'autre ne joue, le micro se
+    /// libère, et c'est la voix, à sa fin, qui rend la session.
+    case returnToInterruptingVoice
     /// Plus rien ne joue : la session se désactive avec
     /// `.notifyOthersOnDeactivation`, et la musique des autres apps reprend.
     case releaseSession
@@ -73,10 +78,15 @@ public enum RecordingSessionLaw {
     }
 
     /// À la fin d'un enregistrement, un son Meeshy encore en lecture retrouve
-    /// sa session de contenu ; sinon la session se rend, et la musique des
-    /// autres apps reprend.
-    public static func handBack(meeshySoundStillPlaying: Bool) -> RecordingSessionHandBack {
-        meeshySoundStillPlaying ? .returnToContentPlayback : .releaseSession
+    /// sa session de contenu ; sinon une voix qui interrompt et sonne encore
+    /// retrouve la sienne ; sinon la session se rend, et la musique des autres
+    /// apps reprend.
+    public static func handBack(
+        meeshySoundStillPlaying: Bool,
+        interruptingVoiceStillPlaying: Bool = false
+    ) -> RecordingSessionHandBack {
+        if meeshySoundStillPlaying { return .returnToContentPlayback }
+        return interruptingVoiceStillPlaying ? .returnToInterruptingVoice : .releaseSession
     }
 
     /// Pendant un enregistrement, aucun lecteur de contenu ne reconfigure ni

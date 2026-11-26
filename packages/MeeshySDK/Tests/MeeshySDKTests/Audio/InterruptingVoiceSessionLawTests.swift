@@ -41,6 +41,16 @@ struct InterruptingVoiceSessionLawTests {
         #expect(plans.allSatisfy { $0.category != .ambient && !$0.options.contains(.mixWithOthers) })
     }
 
+    /// #20579 — la voix sonnait dans la session d'un enregistrement (`.playAndRecord`, qui ignore le bouton
+    /// silencieux) : quand le micro s'arrête, elle reprend la catégorie qu'elle aurait prise seule.
+    @Test func afterARecording_nothingElsePlays_theVoiceTakesSoloAmbient_whichKeepsTheSilentSwitch() {
+        #expect(Law.afterRecording(otherAudioPlaying: false) == Law.Configuration(category: .soloAmbient, options: []))
+    }
+
+    @Test func afterARecording_anotherAppPlays_theVoiceTakesPlayback() {
+        #expect(Law.afterRecording(otherAudioPlaying: true) == Law.Configuration(category: .playback, options: []))
+    }
+
     @Test func atTheEnd_theOtherAppsAreNotified() {
         #expect(Law.deactivationOptions.contains(.notifyOthersOnDeactivation))
     }
