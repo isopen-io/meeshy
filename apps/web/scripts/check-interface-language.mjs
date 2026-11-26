@@ -54,6 +54,7 @@ const expect = (ok, what) => {
 
 const GERMAN = {
   lang: 'de',
+  dir: 'ltr',
   title: 'Meine Links',
   family: 'Teilen',
   back: 'Zurück zu den Unterhaltungen',
@@ -68,6 +69,7 @@ const GERMAN = {
 
 const ARABIC = {
   lang: 'ar',
+  dir: 'rtl',
   title: 'روابطي',
   family: 'مشاركة',
   back: 'العودة إلى المحادثات',
@@ -78,6 +80,7 @@ const ARABIC = {
 
 const FRENCH = {
   lang: 'fr',
+  dir: 'ltr',
   title: 'Mes liens',
   family: 'Partage',
   back: 'Revenir aux conversations',
@@ -100,14 +103,38 @@ const VIEWPORTS = [
 
 const browser = await launchChromium();
 
-async function measure({ name, locale, stored, want }, viewport, scheme) {
-  const tag = `${name} · ${viewport.width}×${viewport.height} · ${scheme}`;
+/* Le sens au moment où `<body>` naît : les scripts en ligne de `<head>` ont
+   tourné, l'application (module différé) pas encore. C'est ce que voit la
+   première peinture. */
+function recordDirectionAtBodyBirth() {
+  const observer = new MutationObserver(() => {
+    if (document.body === null) return;
+    window.__dirAtBodyBirth = document.documentElement.dir;
+    observer.disconnect();
+  });
+  observer.observe(document, { childList: true, subtree: true });
+}
+
+const horizontalOverflow = (page) =>
+  page.evaluate(() => {
+    const root = document.scrollingElement ?? document.documentElement;
+    return { scroll: root.scrollWidth, client: root.clientWidth };
+  });
+
+async function newContextFor({ locale, stored }, viewport, scheme) {
   const context = await browser.newContext({ viewport, locale, colorScheme: scheme });
+  await context.addInitScript(recordDirectionAtBodyBirth);
   if (stored !== null) {
     await context.addInitScript((value) => {
       localStorage.setItem('meeshy.interface-language', value);
     }, stored);
   }
+  return context;
+}
+
+async function measure({ name, locale, stored, want }, viewport, scheme) {
+  const tag = `${name} · ${viewport.width}×${viewport.height} · ${scheme}`;
+  const context = await newContextFor({ locale, stored }, viewport, scheme);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (error) => errors.push(String(error)));
@@ -130,6 +157,11 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   await page.waitForSelector('.floating-menus [data-unread]', { timeout: 10_000 });
 
   expect((await page.evaluate(() => document.documentElement.lang)) === want.lang, `${tag} : <html lang="${want.lang}">`);
+  const dir = await page.evaluate(() => ({ now: document.documentElement.dir, atBodyBirth: window.__dirAtBodyBirth ?? null }));
+  expect(dir.now === want.dir, `${tag} : <html dir="${want.dir}"> (obtenu "${dir.now}")`);
+  expect(dir.atBodyBirth === want.dir, `${tag} : dir="${want.dir}" dès la naissance de <body> (obtenu "${dir.atBodyBirth}")`);
+  const overflow = await horizontalOverflow(page);
+  expect(overflow.scroll <= overflow.client + 1, `${tag} : aucun défilement horizontal (${overflow.scroll} > ${overflow.client})`);
   expect((await page.locator('header h1').innerText()).trim() === want.title, `${tag} : titre « ${want.title} »`);
   expect((await page.locator('[data-links-family-title]').first().innerText()).trim() === want.family, `${tag} : la première famille du hub dans la langue`);
   expect(
@@ -179,6 +211,53 @@ async function measure({ name, locale, stored, want }, viewport, scheme) {
   await context.close();
 }
 
+const SCREENS = [
+  { path: '/c/c-deploiement', ready: '[data-message]', label: 'le fil de la conversation' },
+  { path: '/feed', ready: '[data-feed-card]', label: 'le fil d’actualité' },
+];
+
+async function measureScreens({ name, locale, stored, want }) {
+  for (const screen of SCREENS) {
+    const tag = `${name} · ${screen.label}`;
+    const context = await newContextFor({ locale, stored }, VIEWPORTS[0], 'light');
+    const page = await context.newPage();
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(String(error)));
+    await page.goto(`${BASE}${screen.path}`, { waitUntil: 'load' });
+    await page.waitForSelector(screen.ready, { timeout: 10_000 });
+    await page.waitForTimeout(300);
+    const dir = await page.evaluate(() => document.documentElement.dir);
+    expect(dir === want.dir, `${tag} : <html dir="${want.dir}"> (obtenu "${dir}")`);
+    const overflow = await horizontalOverflow(page);
+    expect(overflow.scroll <= overflow.client + 1, `${tag} : aucun défilement horizontal (${overflow.scroll} > ${overflow.client})`);
+    if (screen.path === '/feed') await measureCarousel(page, tag, want);
+    if (CAPTURES) await page.screenshot({ path: join(CAPTURES, `direction-${want.lang}${screen.path.replaceAll('/', '-')}.png`) });
+    expect(errors.length === 0, `${tag} : aucune erreur de page (${errors.join(' | ')})`);
+    await context.close();
+  }
+}
+
+async function measureCarousel(page, tag, want) {
+  const card = '[data-feed-card-id="post-scenes-mixed"]';
+  await page.locator(card).scrollIntoViewIfNeeded();
+  await page.waitForSelector(`${card} [data-feed-carousel-arrow="forward"]`, { timeout: 10_000 });
+  const placement = await page.evaluate((selector) => {
+    const track = document.querySelector(`${selector} [data-feed-scene-track]`).getBoundingClientRect();
+    const arrow = document.querySelector(`${selector} [data-feed-carousel-arrow="forward"]`).getBoundingClientRect();
+    return { arrow: arrow.left + arrow.width / 2, track: track.left + track.width / 2 };
+  }, card);
+  const onLeft = placement.arrow < placement.track;
+  expect(onLeft === (want.dir === 'rtl'), `${tag} : la flèche « suivant » est à ${want.dir === 'rtl' ? 'gauche' : 'droite'} du carrousel`);
+  await page.locator(`${card} [data-feed-carousel-arrow="forward"]`).click();
+  await page.waitForTimeout(900);
+  const after = await page.evaluate((selector) => ({
+    counter: document.querySelector(`${selector} [data-feed-media-counter]`)?.textContent?.replace(/\s+/g, '') ?? null,
+    scrollLeft: document.querySelector(`${selector} [data-feed-scene-track]`).scrollLeft,
+  }), card);
+  expect(after.counter === '2/3', `${tag} : « suivant » avance le carrousel à 2 / 3 (obtenu "${after.counter}")`);
+  expect(want.dir === 'rtl' ? after.scrollLeft < 0 : after.scrollLeft > 0, `${tag} : la piste défile dans le sens de lecture (scrollLeft ${after.scrollLeft})`);
+}
+
 try {
   for (const testCase of CASES) {
     console.log(`\n${testCase.name}`);
@@ -187,6 +266,10 @@ try {
   console.log('\nGabarit étroit et schéma sombre — la langue la plus longue, et l’arabe');
   for (const testCase of [CASES[0], CASES[1]]) {
     await measure(testCase, VIEWPORTS[1], 'dark');
+  }
+  console.log('\nLe sens d’écriture sur les écrans de lecture — l’arabe et le français');
+  for (const testCase of [CASES[1], CASES[2]]) {
+    await measureScreens(testCase);
   }
 } finally {
   await browser.close();
