@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">Lamparinas de reserva: %1$s.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">Você ganhou uma Lamparina para a sua Chama.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">Você ganhou uma Lamparina.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">Você cumpriu a meta que se propôs.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">Próximo degrau: %1$s, para escolher na sua Chama.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">Você subiu todos os degraus: sua Chama arde alto.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">Meta de Chama cumprida: %1$s.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">Seus ancestrais saúdam sua Chama: %1$s cumpridos!</string>
     <string name="game2_guide_moment_league_first_means">Toda semana, você se mede com outros 29 heróis. Os 7 primeiros sobem para o círculo seguinte, os 5 últimos voltam a descer, e as faíscas recomeçam do zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s até o círculo seguinte nesta semana.</string>
     <string name="game2_guide_moment_league_first_next_top">Você já está no círculo mais alto dos torneios.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">Uma meta para sua Chama? Escolha hoje, ou deixe-a arder.</string>
     <string name="game_flame_panel_goal_later">Mais tarde</string>
     <string name="game_flame_panel_goal_next">Mirar em %1$s</string>
+    <string name="game_flame_panel_goal_next_intro">Meta de %1$s cumprida. O próximo degrau?</string>
     <string name="game_flame_panel_goal_reached">Seus ancestrais saúdam sua Chama: %1$s cumpridos!</string>
     <string name="game_flame_panel_goal_running">Meta: %1$s de Chama. Faltam %2$s.</string>
     <string name="game_flame_panel_pause">Deixar descansar · %1$s</string>
