@@ -424,6 +424,11 @@ const en = {
   'game.flame_panel.goal_next': 'Aim for {days}',
   'game.flame_panel.goal_later': 'Later',
   'game.flame_panel.goal_next_intro': 'Goal of {target} held. Aim higher?',
+  'game.guide.moment.flame_goal_reached.what': 'Your ancestors salute your Flame: {days} held!',
+  'game.guide.moment.flame_goal_reached.means': 'You kept the goal you set yourself.',
+  'game.guide.moment.flame_goal_reached.next': 'Next goal: {days}, to choose in your Flame.',
+  'game.guide.moment.flame_goal_reached.next_top': 'You have reached every goal: your Flame burns high.',
+  'game.guide.moment.flame_goal_reached.short': 'Flame goal held: {days}.',
   'game.flame_panel.pause_next': 'Your Flame can rest again from {date}.',
 } as const satisfies GameConceptCatalog;
 

@@ -424,6 +424,11 @@ const es = {
   'game.flame_panel.goal_next': 'Apuntar a {days}',
   'game.flame_panel.goal_later': 'Más tarde',
   'game.flame_panel.goal_next_intro': 'Objetivo de {target} cumplido. ¿El siguiente escalón?',
+  'game.guide.moment.flame_goal_reached.what': '¡Tus ancestros saludan tu Llama: {days} cumplidos!',
+  'game.guide.moment.flame_goal_reached.means': 'Cumpliste el objetivo que te fijaste.',
+  'game.guide.moment.flame_goal_reached.next': 'Siguiente escalón: {days}, para elegir en tu Llama.',
+  'game.guide.moment.flame_goal_reached.next_top': 'Subiste todos los escalones: tu Llama arde alto.',
+  'game.guide.moment.flame_goal_reached.short': 'Objetivo de Llama cumplido: {days}.',
   'game.flame_panel.pause_next': 'Tu Llama podrá descansar de nuevo a partir del {date}.',
 } as const satisfies GameConceptCatalog;
 

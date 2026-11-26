@@ -424,6 +424,11 @@ const it = {
   'game.flame_panel.goal_next': 'Punta a {days}',
   'game.flame_panel.goal_later': 'Più tardi',
   'game.flame_panel.goal_next_intro': 'Obiettivo di {target} mantenuto. Il prossimo gradino?',
+  'game.guide.moment.flame_goal_reached.what': 'I tuoi antenati salutano la tua Fiamma: {days} mantenuti!',
+  'game.guide.moment.flame_goal_reached.means': 'Hai mantenuto l’obiettivo che ti eri dato.',
+  'game.guide.moment.flame_goal_reached.next': 'Prossimo gradino: {days}, da scegliere nella tua Fiamma.',
+  'game.guide.moment.flame_goal_reached.next_top': 'Hai salito tutti i gradini: la tua Fiamma arde alta.',
+  'game.guide.moment.flame_goal_reached.short': 'Obiettivo di Fiamma mantenuto: {days}.',
   'game.flame_panel.pause_next': 'La tua Fiamma potrà riposare di nuovo dal {date}.',
 } as const satisfies GameConceptCatalog;
 

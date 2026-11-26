@@ -422,6 +422,11 @@ const fr = {
   'game.flame_panel.goal_next': 'Viser {days}',
   'game.flame_panel.goal_later': 'Plus tard',
   'game.flame_panel.goal_next_intro': 'Objectif de {target} tenu. La marche suivante\u00a0?',
+  'game.guide.moment.flame_goal_reached.what': 'Tes aïeux saluent ta Flamme : {days} tenus\u00a0!',
+  'game.guide.moment.flame_goal_reached.means': 'Tu as tenu l’objectif que tu t’étais fixé.',
+  'game.guide.moment.flame_goal_reached.next': 'Prochaine marche : {days}, à choisir dans ta Flamme.',
+  'game.guide.moment.flame_goal_reached.next_top': 'Tu as gravi toutes les marches : ta Flamme brûle haut.',
+  'game.guide.moment.flame_goal_reached.short': 'Objectif de Flamme tenu : {days}.',
   'game.flame_panel.pause_next': 'Ta prochaine veille sera possible dès le {date}.',
 } as const;
 

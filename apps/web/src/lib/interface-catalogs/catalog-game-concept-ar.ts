@@ -444,6 +444,11 @@ const ar = {
   'game.flame_panel.goal_next': 'استهدف {days}',
   'game.flame_panel.goal_later': 'لاحقًا',
   'game.flame_panel.goal_next_intro': 'تحقّق هدف {target}. الدرجة التالية؟',
+  'game.guide.moment.flame_goal_reached.what': 'أجدادك يحيّون لهبك: \u2066{days}\u2069 من الثبات!',
+  'game.guide.moment.flame_goal_reached.means': 'لقد حقّقت الهدف الذي وضعته لنفسك.',
+  'game.guide.moment.flame_goal_reached.next': 'الدرجة التالية: \u2066{days}\u2069، تختارها في لهبك.',
+  'game.guide.moment.flame_goal_reached.next_top': 'صعدت كل الدرجات: لهبك يشتعل عاليًا.',
+  'game.guide.moment.flame_goal_reached.short': 'تحقّق هدف اللهب: \u2066{days}\u2069.',
   'game.flame_panel.pause_next': 'يستطيع لهبك أن يستريح من جديد ابتداءً من {date}.',
 } as const satisfies GameConceptCatalog;
 

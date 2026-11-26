@@ -424,6 +424,11 @@ const de = {
   'game.flame_panel.goal_next': '{days} anpeilen',
   'game.flame_panel.goal_later': 'Später',
   'game.flame_panel.goal_next_intro': 'Ziel von {target} gehalten. Die nächste Stufe?',
+  'game.guide.moment.flame_goal_reached.what': 'Deine Ahnen grüßen deine Flamme: {days} gehalten!',
+  'game.guide.moment.flame_goal_reached.means': 'Du hast das Ziel gehalten, das du dir gesetzt hast.',
+  'game.guide.moment.flame_goal_reached.next': 'Nächste Stufe: {days}, wählbar in deiner Flamme.',
+  'game.guide.moment.flame_goal_reached.next_top': 'Du hast jede Stufe erklommen: deine Flamme brennt hoch.',
+  'game.guide.moment.flame_goal_reached.short': 'Flammenziel gehalten: {days}.',
   'game.flame_panel.pause_next': 'Deine Flamme kann ab dem {date} wieder ruhen.',
 } as const satisfies GameConceptCatalog;
 
