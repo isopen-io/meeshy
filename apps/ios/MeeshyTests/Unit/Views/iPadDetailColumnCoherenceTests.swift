@@ -128,6 +128,32 @@ final class iPadDetailColumnCoherenceTests: XCTestCase {
         XCTAssertEqual(DeviceLayout.pickActive(noKey, isForeground: \.foreground, holdsKey: \.key)?.name, "main")
     }
 
+    /// Centre de contrôle tiré, alerte système, appel qui s'annonce : la seule scène est `.foregroundInactive` mais
+    /// toujours À L'ÉCRAN. Elle reste la scène mesurée — sinon `safeAreaTop` tombait à 0 et la bande du haut
+    /// disparaissait le temps du geste (#6633). Une scène active, s'il y en a une, garde la main (Split View, Stage Manager).
+    @MainActor
+    func test_anOnScreenInactiveScene_isMeasured_onlyWhenNoActiveSceneExists() {
+        struct Scene { let name: String; let active: Bool; let onScreen: Bool; let key: Bool }
+        let alone = [Scene(name: "bg", active: false, onScreen: false, key: false),
+                     Scene(name: "inactive", active: false, onScreen: true, key: true)]
+        XCTAssertEqual(DeviceLayout.pickActive(alone, isForeground: \.active, holdsKey: \.key, isOnScreen: \.onScreen)?.name,
+                       "inactive")
+        let split = [Scene(name: "inactive", active: false, onScreen: true, key: true),
+                     Scene(name: "active", active: true, onScreen: true, key: false)]
+        XCTAssertEqual(DeviceLayout.pickActive(split, isForeground: \.active, holdsKey: \.key, isOnScreen: \.onScreen)?.name,
+                       "active")
+        let hidden = [Scene(name: "bg", active: false, onScreen: false, key: true)]
+        XCTAssertNil(DeviceLayout.pickActive(hidden, isForeground: \.active, holdsKey: \.key, isOnScreen: \.onScreen))
+    }
+
+    /// Aucune fenêtre mesurable un instant (scène en transition) : l'encart rendu est le dernier MESURÉ, jamais 0. Une
+    /// mesure qui vaut 0 (iPhone en paysage) reste la vérité — seule l'ABSENCE de mesure se comble.
+    func test_aMissingMeasurement_keepsTheLastMeasuredInset_butAMeasuredZeroStands() {
+        XCTAssertEqual(DeviceLayout.insetRemembering(measured: nil, last: 59), 59)
+        XCTAssertEqual(DeviceLayout.insetRemembering(measured: 0, last: 59), 0)
+        XCTAssertEqual(DeviceLayout.insetRemembering(measured: 47, last: 59), 47)
+    }
+
     /// Une notification touchée pendant qu'une fenêtre détachée est devant : la fenêtre principale, où la navigation
     /// a lieu, revient d'abord — sinon la cible s'ouvrait dans une fenêtre invisible.
     func test_aTappedPush_bringsTheMainWindowForward_whenItIsNotInFront() throws {

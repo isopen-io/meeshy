@@ -19,16 +19,22 @@ enum DeviceLayout {
     /// allocation-free on the nominal path, per the repo's "keep body pure and
     /// fast" rule.
     static var activeWindowScene: UIWindowScene? {
-        pickActive(windowScenes, isForeground: { $0.activationState == .foregroundActive }, holdsKey: { $0.keyWindow != nil })
+        pickActive(windowScenes, isForeground: { $0.activationState == .foregroundActive }, holdsKey: { $0.keyWindow != nil },
+                   isOnScreen: { $0.activationState == .foregroundInactive })
     }
 
     /// Quelle scène est « la » scène active. Avec une fenêtre détachée, DEUX scènes de l'app peuvent être au premier
     /// plan à la fois (Split View, Stage Manager) : celle qui tient la fenêtre CLÉ est celle où l'utilisateur agit — une
-    /// feuille présentée, une mesure prise, vont là. À défaut, la première au premier plan. Deux passes sans allocation.
+    /// feuille présentée, une mesure prise, vont là. À défaut, la première au premier plan. Et seulement quand AUCUNE
+    /// n'est active, une scène `.foregroundInactive` — Centre de contrôle tiré, alerte système, appel qui s'annonce : elle
+    /// est toujours à l'écran, et sans elle `safeAreaTop` tombait à 0 le temps du geste (#6633). Passes sans allocation.
     static func pickActive<S: Sequence>(_ scenes: S, isForeground: (S.Element) -> Bool,
-                                        holdsKey: (S.Element) -> Bool) -> S.Element? {
+                                        holdsKey: (S.Element) -> Bool,
+                                        isOnScreen: (S.Element) -> Bool = { _ in false }) -> S.Element? {
         for scene in scenes where isForeground(scene) && holdsKey(scene) { return scene }
         for scene in scenes where isForeground(scene) { return scene }
+        for scene in scenes where isOnScreen(scene) && holdsKey(scene) { return scene }
+        for scene in scenes where isOnScreen(scene) { return scene }
         return nil
     }
 
@@ -122,15 +128,16 @@ enum DeviceLayout {
 
     /// Bottom safe-area inset of the window the app is actually rendered in.
     ///
-    /// `0` is the correct last resort rather than a screen-derived guess: it is
-    /// the honest value on a device with no home indicator, and when no
-    /// foreground scene exists nothing is being laid out anyway.
+    /// Without a measurable window, the last MEASURED inset (`0` before any
+    /// measurement), never a screen-derived guess (#6633).
     ///
     /// Prefer a `GeometryReader`'s own `safeAreaInsets` wherever one is in
     /// scope. This exists for views rendered inside `.ignoresSafeArea()`, where
     /// the reader reports `0` and the real inset is only knowable from the window.
     static var safeAreaBottom: CGFloat {
-        measurementWindow?.safeAreaInsets.bottom ?? 0
+        let measured = measurementWindow?.safeAreaInsets.bottom
+        if let measured, measured != lastMeasuredBottom { lastMeasuredBottom = measured }
+        return insetRemembering(measured: measured, last: lastMeasuredBottom)
     }
 
     /// Top safe-area inset of the window the app is actually rendered in.
@@ -141,8 +148,19 @@ enum DeviceLayout {
     /// user is looking at — read off a background scene it silently misreads
     /// the hardware.
     static var safeAreaTop: CGFloat {
-        measurementWindow?.safeAreaInsets.top ?? 0
+        let measured = measurementWindow?.safeAreaInsets.top
+        if let measured, measured != lastMeasuredTop { lastMeasuredTop = measured }
+        return insetRemembering(measured: measured, last: lastMeasuredTop)
     }
+
+    /// Un encart ne change pas parce qu'une alerte s'affiche : sans fenêtre mesurable, le dernier MESURÉ. Une mesure
+    /// qui vaut 0 (iPhone en paysage, appareil sans encoche) reste la vérité — seule l'absence de mesure se comble.
+    static func insetRemembering(measured: CGFloat?, last: CGFloat) -> CGFloat {
+        measured ?? last
+    }
+
+    private static var lastMeasuredTop: CGFloat = 0
+    private static var lastMeasuredBottom: CGFloat = 0
 
 
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
