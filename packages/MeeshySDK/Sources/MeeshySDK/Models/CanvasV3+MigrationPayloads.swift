@@ -190,4 +190,5 @@ extension CanvasV3 {
             payload["backgroundStyle"] = .object(wire)
         }
         return payload
+    }
 }
