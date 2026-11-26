@@ -50,9 +50,59 @@ final class GameNotificationTests: XCTestCase {
         XCTAssertEqual(try decode(seasonJSON).notificationType, .gameSeasonStep)
     }
 
-    func test_isGame_isTrueForTheFiveTypesOnly() {
+    func test_isGame_isTrueForTheSixTypesOnly() {
         let games = MeeshyNotificationType.allCases.filter(\.isGame)
-        XCTAssertEqual(Set(games), [.gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow])
+        XCTAssertEqual(Set(games), [.gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening])
+    }
+
+    // MARK: - Le rappel du soir de la Flamme (#20612, #20614)
+
+    private let flameEveningJSON = #"""
+    {"id":"n5","userId":"me","type":"game_flame_evening","priority":"normal",
+     "content":"Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée.",
+     "state":{"isRead":false,"readAt":null,"createdAt":"2026-11-26T19:00:00.000Z"},
+     "metadata":{"action":"view_details","route":"progression","gameSection":"flame"}}
+    """#
+
+    func test_flameEvening_isAKnownGameType_notASystemFallback() throws {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "game_flame_evening"), .gameFlameEvening)
+        XCTAssertEqual(try decode(flameEveningJSON).notificationType, .gameFlameEvening)
+    }
+
+    func test_flameEvening_theTouchOpensTheFlame() {
+        XCTAssertEqual(MeeshyNotificationType.gameFlameEvening.gameDestination, .flame)
+    }
+
+    func test_flameEvening_isFiledWithEngagement_underItsOwnIcon() {
+        XCTAssertEqual(MeeshyNotificationType.gameFlameEvening.accentHex, MeeshyNotificationType.levelUp.accentHex)
+        XCTAssertNotEqual(MeeshyNotificationType.gameFlameEvening.systemIcon, "bell.fill")
+    }
+
+    func test_flameEvening_hasNoActor_theClientNamesTheFlame_andShowsTheServedSentence() throws {
+        let notification = try decode(flameEveningJSON)
+        XCTAssertEqual(notification.formattedTitle, "Ta Flamme")
+        XCTAssertEqual(notification.formattedBody, "Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée.")
+        XCTAssertEqual(notification.rowPresentation().leading, .signature)
+        XCTAssertEqual(notification.quickActions, [])
+    }
+
+    func test_flameEvening_isSilencedWhenTheGameIsSwitchedOff() {
+        var prefs = UserNotificationPreferences.defaults
+        XCTAssertTrue(prefs.isTypeEnabled(.gameFlameEvening))
+        prefs.gameEnabled = false
+        XCTAssertFalse(prefs.isTypeEnabled(.gameFlameEvening))
+        XCTAssertFalse(prefs.allowsNotification(type: .gameFlameEvening))
+        XCTAssertFalse(prefs.allowsInAppBanner(type: .gameFlameEvening))
+    }
+
+    func test_flameEvening_inAppBanner_namesTheFlame_neverSomeone() throws {
+        let event = try JSONDecoder().decode(SocketNotificationEvent.self, from: Data("""
+        {"id":"n7","userId":"me","type":"game_flame_evening","content":"Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée."}
+        """.utf8))
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "Ta Flamme")
+        XCTAssertEqual(banner.body, "Ta Flamme brûle depuis 12 jours. Un geste ce soir la garde allumée.")
     }
 
     // MARK: - La plage de la mission personnelle (#9539)

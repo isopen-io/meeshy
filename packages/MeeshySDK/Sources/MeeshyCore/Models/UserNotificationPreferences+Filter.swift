@@ -145,7 +145,7 @@ public extension UserNotificationPreferences {
             return receivesDeviceUnreachable
         case .bloodProximity:
             return receivesBloodProximity
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening:
             return gameEnabled
         case .newConversation, .newConversationDirect, .newConversationGroup,
              .addedToConversation, .removedFromConversation:
