@@ -191,7 +191,7 @@ struct RootNotificationNavigator {
                 router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
             })
 
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening:
             // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme (#9564) : le
             // Classement pour un duo ou un résultat de ligue, la Saison pour une étape, la fiche des Missions à ses
             // gestes — posé sur son chemin complet, le retour remonte la chaîne. Le type décide, jamais la métadonnée.

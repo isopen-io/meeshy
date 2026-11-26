@@ -167,6 +167,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case gameSeasonStep = "game_season_step"
     /// La plage de ta mission personnelle du jour vient de s'ouvrir (#9539). Sans acteur — hors du plafond quotidien.
     case gameMissionWindow = "game_mission_window"
+    /// Le rappel du soir (#20612) : une Flamme de trois jours ou plus sans geste du jour, jamais après 21 h. Sans acteur.
+    case gameFlameEvening = "game_flame_evening"
 
     // Legacy uppercase (backward compat)
     case legacyNewMessage = "NEW_MESSAGE"
@@ -227,6 +229,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .gameLeagueResult: return "trophy.fill"
         case .gameSeasonStep: return "star.circle.fill"
         case .gameMissionWindow: return "timer"
+        case .gameFlameEvening: return "flame"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
         case .system, .maintenance, .updateAvailable: return "bell.fill"
@@ -267,7 +270,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         // « Progression » (`MeeshyColors.warningHex`), distinct de la famille
         // « communauté » ci-dessus — un badge ne ressemble plus à une invitation.
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
-             .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
+             .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening:
             return "FBBF24"
         case .missedCall, .callDeclined, .incomingCall, .incomingCallAlert, .callEnded, .legacyCallMissed, .legacyCallIncoming:
             return "E91E63"
@@ -300,6 +303,8 @@ public enum GameNotificationDestination: String, Equatable, Sendable {
     case season
     /// La section Héro des missions de Progression (#9539) : ce n'est pas une page du jeu, c'est un endroit de l'écran.
     case missions
+    /// La fiche de la Flamme, à ses gestes : le rappel du soir y mène (#20612), comme le web.
+    case flame
 }
 
 public extension MeeshyNotificationType {
@@ -316,6 +321,8 @@ public extension MeeshyNotificationType {
             return String(localized: "notification.game.seasonStep.fallbackTitle", defaultValue: "Ta saison", bundle: .main)
         case .gameMissionWindow:
             return String(localized: "notification.game.missionWindow.fallbackTitle", defaultValue: "Ta mission du moment", bundle: .main)
+        case .gameFlameEvening:
+            return String(localized: "notification.game.flameEvening.fallbackTitle", defaultValue: "Ta Flamme", bundle: .main)
         default:
             return nil
         }
@@ -327,6 +334,7 @@ public extension MeeshyNotificationType {
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult: .league
         case .gameSeasonStep: .season
         case .gameMissionWindow: .missions
+        case .gameFlameEvening: .flame
         default: nil
         }
     }

@@ -32,6 +32,8 @@ final class GameNotificationRoutingTests: XCTestCase {
         XCTAssertEqual(GameNavigationMap.entry(for: .gameSeasonStep), .gamePage(.season), "l'étape se réclame dans la Saison")
         XCTAssertEqual(GameNavigationMap.entry(for: .gameMissionWindow), .progressionConcept(.missions, section: .act),
                        "la mission du jour ouvre la fiche des missions, à ses gestes")
+        XCTAssertEqual(GameNavigationMap.entry(for: .gameFlameEvening), .progressionConcept(.flame, section: .act),
+                       "le rappel du soir ouvre la fiche de la Flamme, à ses gestes (#20614), comme le web")
         XCTAssertEqual(GameNavigationMap.entry(for: .levelUp), .progressionConcept(.level))
         XCTAssertEqual(GameNavigationMap.entry(for: .streakMilestone), .progressionConcept(.flame))
         XCTAssertEqual(GameNavigationMap.entry(for: .badgeEarned), .progressionConcept(.badges))
@@ -41,16 +43,16 @@ final class GameNotificationRoutingTests: XCTestCase {
     }
 
     func test_everyNavigationSwitch_opensTheGameOnItsCompleteChain() throws {
-        let five = ".gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow"
+        let six = ".gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening"
         let entry = "router.openGame(at: GameNavigationMap.entry(for:"
         // L'aiguillage iPhone vit dans `RootNotificationNavigator`, le lien du Jeu dans `RootView` (#9947).
         let iphone = try source("Meeshy/Features/Main/Views/RootView.swift")
             + "\n" + source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")
-        XCTAssertEqual(iphone.components(separatedBy: "case \(five):").count - 1, 1, "l'aiguillage iPhone (push, liste, bannière)")
+        XCTAssertEqual(iphone.components(separatedBy: "case \(six):").count - 1, 1, "l'aiguillage iPhone (push, liste, bannière)")
         XCTAssertEqual(iphone.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPhone ouvre l'écran de la carte")
 
         let ipad = try source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift")
-        XCTAssertEqual(ipad.components(separatedBy: "case \(five):").count - 1, 1, "liste, bannière in-app et push : UN aiguillage iPad, comme l'iPhone")
+        XCTAssertEqual(ipad.components(separatedBy: "case \(six):").count - 1, 1, "liste, bannière in-app et push : UN aiguillage iPad, comme l'iPhone")
         XCTAssertEqual(ipad.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPad ouvre l'écran de la carte, comme l'iPhone")
         XCTAssertFalse(ipad.contains("rightPanelRoute = .gamePage("), "plus aucune sous-page orpheline ouverte par une notification")
 

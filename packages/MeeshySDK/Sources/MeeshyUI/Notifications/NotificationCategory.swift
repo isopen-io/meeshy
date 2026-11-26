@@ -118,7 +118,7 @@ public enum NotificationCategory: String, CaseIterable, Sendable {
         case .engagement:
             return [
                 .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
-                .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow
+                .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow, .gameFlameEvening
             ]
         case .contacts:
             return [
