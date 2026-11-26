@@ -218,6 +218,24 @@ describe('media-renditions — la fabrique commune des rendus (#11260)', () => {
       expect(runFfmpeg).toHaveBeenCalledTimes(1);
     });
 
+    it('le rendu différé d une longue vidéo a un délai d encodage à la mesure de sa durée, pas les cinq minutes par défaut (#12294)', async () => {
+      process.env.VIDEO_COMPAT_RENDITION = 'true';
+      const twentyMinutes = 1200;
+      await placeClip(2048);
+      const runFfmpeg = jest.fn<(args: string[], timeoutMs?: number) => Promise<void>>().mockImplementation(async (args) => {
+        await fs.writeFile(args[args.length - 1], Buffer.alloc(4096, 3));
+      });
+      const probeVideo = async (file: string) => (file.endsWith('_h264.mp4')
+        ? { codec_name: 'h264', width: 1920, height: 1080 }
+        : { codec_name: 'hevc', color_transfer: 'arib-std-b67', width: 3840, height: 2160, duration: String(twentyMinutes) });
+      const deps = { ...videoDeps(runFfmpeg).deps, probeVideo, hasFilter: async () => true };
+
+      await renderDeferred(deps, { relPath, mimeType: 'video/quicktime', attachmentType: 'video', fileSize: 4 * 1024 * 1024 * 1024 }, 'transcode', { strict: true });
+
+      const timeoutMs = runFfmpeg.mock.calls[0]?.[1];
+      expect(timeoutMs).toBeGreaterThan(twentyMinutes * 1000);
+    });
+
     it('garde l original si le transcodage échoue', async () => {
       process.env.VIDEO_TRANSCODE = 'true';
       const size = 5 * 1024 * 1024;

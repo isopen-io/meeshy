@@ -29,6 +29,7 @@ import path from 'path';
 import type { MediaRendition } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { timeMediaStage } from '../metrics/mediaStageMetrics';
+import { FFMPEG_DEFAULT_TIMEOUT_MS } from './ffmpeg-run.js';
 
 const logger = enhancedLogger.child({ module: 'video-compat-rendition' });
 
@@ -37,6 +38,14 @@ export const COMPAT_RENDITION_MAX_LONG_SIDE = 1920;
 const HDR_TRANSFERS = new Set(['arib-std-b67', 'smpte2084']);
 const HEVC_CODECS = new Set(['hevc', 'h265']);
 const PROBE_TIMEOUT_MS = 15_000;
+/**
+ * Dans le worker, une seconde de vidéo s'accorde six secondes d'encodage : un
+ * 4K HEVC HDR décodé, mappé puis réencodé en `medium` sur le serveur partagé
+ * tourne bien au-dessous du temps réel. Les cinq minutes par défaut de
+ * `runFfmpeg` tuaient l'encodage d'une longue vidéo, trois essais de suite, et
+ * la pièce finissait `failed` après quinze minutes de CPU perdues (#12294).
+ */
+export const COMPAT_RENDITION_ENCODE_MS_PER_MEDIA_SECOND = 6_000;
 
 export type VideoColourProbe = { readonly codec: string | null; readonly transfer: string | null };
 export type CompatRenditionPlan = { readonly maxLongSide: number; readonly crf: number; readonly toneMap: boolean };
@@ -91,10 +100,10 @@ function runProbe(args: readonly string[]): Promise<string | null> {
   });
 }
 
-export type VideoStream = { readonly codec_name?: string; readonly color_transfer?: string; readonly width?: number; readonly height?: number };
+export type VideoStream = { readonly codec_name?: string; readonly color_transfer?: string; readonly width?: number; readonly height?: number; readonly duration?: string };
 
 async function probeVideo(file: string): Promise<VideoStream | null> {
-  const out = await runProbe(['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,color_transfer,width,height', '-of', 'json', file]);
+  const out = await runProbe(['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=codec_name,color_transfer,width,height,duration', '-of', 'json', file]);
   if (out === null) return null;
   try {
     return (JSON.parse(out) as { streams?: VideoStream[] }).streams?.[0] ?? null;
@@ -122,7 +131,7 @@ export function ffmpegHasFilter(name: string): Promise<boolean> {
 
 export type CompatRenditionDeps = {
   readonly uploadBasePath: string;
-  readonly runFfmpeg: (args: string[]) => Promise<void>;
+  readonly runFfmpeg: (args: string[], timeoutMs?: number) => Promise<void>;
   readonly hasFilter?: (name: string) => Promise<boolean>;
   readonly probeVideo?: (file: string) => Promise<VideoStream | null>;
 };
@@ -134,6 +143,12 @@ export type CompatRenditionDeps = {
  * requête, ne prive plus une vidéo lourde de son rendu.
  */
 export type CompatRenditionOptions = { readonly strict?: boolean; readonly deferred?: boolean };
+
+function deferredEncodeTimeout(stream: VideoStream | null): number {
+  const seconds = Number(stream?.duration);
+  if (!Number.isFinite(seconds) || seconds <= 0) return FFMPEG_DEFAULT_TIMEOUT_MS;
+  return Math.max(FFMPEG_DEFAULT_TIMEOUT_MS, Math.ceil(seconds * COMPAT_RENDITION_ENCODE_MS_PER_MEDIA_SECOND));
+}
 
 function exceedsSyncBound(fileSize: number): boolean {
   const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
@@ -163,7 +178,9 @@ export async function produceCompatibilityRendition(
   try {
     // #11257 — le rendu H.264 d'une vidéo HEVC est l'encodage qui reste au
     // serveur depuis #11261 : il est mesuré à l'étape `transcode`.
-    await timeMediaStage('transcode', 'video', () => deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan)));
+    await timeMediaStage('transcode', 'video', () => options.deferred === true
+      ? deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan), deferredEncodeTimeout(stream))
+      : deps.runFfmpeg(buildCompatibilityRenditionArgs(inputAbs, outputAbs, plan)));
     const [rendered, stat] = await Promise.all([probe(outputAbs), fs.stat(outputAbs)]);
     if (!rendered?.width || !rendered.height || stat.size === 0) throw new Error('rendu vide');
     return { codec: 'h264', mimeType: 'video/mp4', url: outputRel, width: rendered.width, height: rendered.height, size: stat.size };

@@ -67,7 +67,7 @@ export interface RenditionMetadataPort {
 export interface RenditionDeps {
   readonly uploadBasePath: string;
   readonly metadataManager: RenditionMetadataPort;
-  readonly runFfmpeg: (args: string[]) => Promise<void>;
+  readonly runFfmpeg: (args: string[], timeoutMs?: number) => Promise<void>;
   readonly probeVideo?: CompatRenditionDeps['probeVideo'];
 }
 
