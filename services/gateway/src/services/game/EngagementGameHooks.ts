@@ -26,6 +26,7 @@ import { TrophyService } from './TrophyService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
 import { MissionService, type SignalOptions } from './MissionService';
 import { GameWeekPointsRecorder } from './GameWeekPoints';
+import { GameSparksDayRecorder } from './GameSparksDay';
 import { FlameService, type StreakPlan } from './FlameService';
 import { getPhotoMomentMarks, type PhotoMomentMarks } from './PhotoMomentMarks';
 import { isGamePhotoPushOn } from './photoPushFlag';
@@ -69,6 +70,9 @@ export class EngagementGameHooks {
   readonly abuse: GameAbuseGuard;
 
   readonly weekPoints: GameWeekPointsRecorder;
+
+  /** Le seau quotidien des étincelles que lit l'administration (#20619). */
+  readonly sparksDay: GameSparksDayRecorder;
 
   readonly seasons: SeasonService;
 
@@ -114,6 +118,7 @@ export class EngagementGameHooks {
     this.duo = new DuoService(prisma, { creditPoints, seasons: this.seasons, notifier });
     this.abuse = new GameAbuseGuard(prisma);
     this.weekPoints = new GameWeekPointsRecorder(prisma);
+    this.sparksDay = new GameSparksDayRecorder(prisma);
     // Un fait de jeu avance la mission du jour ET le duo de la semaine, chacun isolé.
     this.signals = new MessageGameSignals(prisma, { missions: { onSignal: (userId, signal, options) => this.onSignal(userId, signal, options) }, creditPoints });
   }
@@ -150,11 +155,13 @@ export class EngagementGameHooks {
 
   /**
    * Des points viennent d'être GAGNÉS (#9384, #9385) : la semaine du compte
-   * monte d'autant — le total que les ligues classent. Un débit (la frappe) ne
-   * passe jamais ici ; une reprise passe par `onPointsTakenBack`.
+   * monte d'autant — le total que les ligues classent —, et le seau du jour que
+   * lit l'administration (#20619). Un débit (la frappe) ne passe jamais ici ; une
+   * reprise passe par `onPointsTakenBack`.
    */
   async onPointsGained(userId: string, points: number): Promise<void> {
     await this.isolated('week points', () => this.weekPoints.record(userId, points));
+    await this.isolated('sparks day', () => this.sparksDay.record(userId, points));
     await this.markPhotoMoment(userId);
   }
 

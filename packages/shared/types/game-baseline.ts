@@ -4,7 +4,7 @@
  * Des AGRÉGATS sans identité : aucun identifiant de compte, aucun pseudonyme, aucune ligne par compte.
  *
  * @see services/gateway/src/services/game/gameBaselineAggregate.ts (la loi)
- * @see schema.prisma — `User.createdAt` / `lastActiveAt`, `GameDay.chestClaimedAt`, `MeeshLedger`, `GameProfile.gameHiddenAt`
+ * @see schema.prisma — `User.createdAt` / `lastActiveAt`, `GameDay.chestClaimedAt`, `MeeshLedger`, `GameProfile.gameHiddenAt`, `GameSparksDay`
  */
 
 export const GAME_BASELINE_DEFAULT_WINDOW_DAYS = 14;
@@ -33,6 +33,13 @@ export type GameDailyCounters = {
   readonly offeringsOpened: number;
   readonly meeshesMinted: number;
   readonly meeshesSpent: number;
+  /**
+   * Les étincelles gagnées ce jour-là, tous joueurs confondus, et le nombre de joueurs qui en ont gagné (#20619) —
+   * leur quotient est l'« étincelles par joueur actif ». Bruts : une reprise de contenu retiré ne les baisse pas.
+   * Zéro avant le déploiement du seau ; absents d'une passerelle d'avant #20619.
+   */
+  readonly sparksEarned?: number;
+  readonly sparkEarners?: number;
 };
 
 export type GameBaselineSummary = {
