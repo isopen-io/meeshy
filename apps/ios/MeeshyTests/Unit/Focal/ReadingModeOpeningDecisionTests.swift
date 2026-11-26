@@ -192,6 +192,81 @@ final class ReadingModeOpeningDecisionTests: XCTestCase {
         XCTAssertEqual(mode, .bubbles)
     }
 
+    // MARK: - L'enveloppe de la bannière tirée peint la face de la feuille (#18855)
+
+    /// La loi pure : le Résumé s'ouvre en Résumé ; tout autre mode montre des
+    /// messages, posés comme l'aperçu (la Rivière en Script).
+    func test_openingFace_summary_isTheSummary() {
+        let face = ConversationOpeningFace.resolve(.init(mode: .summary, reason: .default))
+
+        XCTAssertEqual(face, .summary)
+    }
+
+    func test_openingFace_river_isMessagesInScript() {
+        let face = ConversationOpeningFace.resolve(.init(mode: .river, reason: .default))
+
+        XCTAssertEqual(face, .messages(.script))
+    }
+
+    func test_openingFace_bubbles_isMessagesInBubbles() {
+        let face = ConversationOpeningFace.resolve(.init(mode: .bubbles, reason: .sticky))
+
+        XCTAssertEqual(face, .messages(.bubbles))
+    }
+
+    /// AUTO au-delà du plafond de non-lus : le fil s'ouvre en Résumé, donc
+    /// l'enveloppe aussi — jamais les derniers messages qu'elle quitterait.
+    func test_envelopeFace_unreadOverCap_isTheSummary() {
+        let conversation = makeConversation(unreadCount: ReadingModeOrchestrator.unreadCap + 1)
+
+        let face = LentilleReadingModeContext.envelopeFace(
+            for: conversation, identity: .registered(userId: "u1"), isFlagEnabled: true,
+            isRiverFlagEnabled: false, store: OpeningDecisionStore(), now: now
+        )
+
+        XCTAssertEqual(face, .summary)
+    }
+
+    func test_envelopeFace_fewUnread_isMessagesInThePreviewMode() {
+        let conversation = makeConversation()
+        let store = OpeningDecisionStore()
+
+        let face = LentilleReadingModeContext.envelopeFace(
+            for: conversation, identity: .registered(userId: "u1"), isFlagEnabled: true,
+            isRiverFlagEnabled: false, store: store, now: now
+        )
+
+        XCTAssertEqual(face, .messages(LentilleReadingModeContext.previewMode(
+            for: conversation, identity: .registered(userId: "u1"), isFlagEnabled: true,
+            isRiverFlagEnabled: false, store: store, now: now
+        )))
+    }
+
+    /// La MÊME loi que la feuille : la face de l'enveloppe est celle de la
+    /// décision que `ConversationView.init` remet au contrôleur.
+    func test_envelopeFace_isTheFaceOfTheThreadDecision() {
+        for (conversation, sticky, flag) in [
+            (makeConversation(unreadCount: ReadingModeOrchestrator.unreadCap + 1), nil, true),
+            (makeConversation(), nil, true),
+            (makeConversation(), ConversationReadingMode.bubbles, true),
+            (makeConversation(unreadCount: ReadingModeOrchestrator.unreadCap + 1), nil, false)
+        ] as [(Conversation, ConversationReadingMode?, Bool)] {
+            let store = OpeningDecisionStore()
+            store.stubbedMode = sticky
+            let identity = ConversationViewerIdentity.registered(userId: "u1")
+
+            XCTAssertEqual(
+                LentilleReadingModeContext.envelopeFace(
+                    for: conversation, identity: identity, isFlagEnabled: flag,
+                    isRiverFlagEnabled: false, store: store, now: now
+                ),
+                ConversationOpeningFace.resolve(threadDecision(
+                    for: conversation, identity: identity, isFlagEnabled: flag, store: store
+                ))
+            )
+        }
+    }
+
     /// `select` / `resetToAuto` recalculent par la MÊME loi que l'ouverture.
     func test_recompute_afterSelect_followsTheOpeningDecision() {
         let store = OpeningDecisionStore()

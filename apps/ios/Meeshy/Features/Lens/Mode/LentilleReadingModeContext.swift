@@ -226,6 +226,39 @@ nonisolated enum LentilleReadingModeContext {
         ).mode
     }
 
+    /// #18855 — la face que l'enveloppe de la bannière tirée peint : celle de
+    /// la décision d'OUVERTURE du fil (`openingDecision`), la même que la
+    /// feuille remet à `ReadingModeController`. Une conversation qui s'ouvre
+    /// en Résumé montre le Résumé dès l'enveloppe, jamais des messages que la
+    /// feuille remplacerait au relais.
+    static func envelopeFace(
+        for conversation: Conversation,
+        identity: ConversationViewerIdentity,
+        isFlagEnabled: Bool = MeeshyFeatureFlags.isReadingModesEnabled,
+        isRiverFlagEnabled: Bool = LentilleFeatureFlag.isRiviereModeEnabled,
+        store: FocalReadingModePreferenceStoring = ReadingModePreferenceStore(),
+        now: Date = Date()
+    ) -> ConversationOpeningFace {
+        ConversationOpeningFace.resolve(openingDecision(
+            for: conversation,
+            identity: identity,
+            isFlagEnabled: isFlagEnabled,
+            isRiverFlagEnabled: isRiverFlagEnabled,
+            store: store,
+            now: now
+        ))
+    }
+
+    /// La face de l'enveloppe pour le LECTEUR COURANT (même résolveur
+    /// d'identité que `listPreviewMode`).
+    @MainActor
+    static func listEnvelopeFace(for conversation: Conversation) -> ConversationOpeningFace {
+        envelopeFace(
+            for: conversation,
+            identity: ConversationViewerIdentityResolver.resolve(authManager: AuthManager.shared, anonymousSession: nil)
+        )
+    }
+
     /// Le mode de l'aperçu pour le LECTEUR COURANT, résolu par l'unique point
     /// de branchement invité/inscrit (`ConversationViewerIdentityResolver`).
     /// La liste n'est jamais montée pour une session invitée (voir
@@ -237,6 +270,22 @@ nonisolated enum LentilleReadingModeContext {
             for: conversation,
             identity: ConversationViewerIdentityResolver.resolve(authManager: AuthManager.shared, anonymousSession: nil)
         )
+    }
+}
+
+// MARK: - La face d'ouverture (#18855)
+
+/// Ce qu'une conversation montre à son ouverture : le Résumé vivant, ou des
+/// messages dans un mode qui montre le fil. La Rivière, hôte dédié qui ne se
+/// peint pas depuis un aperçu, s'y pose en Script comme « Aller au message »
+/// (`ReadingModeController.landing`).
+nonisolated enum ConversationOpeningFace: Equatable, Sendable {
+    case summary
+    case messages(ConversationReadingMode)
+
+    static func resolve(_ opening: ReadingModeOrchestrator.OrchestratorDecision) -> ConversationOpeningFace {
+        guard opening.mode != .summary else { return .summary }
+        return .messages(ReadingModeController.landing(opening).mode)
     }
 }
 

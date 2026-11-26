@@ -654,9 +654,10 @@ final class ConversationPreviewPhotoFallbacks {
 // MARK: - Les messages en cache peints dans l'enveloppe de la bannière (#18721)
 
 /// Les derniers messages en cache d'une conversation, peints dans l'enveloppe
-/// du tiroir de bannière le temps que la feuille réelle peigne les siens : la
-/// même face que l'aperçu d'appui long, posée au bas comme le fil. Une
-/// conversation verrouillée n'y montre rien.
+/// du tiroir de bannière le temps que la feuille réelle peigne les siens, dans
+/// la face que la feuille ouvrira (`ConversationOpeningFace`, #18855) : le
+/// Résumé si elle s'ouvre en Résumé, sinon les messages posés au bas comme le
+/// fil. Une conversation verrouillée n'y montre rien.
 struct NotificationEnvelopeMessages: View {
     let conversation: Conversation?
     let loader: ConversationListPreviewLoader?
@@ -679,10 +680,40 @@ private struct NotificationEnvelopeMessageList: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        messages(of: conversation, state: state)
+        switch LentilleReadingModeContext.listEnvelopeFace(for: conversation) {
+        case .summary:
+            summary(of: conversation, state: state)
+        case .messages(let mode):
+            messages(of: conversation, state: state, mode: mode)
+        }
     }
 
-    private func messages(of conversation: Conversation, state: ConversationListPreviewLoader.PreviewState) -> some View {
+    /// #18855 — la conversation s'ouvre en Résumé : l'enveloppe peint le
+    /// Résumé des messages en cache, la face que la feuille montrera. Pas
+    /// d'enrichissement réseau (la feuille le fait) ; la fenêtre en cache ne
+    /// prétend pas couvrir tous les non-lus, comme celle que la feuille ouvre.
+    private func summary(of conversation: Conversation, state: ConversationListPreviewLoader.PreviewState) -> some View {
+        LivingSummaryHost(
+            messages: state.messages,
+            viewerId: AuthManager.shared.currentUser?.id ?? "",
+            viewerUsername: AuthManager.shared.currentUser?.username,
+            windowCoversUnread: false,
+            analysisProvider: nil,
+            conversationId: conversation.id,
+            isDark: colorScheme == .dark,
+            protections: LivingSummaryProtections.entries(messages: state.messages),
+            onReplyToPerson: { _ in },
+            onOpenEpisode: { _ in },
+            onResumeThread: {}
+        )
+        .id(state.messages.last?.id)
+        .frame(width: width, alignment: .top)
+        .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private func messages(
+        of conversation: Conversation, state: ConversationListPreviewLoader.PreviewState, mode: ConversationReadingMode
+    ) -> some View {
         let isDark = colorScheme == .dark
         let accent = conversation.displayPalette(isDark: isDark).primary
         return ConversationRecentMessagesPreview(
@@ -690,7 +721,7 @@ private struct NotificationEnvelopeMessageList: View {
             translations: state.snapshot?.translations ?? [:],
             served: state.snapshot?.served ?? [:],
             phase: state.phase,
-            readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
+            readingMode: mode,
             accentColor: accent,
             skin: ConversationPreviewRenderer.skin(for: conversation, isDark: isDark),
             isDirect: conversation.type == .direct,

@@ -193,6 +193,22 @@ final class RootNotificationToastOverlayPullTests: XCTestCase {
         XCTAssertTrue(try host().contains("NotificationEnvelopeMessages("))
     }
 
+    /// #18855 — l'enveloppe peint ce que la feuille montrera, décidé par la
+    /// loi de la feuille : le Résumé en cache quand elle s'ouvre en Résumé.
+    /// Aucune seconde décision : ni l'aperçu de liste, ni un mode recalculé.
+    func test_envelope_paintsTheFaceTheSheetOpensOn() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/ConversationRecentMessagesPreview.swift"
+        ))
+        let start = try XCTUnwrap(source.range(of: "struct NotificationEnvelopeMessages: View"))
+        let envelope = String(source[start.lowerBound...])
+
+        XCTAssertTrue(envelope.contains("LentilleReadingModeContext.listEnvelopeFace(for: conversation)"))
+        XCTAssertTrue(envelope.contains("case .summary"))
+        XCTAssertTrue(envelope.contains("LivingSummaryHost("))
+        XCTAssertFalse(envelope.contains("listPreviewMode("), "une seconde décision ferait changer la face au relais")
+    }
+
     /// Les deux annonces que l'enveloppe attend : la feuille à l'écran, puis
     /// ses messages peints.
     func test_previewSheet_announcesShownThenPainted() throws {
