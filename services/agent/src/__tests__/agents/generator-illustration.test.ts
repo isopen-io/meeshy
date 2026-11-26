@@ -1,6 +1,28 @@
+const openAiResponsesCreate = jest.fn();
+const anthropicMessagesCreate = jest.fn();
+
+jest.mock('openai', () => ({
+  __esModule: true,
+  default: jest.fn().mockImplementation(() => ({
+    responses: { create: openAiResponsesCreate },
+    chat: { completions: { create: jest.fn() } },
+  })),
+}));
+
+jest.mock(
+  '@anthropic-ai/sdk',
+  () => ({
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({ messages: { create: anthropicMessagesCreate } })),
+  }),
+  { virtual: true },
+);
+
 import { createGeneratorNode } from '../../agents/generator';
 import type { ConversationState, ControlledUser, MessageDirective, ToneProfile } from '../../graph/state';
 import type { LlmChatParams, LlmChatResponse, LlmProvider } from '../../llm/types';
+import { createOpenAiProvider } from '../../llm/providers/openai-provider';
+import { createAnthropicProvider } from '../../llm/providers/anthropic-provider';
 
 function makeProfile(overrides: Partial<ToneProfile> = {}): ToneProfile {
   return {
@@ -174,5 +196,53 @@ describe('generator — illustration of a fresh topic', () => {
     await createGeneratorNode(llm)(makeState(makeDirective()));
     const systemPrompt = llm.calls[0]?.systemPrompt ?? '';
     expect(systemPrompt.toLowerCase()).toMatch(/ragot|kongossa|secret/);
+  });
+});
+
+const ANSWER = 'Vous avez vu ce qui s\'est passé à Bonabéri ? 😳';
+
+const PROVIDERS: ReadonlyArray<{ name: string; make: () => LlmProvider; answerWithCitation: () => void }> = [
+  {
+    name: 'openai',
+    make: () => createOpenAiProvider({ provider: 'openai', apiKey: 'k', model: 'gpt-4o-mini' }),
+    answerWithCitation: () =>
+      openAiResponsesCreate.mockResolvedValue({
+        model: 'gpt-4o-mini',
+        usage: { input_tokens: 1, output_tokens: 1 },
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'output_text', text: ANSWER, annotations: [{ type: 'url_citation', ...ARTICLE }] }],
+          },
+        ],
+      }),
+  },
+  {
+    name: 'anthropic',
+    make: () => createAnthropicProvider({ provider: 'anthropic', apiKey: 'k', model: 'claude-haiku-4-5-20251001' }),
+    answerWithCitation: () =>
+      anthropicMessagesCreate.mockResolvedValue({
+        model: 'claude-haiku-4-5-20251001',
+        usage: { input_tokens: 1, output_tokens: 1 },
+        content: [
+          { type: 'server_tool_use', id: 's1', name: 'web_search', input: { query: 'Bonabéri' } },
+          { type: 'web_search_tool_result', tool_use_id: 's1', content: [{ type: 'web_search_result', ...ARTICLE }] },
+          { type: 'text', text: ANSWER, citations: [{ type: 'web_search_result_location', ...ARTICLE, cited_text: '…' }] },
+        ],
+      }),
+  },
+];
+
+describe.each(PROVIDERS)('generator — a fresh topic opened under the $name provider', ({ make, answerWithCitation }) => {
+  beforeEach(() => {
+    openAiResponsesCreate.mockReset();
+    anthropicMessagesCreate.mockReset();
+  });
+
+  it('carries the article it cites as its illustration source', async () => {
+    answerWithCitation();
+    const result = await createGeneratorNode(make())(makeState(makeDirective()));
+    const [message] = result.pendingActions;
+    expect(message.type === 'message' && message.illustration).toEqual({ sourceUrl: ARTICLE.url });
   });
 });
