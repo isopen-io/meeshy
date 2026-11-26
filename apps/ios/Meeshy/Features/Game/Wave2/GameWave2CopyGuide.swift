@@ -157,6 +157,22 @@ extension GameText {
 
     static var guideMomentOfferingKeptShort: String { String(localized: "game2.guide.moment.offering_kept.short", defaultValue: "Ton Offrande t’attend, gardée par les aïeux.", bundle: .main) }
 
+    static func guideMomentFlameGoalReachedWhat(days: String) -> String {
+        String(localized: "game2.guide.moment.flame_goal_reached.what", defaultValue: "Tes aïeux saluent ta Flamme : \(days) tenus\u{00a0}!", bundle: .main)
+    }
+
+    static var guideMomentFlameGoalReachedMeans: String { String(localized: "game2.guide.moment.flame_goal_reached.means", defaultValue: "Tu as tenu l’objectif que tu t’étais fixé.", bundle: .main) }
+
+    static func guideMomentFlameGoalReachedNext(days: String) -> String {
+        String(localized: "game2.guide.moment.flame_goal_reached.next", defaultValue: "Prochaine marche : \(days), à choisir dans ta Flamme.", bundle: .main)
+    }
+
+    static var guideMomentFlameGoalReachedNextTop: String { String(localized: "game2.guide.moment.flame_goal_reached.next_top", defaultValue: "Tu as gravi toutes les marches : ta Flamme brûle haut.", bundle: .main) }
+
+    static func guideMomentFlameGoalReachedShort(days: String) -> String {
+        String(localized: "game2.guide.moment.flame_goal_reached.short", defaultValue: "Objectif de Flamme tenu : \(days).", bundle: .main)
+    }
+
     static var photoKickerTrophy: String { String(localized: "game2.photo.kicker.trophy", defaultValue: "Nouveau trophée", bundle: .main) }
 
     static var photoKickerLeagueUp: String { String(localized: "game2.photo.kicker.league_up", defaultValue: "Cercle gravi", bundle: .main) }

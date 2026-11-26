@@ -73,7 +73,7 @@ enum GameGuideCard {
         let emblem = GamePhotoMomentsV2.emblem(of: moment.event)
         let photo = emblem.map(GamePhotoMoments.ofEmblemV2)
         return GuideCard(
-            key: moment.key.rawValue,
+            key: moment.seenKey,
             speaker: moment.speaker,
             mood: moment.mood,
             copy: GameGuideCopy.momentV2(moment),

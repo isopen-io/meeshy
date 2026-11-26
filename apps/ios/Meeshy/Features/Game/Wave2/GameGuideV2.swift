@@ -5,7 +5,8 @@ import MeeshySDK
 //
 // La loi partagée (`GameGuideV2.chooseMoment`) choisit LE moment ; ce fichier relève ses huit événements dans l'état
 // du jeu, comme `GameGuideEvents` le fait pour la vague 1 — et la première Veilleuse offerte, dite le jour du cadeau —
-// et l'Offrande gardée par les aïeux, redite tant qu'elle est prête le jour du retour.
+// et l'Offrande gardée par les aïeux, redite tant qu'elle est prête le jour du retour — et l'objectif de Flamme atteint,
+// salué une fois par objectif.
 // Miroir de `apps/web/src/lib/game-guide/events-v2.ts` :
 //
 //  - `standing` lit l'ÉTAT à l'ouverture. Seules deux découvertes s'y lisent — la première ligue, le début d'une
@@ -87,6 +88,21 @@ enum GameGuideEventsV2 {
             ? .offeringKept(easedDays: GameWelcomeBack.easedDays) : nil
     }
 
+    /// L'objectif de Flamme atteint, tant que sa clé (`GameFlameGoalLaw.nextSeenKey`) n'est ni dans `game.guideSeen` ni
+    /// dans ce que l'écran vient de marquer : la carte de la Flamme et la carte de guide la lisent toutes les deux, donc
+    /// un objectif ne se salue qu'une fois, par l'une ou par l'autre.
+    private static func goalReached(_ game: GameBlock, seen: Set<String>) -> GuideEventV2? {
+        guard let current = game.flame.goal?.current, current.reached else { return nil }
+        let key = GameFlameGoalLaw.nextSeenKey(reachedTarget: current.target)
+        guard !game.guideSeen.contains(key), !seen.contains(key) else { return nil }
+        return .flameGoalReached(target: current.target, next: current.next)
+    }
+
+    private static func reachedTarget(_ game: GameBlock) -> Int? {
+        guard let current = game.flame.goal?.current, current.reached else { return nil }
+        return current.target
+    }
+
     /// Ce que l'état dit à l'ouverture, et que la personne n'a pas encore entendu — plus l'Offrande gardée, qui se
     /// redit tant qu'elle est prête.
     static func standing(game: GameBlock, seen: Set<String>) -> [GuideEventV2] {
@@ -96,7 +112,8 @@ enum GameGuideEventsV2 {
         }
         if let season = GuideSnapshotV2(game: game).season { events.append(seasonStart(season)) }
         if let gift = freezeGift(game) { events.append(gift) }
-        let discoveries = events.filter { !seen.contains($0.key.rawValue) }
+        if let goal = goalReached(game, seen: seen) { events.append(goal) }
+        let discoveries = events.filter { !seen.contains($0.seenKey) }
         return discoveries + (keptOffering(game).map { [$0] } ?? [])
     }
 
@@ -144,13 +161,16 @@ enum GameGuideEventsV2 {
         return events
     }
 
-    /// Les événements d'une transition entre deux lectures du bloc. Le cadeau et l'Offrande gardée ne se disent qu'en
-    /// ARRIVANT : une lecture qui les portait déjà les a annoncés.
+    /// Les événements d'une transition entre deux lectures du bloc. Le cadeau, l'Offrande gardée et l'objectif atteint ne
+    /// se disent qu'en ARRIVANT : une lecture qui les portait déjà les a annoncés.
     static func transition(from before: GameBlock, to after: GameBlock) -> [GuideEventV2] {
         let gift = before.flame.freezeGifted == true ? nil : freezeGift(after)
         let welcome = GameWelcomeBack.announcesKeptOffering(kept: before.chest.kept, status: before.chest.status)
             ? nil : keptOffering(after)
-        return between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after)) + [gift, welcome].compactMap { $0 }
+        let target = reachedTarget(after)
+        let goal = target == nil || reachedTarget(before) == target ? nil : goalReached(after, seen: [])
+        return between(before: GuideSnapshotV2(game: before), after: GuideSnapshotV2(game: after))
+            + [gift, welcome, goal].compactMap { $0 }
     }
 }
 
@@ -275,7 +295,21 @@ extension GameGuideCopy {
                 GameText.guideMomentOfferingKeptWhat, GameText.guideMomentOfferingKeptMeans,
                 GameText.guideMomentOfferingKeptNext(days: GameCopy.days(easedDays)), GameText.guideMomentOfferingKeptShort
             )
+        case .flameGoalReached(let target, let next):
+            return flameGoalReached(target: target, next: next, action: action)
         }
+    }
+
+    /// L'objectif de Flamme tenu : la marche suivante à choisir dans la Flamme, ou le sommet atteint.
+    private static func flameGoalReached(target: Int, next: Int?, action: String) -> GuideCopy {
+        let days = GameCopy.days(target)
+        return GuideCopy(
+            what: GameText.guideMomentFlameGoalReachedWhat(days: days),
+            means: GameText.guideMomentFlameGoalReachedMeans,
+            next: next.map { GameText.guideMomentFlameGoalReachedNext(days: GameCopy.days($0)) } ?? GameText.guideMomentFlameGoalReachedNextTop,
+            short: GameText.guideMomentFlameGoalReachedShort(days: days),
+            action: action
+        )
     }
 }
 

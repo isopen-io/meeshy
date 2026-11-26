@@ -38,6 +38,8 @@ public enum GuideMomentKeyV2: String, CaseIterable, Codable, Sendable, Hashable 
     case flameFreezeGift = "flame-freeze-gift"
     /// Le jour du retour, l'Offrande gardée par les aïeux est prête. Redite tant qu'elle l'est.
     case offeringKept = "offering-kept"
+    /// L'objectif de Flamme choisi est atteint. Sa clé « vue » n'est pas son genre : voir `GuideEventV2.seenKey`.
+    case flameGoalReached = "flame-goal-reached"
 }
 
 /// Ce qui vient d'arriver au joueur, avec les chiffres que le moment cite.
@@ -52,6 +54,8 @@ public enum GuideEventV2: Sendable, Equatable {
     case atlasStamp(language: String, stamped: Int, total: Int)
     case flameFreezeGift(freezes: Int)
     case offeringKept(easedDays: Int)
+    /// `target` jours tenus ; `next`, la marche suivante (`nil` après la dernière).
+    case flameGoalReached(target: Int, next: Int?)
 
     public var key: GuideMomentKeyV2 {
         switch self {
@@ -65,6 +69,18 @@ public enum GuideEventV2: Sendable, Equatable {
         case .atlasStamp: .atlasStamp
         case .flameFreezeGift: .flameFreezeGift
         case .offeringKept: .offeringKept
+        case .flameGoalReached: .flameGoalReached
+        }
+    }
+
+    /// La clé « vue » que le moment écrit dans `game.guideSeen` : son genre, sauf l'objectif de Flamme atteint, dont
+    /// la clé est celle de l'objectif (`GameFlameGoalLaw.nextSeenKey`), que la carte de la Flamme lit aussi. Un objectif
+    /// se salue donc une fois, par l'une ou par l'autre, et un nouvel objectif atteint est un moment nouveau. Miroir de
+    /// `guideSeenKeyV2`.
+    public var seenKey: String {
+        switch self {
+        case .flameGoalReached(let target, _): GameFlameGoalLaw.nextSeenKey(reachedTarget: target)
+        default: key.rawValue
         }
     }
 }
@@ -86,6 +102,9 @@ public struct GuideMomentV2: Sendable, Equatable {
         self.action = action
         self.presentation = presentation
     }
+
+    /// La clé « vue » de la carte : `GuideEventV2.seenKey`.
+    public var seenKey: String { event.seenKey }
 }
 
 /// Un événement de l'ensemble des vingt et un moments : les treize d'origine ou les huit nouveaux.
@@ -97,6 +116,13 @@ public enum GuideAnyEvent: Sendable, Equatable {
         switch self {
         case .original(let event): event.key.rawValue
         case .wave2(let event): event.key.rawValue
+        }
+    }
+
+    var seenKeyValue: String {
+        switch self {
+        case .original(let event): event.key.rawValue
+        case .wave2(let event): event.seenKey
         }
     }
 }
@@ -141,12 +167,13 @@ public enum GameGuideV2 {
         case .atlasStamp: Persona(speaker: .mee, mood: .cheer, action: .seeAtlas)
         case .flameFreezeGift: Persona(speaker: .meo, mood: .cheer, action: .seeFlame)
         case .offeringKept: Persona(speaker: .mee, mood: .cheer, action: .seeMissions)
+        case .flameGoalReached: Persona(speaker: .duo, mood: .proud, action: .seeFlame)
         }
     }
 
     public static func moment<Seen: Sequence>(for event: GuideEventV2, seen: Seen) -> GuideMomentV2 where Seen.Element == String {
         let voice = persona(of: event)
-        let presentation: GuidePresentation = Set(seen).contains(event.key.rawValue) ? .short : .full
+        let presentation: GuidePresentation = Set(seen).contains(event.seenKey) ? .short : .full
         return GuideMomentV2(key: event.key, speaker: voice.speaker, mood: voice.mood, event: event,
                              action: voice.action, presentation: presentation)
     }
@@ -156,8 +183,8 @@ public enum GameGuideV2 {
     /// éteint ou protège passent avant.
     public static let momentPriorityAll: [String] = [
         "new-rank", "prestige", "trophy", "level-100", "first-mint", "season-end", "offering-kept", "flame-out", "flame-at-risk",
-        "flame-freeze-gift", "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier", "badge-extinguished",
-        "price-rises", "atlas-stamp", "league-first", "first-mint-possible", "missions-unlocked", "first-level",
+        "flame-freeze-gift", "flame-goal-reached", "league-promoted", "league-relegated", "new-tier", "season-start", "treasury-tier",
+        "badge-extinguished", "price-rises", "atlas-stamp", "league-first", "first-mint-possible", "missions-unlocked", "first-level",
         "return-after-absence",
     ]
 
@@ -181,7 +208,7 @@ public enum GameGuideV2 {
             let order = rank(lhs) - rank(rhs)
             return order == 0 ? 0 : (order < 0 ? -1 : 1)
         }
-        guard let chosen = byPriority.first(where: { !seenSet.contains($0.keyValue) }) ?? byPriority.first else { return nil }
+        guard let chosen = byPriority.first(where: { !seenSet.contains($0.seenKeyValue) }) ?? byPriority.first else { return nil }
         switch chosen {
         case .original(let event): return .original(GameGuide.moment(for: event, seen: seenSet))
         case .wave2(let event): return .wave2(moment(for: event, seen: seenSet))
@@ -197,7 +224,8 @@ public enum GameGuideV2 {
 // qu'une montée vers la même ligue une autre semaine est un moment nouveau.
 //
 // Ne se photographient pas : une première ligue, une descente (Meo la dit
-// calmement), une saison inachevée, un simple tampon d'Atlas, une Veilleuse offerte, une Offrande gardée.
+// calmement), une saison inachevée, un simple tampon d'Atlas, une Veilleuse offerte, une Offrande gardée, un objectif
+// de Flamme atteint.
 
 public enum PhotoMomentEmblemV2: Sendable, Equatable {
     case trophy(trophyKey: String)
@@ -223,7 +251,7 @@ public enum GamePhotoMomentsV2 {
         case .leaguePromoted(_, let to, _, let weekKey): .leagueUp(league: to, weekKey: weekKey)
         case .seasonEnd(let season, _, let completed, _): completed ? .season(season: season) : nil
         case .prestige(let prestige, _): .prestige(number: prestige)
-        case .leagueFirst, .leagueRelegated, .seasonStart, .atlasStamp, .flameFreezeGift, .offeringKept: nil
+        case .leagueFirst, .leagueRelegated, .seasonStart, .atlasStamp, .flameFreezeGift, .offeringKept, .flameGoalReached: nil
         }
     }
 
