@@ -382301,6 +382301,53 @@
           }
         }
       }
+    },
+    "game.flame_panel.pause_next": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يستطيع لهبك أن يستريح من جديد ابتداءً من %@."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Flamme kann ab dem %@ wieder ruhen."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your Flame can rest again from %@."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu Llama podrá descansar de nuevo a partir del %@."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta prochaine veille sera possible dès le %@."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La tua Fiamma potrà riposare di nuovo dal %@."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sua Chama poderá descansar de novo a partir de %@."
+          }
+        }
+      }
     }
   },
   "version": "1.1"
