@@ -245,6 +245,7 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     FlameGoalRunning("game_flame_panel_goal_running", GameTextForm.Plain),
     FlameGoalReached("game_flame_panel_goal_reached", GameTextForm.Plain),
     FlameGoalNext("game_flame_panel_goal_next", GameTextForm.Plain),
+    FlameGoalNextIntro("game_flame_panel_goal_next_intro", GameTextForm.Plain),
     FlameGoalLater("game_flame_panel_goal_later", GameTextForm.Plain),
     FlameGoalNotOffered("game_error_flame_goal_not_offered", GameTextForm.Plain),
     FlameGoalNoFlame("game_error_flame_goal_no_flame", GameTextForm.Plain),

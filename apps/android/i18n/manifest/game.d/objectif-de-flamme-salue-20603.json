@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.flame_panel.goal_next_intro",
+          "androidName": "game_flame_panel_goal_next_intro",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_goal_reached.means",
+          "androidName": "game2_guide_moment_flame_goal_reached_means",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_goal_reached.next",
+          "androidName": "game2_guide_moment_flame_goal_reached_next",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_goal_reached.next_top",
+          "androidName": "game2_guide_moment_flame_goal_reached_next_top",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_goal_reached.short",
+          "androidName": "game2_guide_moment_flame_goal_reached_short",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game2.guide.moment.flame_goal_reached.what",
+          "androidName": "game2_guide_moment_flame_goal_reached_what",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

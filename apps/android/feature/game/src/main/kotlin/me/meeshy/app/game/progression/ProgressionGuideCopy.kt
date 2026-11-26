@@ -328,6 +328,17 @@ private fun momentCopyV2(event: GuideEventV2, action: String): GuideCopyText = w
         stringResource(R.string.game2_guide_moment_offering_kept_short),
         action,
     )
+    is GuideEventV2.FlameGoalReached -> {
+        val days = gameString(GameCopyLaws.days(event.target))
+        GuideCopyText(
+            stringResource(R.string.game2_guide_moment_flame_goal_reached_what, days),
+            stringResource(R.string.game2_guide_moment_flame_goal_reached_means),
+            event.next?.let { stringResource(R.string.game2_guide_moment_flame_goal_reached_next, gameString(GameCopyLaws.days(it))) }
+                ?: stringResource(R.string.game2_guide_moment_flame_goal_reached_next_top),
+            stringResource(R.string.game2_guide_moment_flame_goal_reached_short, days),
+            action,
+        )
+    }
 }
 
 /** Une étape de l'intégration : sa phrase forte EST sa version courte (iOS `GameGuideCopy.step`). */
