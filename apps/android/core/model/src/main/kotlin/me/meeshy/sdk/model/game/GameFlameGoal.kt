@@ -44,6 +44,8 @@ public sealed interface FlameGoalSection {
     public data class Running(val target: Int, val remaining: Int) : FlameGoalSection
     /** Le signe des aïeux, et la marche suivante s'il en reste une. */
     public data class Reached(val target: Int, val next: Int?) : FlameGoalSection
+    /** Le salut déjà dit (fermé ici ou montré par Mee et Meo) : la marche suivante reste choisissable, sobrement. */
+    public data class Next(val target: Int, val next: Int) : FlameGoalSection
 }
 
 public object GameFlameGoalLaw {
@@ -71,13 +73,16 @@ public object GameFlameGoalLaw {
     /** La clé de guide qui ferme le signe des aïeux, une fois par objectif atteint (`game.guideSeen`). */
     public fun nextSeenKey(reachedTarget: Int): String = "flame-goal-next-${max(0, reachedTarget)}"
 
-    /** La section de la carte ; `null` quand il n'y a rien à dire, ou que le signe a été fermé. */
+    /**
+     * La section de la carte ; `null` quand il n'y a rien à dire. Une fois le salut dit (sa clé dans `guideSeen`), il ne
+     * se redit pas, mais la marche suivante reste ; au sommet, plus rien (iOS `GoalSection.next`, web `kind: 'next'`).
+     */
     public fun section(goal: GameServedFlameGoal?, guideSeen: Collection<String>): FlameGoalSection? {
         goal ?: return null
         val current = goal.current ?: return goal.offer.takeIf { it.isNotEmpty() }?.let(FlameGoalSection::Choose)
         if (!current.reached) return FlameGoalSection.Running(current.target, current.remaining)
-        if (nextSeenKey(current.target) in guideSeen) return null
-        return FlameGoalSection.Reached(current.target, current.next)
+        if (nextSeenKey(current.target) !in guideSeen) return FlameGoalSection.Reached(current.target, current.next)
+        return current.next?.let { FlameGoalSection.Next(current.target, it) }
     }
 }
 

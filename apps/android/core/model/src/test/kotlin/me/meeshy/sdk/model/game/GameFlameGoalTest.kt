@@ -85,7 +85,7 @@ class GameFlameGoalTest {
     }
 
     @Test
-    fun `la carte propose, dit ce qu il reste, puis salue jusqu a ce qu on ferme le signe`() {
+    fun `la carte propose, dit ce qu il reste, salue, puis garde la marche suivante une fois le signe ferme`() {
         val offer = GameServedFlameGoal(listOf(7, 14, 30), null)
         assertThat(GameFlameGoalLaw.section(offer, guideSeen = emptyList())).isEqualTo(FlameGoalSection.Choose(listOf(7, 14, 30)))
 
@@ -94,7 +94,9 @@ class GameFlameGoalTest {
 
         val reached = GameServedFlameGoal(listOf(14), GameServedFlameGoal.Current(7, 0, true, 14))
         assertThat(GameFlameGoalLaw.section(reached, guideSeen = emptyList())).isEqualTo(FlameGoalSection.Reached(7, 14))
-        assertThat(GameFlameGoalLaw.section(reached, guideSeen = listOf("flame-goal-next-7"))).isNull()
+        assertThat(GameFlameGoalLaw.section(reached, guideSeen = listOf("flame-goal-next-7"))).isEqualTo(FlameGoalSection.Next(7, 14))
+        val top = GameServedFlameGoal(emptyList(), GameServedFlameGoal.Current(365, 0, true, null))
+        assertThat(GameFlameGoalLaw.section(top, guideSeen = listOf("flame-goal-next-365"))).isNull()
         assertThat(GameFlameGoalLaw.section(reached, guideSeen = listOf("flame-goal-next-14")))
             .isEqualTo(FlameGoalSection.Reached(7, 14))
 
@@ -117,10 +119,11 @@ class GameFlameGoalTest {
     }
 
     @Test
-    fun `un signe ferme a l instant se tait avant meme que le bloc le range`() {
+    fun `un signe ferme a l instant se tait avant meme que le bloc le range, la marche suivante restant`() {
         val reached = GameServedFlameGoal(listOf(14), GameServedFlameGoal.Current(7, 0, true, 14))
 
-        assertThat(FlameGoalLocal(closedSigns = setOf(7)).section(reached, guideSeen = emptyList())).isNull()
+        assertThat(FlameGoalLocal(closedSigns = setOf(7)).section(reached, guideSeen = emptyList()))
+            .isEqualTo(FlameGoalSection.Next(7, 14))
         assertThat(FlameGoalLocal(closedSigns = setOf(14)).section(reached, guideSeen = emptyList()))
             .isEqualTo(FlameGoalSection.Reached(7, 14))
     }

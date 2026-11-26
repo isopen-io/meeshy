@@ -610,7 +610,7 @@ class GameGesturesViewModelTest {
     }
 
     @Test
-    fun `fermer le signe des aieux le tait tout de suite et range sa cle une fois`() = runTest {
+    fun `fermer le signe des aieux le tait tout de suite, garde la marche suivante et range sa cle une fois`() = runTest {
         coEvery { gestures.closeFlameGoalSign(any(), 7) } returns GameWriteOutcome.Done(GuideSeenResponse(listOf("flame-goal-next-7")))
         val vm = viewModel()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { vm.state.collect { } }
@@ -620,7 +620,7 @@ class GameGesturesViewModelTest {
         vm.closeFlameGoalSign(7)
         vm.closeFlameGoalSign(7)
 
-        assertThat(vm.state.value.flameGoal.section(reached, emptyList())).isNull()
+        assertThat(vm.state.value.flameGoal.section(reached, emptyList())).isEqualTo(FlameGoalSection.Next(7, 14))
         coVerify(exactly = 1) { gestures.closeFlameGoalSign(any(), 7) }
     }
 

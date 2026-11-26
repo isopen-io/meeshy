@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">Hüterinnen in Reserve: %1$s.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">Dir wird eine Hüterin für deine Flamme geschenkt.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">Dir wird eine Hüterin geschenkt.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">Du hast das Ziel gehalten, das du dir gesetzt hast.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">Nächste Stufe: %1$s, wählbar in deiner Flamme.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">Du hast jede Stufe erklommen: deine Flamme brennt hoch.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">Flammenziel gehalten: %1$s.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">Deine Ahnen grüßen deine Flamme: %1$s gehalten!</string>
     <string name="game2_guide_moment_league_first_means">Jede Woche misst du dich mit 29 anderen Helden. Die ersten 7 steigen in den nächsten Kreis auf, die letzten 5 steigen ab, und die Funken beginnen wieder bei null.</string>
     <string name="game2_guide_moment_league_first_next">%1$s bis zum nächsten Kreis in dieser Woche.</string>
     <string name="game2_guide_moment_league_first_next_top">Du bist schon im höchsten Kreis der Turniere.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">Ein Ziel für deine Flamme? Wähle es heute – oder lass sie brennen.</string>
     <string name="game_flame_panel_goal_later">Später</string>
     <string name="game_flame_panel_goal_next">%1$s anpeilen</string>
+    <string name="game_flame_panel_goal_next_intro">Ziel von %1$s gehalten. Die nächste Stufe?</string>
     <string name="game_flame_panel_goal_reached">Deine Ahnen grüßen deine Flamme: %1$s gehalten!</string>
     <string name="game_flame_panel_goal_running">Ziel: %1$s Flamme. Noch %2$s.</string>
     <string name="game_flame_panel_pause">Ruhen lassen · %1$s</string>

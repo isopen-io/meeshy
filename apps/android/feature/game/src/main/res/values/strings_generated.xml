@@ -107,6 +107,11 @@
     <string name="game2_guide_moment_flame_freeze_gift_next">Vigils in reserve: %1$s.</string>
     <string name="game2_guide_moment_flame_freeze_gift_short">A Vigil for your Flame, as a gift.</string>
     <string name="game2_guide_moment_flame_freeze_gift_what">A Vigil is yours, as a gift.</string>
+    <string name="game2_guide_moment_flame_goal_reached_means">You kept the goal you set yourself.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next">Next goal: %1$s, to choose in your Flame.</string>
+    <string name="game2_guide_moment_flame_goal_reached_next_top">You have reached every goal: your Flame burns high.</string>
+    <string name="game2_guide_moment_flame_goal_reached_short">Flame goal held: %1$s.</string>
+    <string name="game2_guide_moment_flame_goal_reached_what">Your ancestors salute your Flame: %1$s held!</string>
     <string name="game2_guide_moment_league_first_means">Each week, you measure yourself against 29 other heroes. The top 7 climb to the next circle, the bottom 5 go back down, and the sparks start again from zero.</string>
     <string name="game2_guide_moment_league_first_next">%1$s to the next circle this week.</string>
     <string name="game2_guide_moment_league_first_next_top">You are already in the highest circle of the jousts.</string>
@@ -652,6 +657,7 @@
     <string name="game_flame_panel_goal_intro">A goal for your Flame? Pick one today, or let it burn.</string>
     <string name="game_flame_panel_goal_later">Later</string>
     <string name="game_flame_panel_goal_next">Aim for %1$s</string>
+    <string name="game_flame_panel_goal_next_intro">Goal of %1$s held. Aim higher?</string>
     <string name="game_flame_panel_goal_reached">Your ancestors salute your Flame: %1$s held!</string>
     <string name="game_flame_panel_goal_running">Goal: %1$s of Flame. %2$s to go.</string>
     <string name="game_flame_panel_pause">Let it rest · %1$s</string>
