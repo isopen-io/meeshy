@@ -10,6 +10,7 @@ const ComposerAudioTrim = lazy(() => import('./composer-audio-trim'));
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
+import { isHeifFamily } from '@/lib/media/heif';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
@@ -377,10 +378,10 @@ function PreviewTile({
         >
           {face}
         </button>
-      ) : undecodable ? (
+      ) : undecodable && isHeifFamily(attachment.file) ? (
         /* #12322 — la vignette DIT pourquoi « Éditer » manque : ce navigateur
            ne décode pas ce HEIC, la photo part telle quelle et la passerelle
-           la sert en JPEG. */
+           la sert en JPEG. Une autre image illisible ne se dit pas HEIC. */
         <span data-pending-undecodable="" title={translate(language, 'composer.attachment.heifNotEditable')} className="block">
           {face}
           <span className="sr-only">{translate(language, 'composer.attachment.heifNotEditable')}</span>

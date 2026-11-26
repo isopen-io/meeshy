@@ -84,4 +84,14 @@ describe('PreviewTile — un aperçu que le navigateur ne décode pas', () => {
     expect(dit?.getAttribute('title')).toBe(motif);
     expect(dit?.textContent).toContain(motif);
   });
+
+  test('une image NON HEIC que le navigateur ne décode pas ne se dit pas « photo HEIC » (#12322)', () => {
+    const el = mountTray(new File([new Uint8Array(8)], 'photo-abimee.jpg', { type: 'image/jpeg' }));
+    act(() => {
+      el.querySelector('[data-pending-tile] img')!.dispatchEvent(new Event('error'));
+    });
+    expect(el.querySelector('[data-composer-edit]')).toBeNull();
+    expect(el.querySelector('[data-pending-undecodable]')).toBeNull();
+    expect(el.textContent).not.toContain('HEIC');
+  });
 });
