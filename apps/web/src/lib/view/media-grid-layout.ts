@@ -1,5 +1,6 @@
 import { MEDIA_GRID_MAX_WIDTH } from '@/lib/reading-mode/metrics';
 import { kindOf } from '@/lib/view/message';
+import { formatMediaTime } from '@/lib/view/seek-track';
 import type { Attachment } from '@/lib/api/types';
 
 /**
@@ -35,11 +36,21 @@ export const PLAY_DIAMETER_MULTI = 44;
 /** `+Media.swift:742` — la capsule du badge de durée d'une vignette vidéo. */
 export const DURATION_BADGE_OPACITY = 0.6;
 
-/** Le libellé `m:ss` de ce badge, d'une durée en MILLISECONDES — la bulle et la carte d'un contenu (#19334) le partagent. */
-export const videoDurationLabel = (durationMs: number): string => {
-  const seconds = Math.round(durationMs / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
-};
+/**
+ * Le libellé `m:ss` de ce badge, d'une durée en MILLISECONDES — la bulle et la
+ * carte d'un contenu (#19334) le partagent.
+ *
+ * DÉLÈGUE au formateur SOCLE `formatMediaTime` (`seek-track.ts`), le même que
+ * lisent le lecteur (`media-transport.ts`), l'aperçu de citation
+ * (`quoted-preview.ts`) et la feuille d'accusés (`message-receipts-sheet.tsx`)
+ * via `attachmentDurationLabel`. Il PLANCHE (parité iOS `MediaFormat.duration`,
+ * défaut `rounding: .down`, lu par le badge de vignette `MeeshyVideoThumbnail
+ * .swift:53`) et GARDE le non-fini / négatif en « 0:00 ». L'ancienne jumelle
+ * arrondissait (`Math.round`, sans garde) : pour toute durée à fraction ≥ .5 s
+ * le badge annonçait UNE seconde de plus que le même fichier partout ailleurs,
+ * et une durée indéfinie peignait « NaN:NaN ».
+ */
+export const videoDurationLabel = (durationMs: number): string => formatMediaTime(durationMs / 1000);
 
 /**
  * LA FORME DE LA GRILLE — une DONNÉE que l'hôte déclare, jamais une branche

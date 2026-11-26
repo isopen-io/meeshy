@@ -9,8 +9,10 @@ import {
   mediaGridSlots,
   partitionAttachments,
   soloVideoSlot,
+  videoDurationLabel,
   visibleCount,
 } from './media-grid-layout';
+import { formatMediaTime } from './seek-track';
 
 /**
  * T1 (#6221) — `mediaGridSlots`, miroir de `FocalMediaGridLayout.slots(for:)`.
@@ -234,5 +236,39 @@ describe('partitionAttachments — miroir de BubbleContentBuilder.swift:221-247'
 
   test('liste vide : trois groupes vides', () => {
     expect(partitionAttachments([])).toEqual({ visual: [], audio: [], nonMedia: [] });
+  });
+});
+
+/**
+ * `videoDurationLabel` — le badge `m:ss` d'une vignette vidéo, d'une durée en
+ * MILLISECONDES. Il doit PLANCHER (parité iOS `MediaFormat.duration` défaut
+ * `.down`, `MeeshyVideoThumbnail.swift:53`) et parler la MÊME horloge que le
+ * reste du produit — le socle `formatMediaTime` (lecteur, citation, accusés) —,
+ * jamais arrondir vers le haut ni rendre « NaN:NaN ».
+ */
+describe('videoDurationLabel — même horloge plancher que le socle', () => {
+  test('plancher, jamais arrondi vers le haut : 1,5 s → 0:01', () => {
+    expect(videoDurationLabel(1500)).toBe('0:01');
+  });
+
+  test('plancher à la minute : 90,5 s → 1:30 (pas 1:31)', () => {
+    expect(videoDurationLabel(90_500)).toBe('1:30');
+  });
+
+  test('accord byte-à-byte avec le socle formatMediaTime', () => {
+    expect(videoDurationLabel(90_500)).toBe(formatMediaTime(90.5));
+    expect(videoDurationLabel(125_000)).toBe(formatMediaTime(125));
+  });
+
+  test('durée entière : 2:05, 60:00 (minutes sans plafond)', () => {
+    expect(videoDurationLabel(125_000)).toBe('2:05');
+    expect(videoDurationLabel(3_600_000)).toBe('60:00');
+  });
+
+  test('garde : NaN / Infinity / négatif / zéro → 0:00, jamais « NaN:NaN »', () => {
+    expect(videoDurationLabel(Number.NaN)).toBe('0:00');
+    expect(videoDurationLabel(Number.POSITIVE_INFINITY)).toBe('0:00');
+    expect(videoDurationLabel(-5000)).toBe('0:00');
+    expect(videoDurationLabel(0)).toBe('0:00');
   });
 });

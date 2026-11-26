@@ -2,6 +2,7 @@ package me.meeshy.sdk.model.game
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /*
  * LA FLAMME EN VEILLE (#17372, #20511). MIROIR de `packages/shared/utils/game/flame-pause.ts` et de `GameFlamePause` /
@@ -39,6 +40,8 @@ public sealed interface FlamePauseDecision {
 public sealed interface FlamePauseSection {
     /** Une veille servie, ou annoncée à l'instant : la carte dit jusqu'à quand, et l'annonce se tait. */
     public data class Paused(val pause: GameFlamePause, val startsTomorrow: Boolean) : FlamePauseSection
+    /** Le trimestre pris (#20535) : l'annonce se tait, et la carte dit dès quand la prochaine veille sera possible. */
+    public data class Next(val from: String) : FlamePauseSection
     /** Une Flamme vivante sans veille : le choix de la durée puis l'annonce. */
     public data object Chooser : FlamePauseSection
     /** Une Flamme absente ou éteinte : rien à garder. */
@@ -85,12 +88,14 @@ public object GameFlamePauseLaw {
 
     /**
      * La section de la carte. [shown] est la veille que la carte doit dire : celle du bloc, ou, en attendant la
-     * relecture, celle que le geste vient d'annoncer.
+     * relecture, celle que le geste vient d'annoncer. Une veille se dit d'abord ; puis, sur une Flamme vivante, le
+     * trimestre pris dit dès quand la prochaine sera possible (iOS `PauseSection.next`, web `GameFlamePanel`).
      */
     public fun section(flame: GameFlame, shown: GameFlamePause?, today: String): FlamePauseSection = when {
         shown != null -> FlamePauseSection.Paused(shown, startsTomorrow = shown.startsAfter(today))
-        isBurning(flame.status) -> FlamePauseSection.Chooser
-        else -> FlamePauseSection.Hidden
+        !isBurning(flame.status) -> FlamePauseSection.Hidden
+        flame.nextPauseFrom != null -> FlamePauseSection.Next(flame.nextPauseFrom)
+        else -> FlamePauseSection.Chooser
     }
 }
 
@@ -109,3 +114,7 @@ internal fun parseFlamePause(owner: JsonObject, key: String = "pause"): GameFlam
     }
     return pause.takeIf { GameDay.isDayKey(it.from) && GameDay.isDayKey(it.until) }
 }
+
+/** Absente, d'un autre type ou pas un jour `AAAA-MM-JJ` : rien ne se dit, et la Flamme se lit quand même. */
+internal fun parseNextPauseFrom(owner: JsonObject): String? =
+    (owner["nextPauseFrom"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { GameDay.isDayKey(it) }
