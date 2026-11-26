@@ -56,6 +56,29 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
         XCTAssertTrue(ProfileCoverEntrance.presentationTransaction().disablesAnimations)
     }
 
+    // MARK: - Les sites du SDK qui présentent la fiche
+
+    /// La boutique présente elle-même la fiche de l'éditeur : elle passe par `profileCover` comme les sites de l'app,
+    /// jamais par une feuille à détentes. Le dossier Profile la construit sans la présenter.
+    func test_sdkSitesPresentingTheProfile_useTheFullScreenCover_neverASheetWithDetents() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI")
+        let enumerator = FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil)
+        let files = (enumerator?.allObjects as? [URL] ?? [])
+            .filter { $0.pathExtension == "swift" && !$0.path.contains("/MeeshyUI/Profile/") }
+        let sites = try files.compactMap { url -> (name: String, code: String)? in
+            let code = try String(contentsOf: url, encoding: .utf8)
+            return code.contains("UserProfileSheet(") ? (url.lastPathComponent, code) : nil
+        }
+        XCTAssertFalse(sites.isEmpty, "les sites du SDK qui présentent la fiche sont trouvés")
+        for site in sites {
+            XCTAssertTrue(site.code.contains(".profileCover("), "\(site.name) présente la fiche en plein écran")
+            XCTAssertFalse(site.code.contains(".presentationDetents("), "\(site.name) ne pose plus de détentes")
+        }
+    }
+
     // MARK: - Pour aller plus loin
 
     func test_ladder_fromAStranger_readsFriendThenCloseThenBlood_friendFirst() {

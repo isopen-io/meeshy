@@ -65,7 +65,7 @@ struct PublisherPageView: View {
             page = try? await service.page(slug: publisher.slug)
             loaded = true
         }
-        .sheet(item: $shownOwner) { owner in
+        .profileCover(item: $shownOwner) { owner in
             if let ownerProfile { ownerSheet(owner, context: ownerProfile) }
         }
     }
@@ -77,8 +77,6 @@ struct PublisherPageView: View {
             presenceProvider: context.presence,
             dependencies: context.dependencies
         )
-        .presentationDetents([.medium, .large])
-        .presentationDragIndicator(.visible)
     }
 
     private var identity: some View {
