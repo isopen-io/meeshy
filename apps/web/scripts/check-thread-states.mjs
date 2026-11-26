@@ -26,6 +26,7 @@ import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkStackedLayers } from './lib/check-stacked-layers.mjs';
 import { checkMenuBubbleAnchor } from './lib/check-menu-bubble-anchor.mjs';
+import { checkLocationCard } from './lib/check-location-card.mjs';
 import { checkRealtimeEvents, SLOW_CODE_LATENCY_MS } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
 import {
@@ -763,6 +764,9 @@ await checkStackedLayers({ browser, BASE, expect });
 
 /* 6.14 — en Bulles, le menu s'ancre sous sa bulle (#12635) — `lib/check-menu-bubble-anchor.mjs`. */
 await checkMenuBubbleAnchor({ browser, BASE, expect });
+
+/* 6.15 — la carte de lieu reste dans sa cellule en Script, Focal et Bulles (#7598) — `lib/check-location-card.mjs`. */
+await checkLocationCard({ browser, BASE, expect });
 
 /**
  * 7 — LE COMPOSEUR TIENT CE QU'IL PROMET (#5668, critère (1)).

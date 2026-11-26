@@ -279,6 +279,7 @@ export function LocationCard({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={translate(language, 'message.location.a11y', { place: label })}
+      data-location-card=""
       className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-start"
       style={{
         borderRadius: 'var(--ios-radius-md)',
