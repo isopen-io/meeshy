@@ -10,8 +10,9 @@ import { actionLabel, type GuideCopy } from './game-guide-copy';
 /**
  * CE QUE DISENT MEE ET MEO, VAGUE 2 (#9481) — les huit moments de la loi
  * (`guide-v2.ts`) : première ligue, montée, descente, début et fin de saison,
- * trophée, Prestige, tampon de l'Atlas, la première Veilleuse offerte (#20169) et
- * l'Offrande gardée par les aïeux le jour du retour (#20327).
+ * trophée, Prestige, tampon de l'Atlas, la première Veilleuse offerte (#20169),
+ * l'Offrande gardée par les aïeux le jour du retour (#20327) et l'objectif de
+ * Flamme atteint (#20548).
  * Même structure que `game-guide-copy.ts` :
  * ce qui vient d'arriver → ce que ça veut dire → l'étape d'après → un bouton, avec
  * une version COURTE pour les fois suivantes. La loi choisit le moment et rend ses
@@ -136,5 +137,18 @@ export function momentCopyV2(moment: GuideMomentV2, language: Language = current
         next: translateGame(language, 'game.guide.moment.offering_kept.next', { days: daysLabel(moment.data.easedDays, language) }),
         short: translateGame(language, 'game.guide.moment.offering_kept.short'),
       });
+    case 'flame-goal-reached': {
+      const days = daysLabel(moment.data.target, language);
+      const next = moment.data.next;
+      return copy({
+        what: translateGame(language, 'game.guide.moment.flame_goal_reached.what', { days }),
+        means: translateGame(language, 'game.guide.moment.flame_goal_reached.means'),
+        next:
+          next === null
+            ? translateGame(language, 'game.guide.moment.flame_goal_reached.next_top')
+            : translateGame(language, 'game.guide.moment.flame_goal_reached.next', { days: daysLabel(next, language) }),
+        short: translateGame(language, 'game.guide.moment.flame_goal_reached.short', { days }),
+      });
+    }
   }
 }

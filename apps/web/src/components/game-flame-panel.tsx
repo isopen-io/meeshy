@@ -155,6 +155,15 @@ function GoalBlock({ view, online, choosing, onChoose, onClose }: GoalBlockProps
           </div>
         </>
       );
+    case 'next':
+      return (
+        <div className="flex flex-wrap items-center gap-1">
+          <p className="text-caption" style={{ color: GAME_INK_2 }}>
+            {flameGoalLine(view)}
+          </p>
+          <GoalChoice target={view.next} label={flameGoalNextAction(view.next)} online={online} choosing={choosing} onChoose={onChoose} />
+        </div>
+      );
     case 'running':
       return (
         <p data-game-flame-goal-running="" className="text-caption font-semibold" style={{ color: GAME_INK }}>

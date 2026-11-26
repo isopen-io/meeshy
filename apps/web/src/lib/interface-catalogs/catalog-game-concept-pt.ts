@@ -423,6 +423,7 @@ const pt = {
   'game.flame_panel.goal_reached': 'Seus ancestrais saúdam sua Chama: {days} cumpridos!',
   'game.flame_panel.goal_next': 'Mirar em {days}',
   'game.flame_panel.goal_later': 'Mais tarde',
+  'game.flame_panel.goal_next_intro': 'Meta de {target} cumprida. O próximo degrau?',
   'game.flame_panel.pause_next': 'Sua Chama poderá descansar de novo a partir de {date}.',
 } as const satisfies GameConceptCatalog;
 

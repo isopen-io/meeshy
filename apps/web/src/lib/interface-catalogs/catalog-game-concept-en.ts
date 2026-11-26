@@ -423,6 +423,7 @@ const en = {
   'game.flame_panel.goal_reached': 'Your ancestors salute your Flame: {days} held!',
   'game.flame_panel.goal_next': 'Aim for {days}',
   'game.flame_panel.goal_later': 'Later',
+  'game.flame_panel.goal_next_intro': 'Goal of {target} held. Aim higher?',
   'game.flame_panel.pause_next': 'Your Flame can rest again from {date}.',
 } as const satisfies GameConceptCatalog;
 
