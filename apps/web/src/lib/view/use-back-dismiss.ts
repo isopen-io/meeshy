@@ -120,9 +120,15 @@ function isTopOpenLayer(layer: symbol): boolean {
   return open[open.length - 1] === layer;
 }
 
-/** L'entrée qu'une couche démontée a laissée, tant qu'aucune autre ne l'a
- * adoptée et que la micro-tâche ne l'a pas rendue (#7527). */
-let pendingRelease: string | null = null;
+/** Les entrées que des couches démontées ont laissées, tant qu'aucune autre ne
+ * les a adoptées et que la micro-tâche ne les a pas rendues (#7527). Une FILE :
+ * deux couches démontées dans le même commit laissent chacune la sienne (#7561). */
+let pendingRelease: readonly string[] = [];
+
+type LeftLayer = { readonly marker: string; readonly layer: symbol };
+
+/** Les couches démontées depuis la dernière micro-tâche, et leur entrée. */
+let leftLayers: readonly LeftLayer[] = [];
 
 type OpenLayer = { readonly close: () => void; readonly marker: string | null };
 
@@ -147,25 +153,48 @@ function carriesMarker(state: unknown, marker: string): boolean {
 }
 
 function leaveEntry(marker: string, layer: symbol): void {
-  pendingRelease = marker;
-  queueMicrotask(() => {
-    if (pendingRelease !== marker) {
-      dropLayer(layer);
-      return;
-    }
-    if (successorExpected) {
-      successorExpected = false;
-      dropLayer(layer);
-      return;
-    }
-    pendingRelease = null;
-    if (!carriesMarker(window.history.state, marker)) {
-      dropLayer(layer);
-      return;
-    }
-    window.addEventListener('popstate', () => dropLayer(layer), { once: true });
-    window.history.back();
-  });
+  if (!pendingRelease.includes(marker)) pendingRelease = [...pendingRelease, marker];
+  if (leftLayers.length === 0) queueMicrotask(releaseLeftEntries);
+  leftLayers = [...leftLayers, { marker, layer }];
+}
+
+/**
+ * **LES ENTRÉES LAISSÉES DANS UN MÊME COMMIT SONT RENDUES ENSEMBLE** (#7561).
+ * La confirmation ouverte par-dessus une feuille se referme avec elle : seule
+ * l'entrée du dessus est courante, celle du dessous est juste en dessous. Les
+ * couches laissées qui se suivent depuis l'entrée courante, dans l'ordre de la
+ * pile, reculent d'autant d'entrées en un seul retour ; les autres (adoptées,
+ * ou recouvertes par une navigation, § #6313) ne rendent rien.
+ */
+function releaseLeftEntries(): void {
+  const left = leftLayers;
+  leftLayers = [];
+  if (successorExpected) {
+    successorExpected = false;
+    left.forEach(({ layer }) => dropLayer(layer));
+    pendingRelease = pendingRelease.filter((marker) => carriesMarker(window.history.state, marker));
+    return;
+  }
+  const stillLeft = left.filter(({ marker }) => pendingRelease.includes(marker));
+  left.filter((entry) => !stillLeft.includes(entry)).forEach(({ layer }) => dropLayer(layer));
+  pendingRelease = pendingRelease.filter((marker) => !stillLeft.some((entry) => entry.marker === marker));
+  const released = releasedRun(stillLeft);
+  stillLeft.filter((entry) => !released.includes(entry)).forEach(({ layer }) => dropLayer(layer));
+  if (released.length === 0) return;
+  window.addEventListener('popstate', () => released.forEach(({ layer }) => dropLayer(layer)), { once: true });
+  if (released.length === 1) window.history.back();
+  else window.history.go(-released.length);
+}
+
+/** Les couches laissées qui occupent, sans trou, le haut de l'historique. */
+function releasedRun(left: readonly LeftLayer[]): readonly LeftLayer[] {
+  const current = layerMarkerOf(window.history.state);
+  const top = layerStack.findIndex((layer) => left.some((entry) => entry.layer === layer && entry.marker === current));
+  if (top === -1) return [];
+  const below = layerStack.slice(0, top + 1).reverse();
+  const gap = below.findIndex((layer) => !left.some((entry) => entry.layer === layer));
+  const run = gap === -1 ? below : below.slice(0, gap);
+  return run.flatMap((layer) => left.filter((entry) => entry.layer === layer));
 }
 
 /** Les entrées qu'une couche a reprises à une couche ÉTEINTE avant que son
@@ -179,10 +208,9 @@ let announcedEntry: string | null = null;
  * courante — sinon la nouvelle couche pose la sienne. */
 function adoptLeftEntry(): string | null {
   successorExpected = false;
-  if (pendingRelease === null) return null;
-  if (!carriesMarker(window.history.state, pendingRelease)) return null;
-  const adopted = pendingRelease;
-  pendingRelease = null;
+  const adopted = pendingRelease.find((marker) => carriesMarker(window.history.state, marker));
+  if (adopted === undefined) return null;
+  pendingRelease = pendingRelease.filter((marker) => marker !== adopted);
   if (adopted === announcedEntry) adoptedEntries = [...adoptedEntries, adopted];
   return adopted;
 }
@@ -199,8 +227,8 @@ function adoptLeftEntry(): string | null {
  * que soit le runtime : la feuille adopte l'entrée comme après un démontage.
  */
 function announceLeaving(marker: string): void {
-  if (pendingRelease !== null || !carriesMarker(window.history.state, marker)) return;
-  pendingRelease = marker;
+  if (pendingRelease.includes(marker) || !carriesMarker(window.history.state, marker)) return;
+  pendingRelease = [...pendingRelease, marker];
   announcedEntry = marker;
 }
 
@@ -293,7 +321,7 @@ export function useBackDismiss(onClose: () => void, options: BackDismissOptions 
         dropLayer(layer);
         return;
       }
-      if (!consumedByHistory && carriesMarker(window.history.state, ownMarker)) {
+      if (!consumedByHistory && layerMarkerOf(window.history.state) !== null) {
         closedLayers = [...closedLayers, layer];
         leaveEntry(ownMarker, layer);
         return;

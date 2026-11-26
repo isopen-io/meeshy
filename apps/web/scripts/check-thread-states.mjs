@@ -24,6 +24,7 @@ import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
 import { checkAudioFullscreen, checkMiniPlayerParity } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
+import { checkStackedLayers } from './lib/check-stacked-layers.mjs';
 import { checkMenuBubbleAnchor } from './lib/check-menu-bubble-anchor.mjs';
 import { checkRealtimeEvents, SLOW_CODE_LATENCY_MS } from './lib/check-realtime-events.mjs';
 import { checkTypingVisibility } from './lib/check-typing-visibility.mjs';
@@ -756,6 +757,9 @@ await checkProtectionStates({ browser, BASE, expect });
  * est dans le doc-comment du module.
  */
 await checkMoreSheet({ browser, BASE, expect });
+
+/* 6.13 bis — deux couches empilées : chaque retour en ferme UNE, le dernier quitte le fil (#7561) — `lib/check-stacked-layers.mjs`. */
+await checkStackedLayers({ browser, BASE, expect });
 
 /* 6.14 — en Bulles, le menu s'ancre sous sa bulle (#12635) — `lib/check-menu-bubble-anchor.mjs`. */
 await checkMenuBubbleAnchor({ browser, BASE, expect });

@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { layerMarkerOf } from './layer-entry';
 import { useBackDismiss } from './use-back-dismiss';
 
 /**
@@ -323,6 +324,59 @@ describe('useBackDismiss — deux couches EMPILÉES : le retour ferme celle du D
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
     expect(closed).toEqual([]);
+  });
+});
+
+/**
+ * DEUX COUCHES DÉMONTÉES DANS LE MÊME COMMIT (#7561) — la confirmation de
+ * suppression ouverte par-dessus la feuille « Infos du message » : choisir
+ * « Supprimer » referme les deux d'un coup. Chaque couche avait posé son
+ * entrée ; une seule était rendue, et l'historique gardait une marche
+ * fantôme — un retour de plus pour quitter le fil.
+ */
+function Pair({ open }: { open: boolean }) {
+  return open ? (
+    <>
+      <Modal onClose={() => {}} />
+      <SheetLayer onClose={() => {}} />
+    </>
+  ) : (
+    <div data-open="false" />
+  );
+}
+
+describe('useBackDismiss — deux couches démontées ensemble rendent leurs DEUX entrées (#7561)', () => {
+  test('les deux entrées sont rendues : l’historique revient à l’écran de départ', async () => {
+    window.history.replaceState({ base: 7561 }, '');
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Pair open={false} />);
+    });
+    act(() => {
+      root.render(<Pair open />);
+    });
+    expect(layerMarkerOf(window.history.state)).not.toBeNull();
+    await act(async () => {
+      root.render(<Pair open={false} />);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(window.history.state).toEqual({ base: 7561 });
+  });
+
+  test('rouvertes ensuite, la couche du dessus se ferme seule au retour suivant', async () => {
+    const closed: string[] = [];
+    mountStacked(() => closed.push('dessous'), () => closed.push('dessus'));
+    await act(async () => {
+      root.render(<Stacked top={false} onCloseA={() => closed.push('dessous')} onCloseB={() => closed.push('dessus')} />);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(closed).toEqual(['dessous']);
   });
 });
 
