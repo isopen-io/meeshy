@@ -17,6 +17,10 @@
           "status": "android-only"
         },
         {
+          "androidName": "notification_game_flame_evening_title",
+          "status": "android-only"
+        },
+        {
           "androidName": "notification_game_league_result_title",
           "status": "android-only"
         },

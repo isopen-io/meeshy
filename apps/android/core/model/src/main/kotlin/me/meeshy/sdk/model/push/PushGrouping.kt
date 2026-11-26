@@ -55,6 +55,7 @@ public enum class PushChannelCategory {
             "contact_request", "friend_request", "FRIEND_REQUEST", "contact_accepted", "friend_accepted",
             "FRIEND_ACCEPTED", "contact_joined", "contact_recently_active", "blood_proximity",
             "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
+            "game_flame_evening",
             "community_invite", "GROUP_INVITE", "member_joined", "community_joined",
         )
         private val SYSTEM_TYPES: Set<String> = setOf(

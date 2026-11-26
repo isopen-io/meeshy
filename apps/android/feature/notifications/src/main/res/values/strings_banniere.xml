@@ -4,6 +4,7 @@
     <string name="notification_game_league_result_title">Your weekly league</string>
     <string name="notification_game_season_step_title">Your season</string>
     <string name="notification_game_mission_window_title">Your current mission</string>
+    <string name="notification_game_flame_evening_title">Your Flame</string>
     <string name="notification_detail_shared_location">Shared location</string>
     <string name="notification_detail_invitation">Invitation</string>
 </resources>

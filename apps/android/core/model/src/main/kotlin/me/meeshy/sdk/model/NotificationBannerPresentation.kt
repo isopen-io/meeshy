@@ -86,7 +86,7 @@ public sealed interface BannerHeadline {
 }
 
 /** Les surfaces de jeu qui se nomment elles-mêmes quand aucun acteur ne signe la notification. */
-public enum class GameSurfaceTitle { LEAGUE_RESULT, SEASON_STEP, MISSION_WINDOW }
+public enum class GameSurfaceTitle { LEAGUE_RESULT, SEASON_STEP, MISSION_WINDOW, FLAME_EVENING }
 
 /** Nature du média principal — traduite par la couche UI. */
 public enum class MediaSummary { IMAGE, VIDEO, AUDIO }
@@ -170,6 +170,7 @@ public object NotificationBannerFraming {
             MeeshyNotificationType.GAME_LEAGUE_RESULT -> GameSurfaceTitle.LEAGUE_RESULT
             MeeshyNotificationType.GAME_SEASON_STEP -> GameSurfaceTitle.SEASON_STEP
             MeeshyNotificationType.GAME_MISSION_WINDOW -> GameSurfaceTitle.MISSION_WINDOW
+            MeeshyNotificationType.GAME_FLAME_EVENING -> GameSurfaceTitle.FLAME_EVENING
             else -> null
         }
 
