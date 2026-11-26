@@ -83,6 +83,14 @@ final class TalkieDuplexTests: XCTestCase {
         XCTAssertTrue(TalkieMicSessionLaw.incomingAudible(micOpen: true, outputs: [.bluetoothA2DP]))
     }
 
+    /// Une route vide (session inactive, changement de route en cours) ne dit pas qu'un écouteur est branché : elle
+    /// compte comme le haut-parleur — micro en `.voiceChat`, voix reçue muette tant qu'il est ouvert.
+    func test_alongsidePlaybackAndIncomingAudible_emptyRoute_countAsTheSpeaker() {
+        XCTAssertFalse(TalkieMicSessionLaw.alongsidePlayback(outputs: []))
+        XCTAssertFalse(TalkieMicSessionLaw.incomingAudible(micOpen: true, outputs: []))
+        XCTAssertTrue(TalkieMicSessionLaw.incomingAudible(micOpen: false, outputs: []))
+    }
+
     func test_myMicIsOpen_whileMyOwnVoiceLeaves() {
         XCTAssertTrue(TalkieMicSessionLaw.micOpen([TalkieVoiceKey(userId: awa, direction: .outgoing)]))
         XCTAssertFalse(TalkieMicSessionLaw.micOpen([TalkieVoiceKey(userId: awa, direction: .incoming)]))

@@ -94,9 +94,10 @@ extension TalkieVoiceHostLaw {
 nonisolated enum TalkieMicSessionLaw {
     private static let acousticPorts: Set<AVAudioSession.Port> = [.builtInSpeaker, .builtInReceiver]
 
-    /// Une sortie que le micro de l'iPhone entend.
+    /// Une sortie que le micro de l'iPhone entend. Une route vide (session inactive, changement de route en cours) ne
+    /// prouve aucune sortie personnelle : elle compte comme le haut-parleur.
     static func acoustic(_ outputs: [AVAudioSession.Port]) -> Bool {
-        !outputs.isEmpty && outputs.allSatisfy(acousticPorts.contains)
+        outputs.allSatisfy(acousticPorts.contains)
     }
 
     static func alongsidePlayback(outputs: [AVAudioSession.Port]) -> Bool {
