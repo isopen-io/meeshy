@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Ruhen lassen · %1$s</string>
     <string name="game_flame_panel_pause_days">Dauer der Ruhe</string>
     <string name="game_flame_panel_pause_intro">Eine Pause? Deine Flamme wartet bis zu %1$s auf dich, einmal pro Quartal.</string>
+    <string name="game_flame_panel_pause_next">Deine Flamme kann ab dem %1$s wieder ruhen.</string>
     <string name="game_flame_panel_paused">Deine Flamme ruht bis %1$s.</string>
     <string name="game_flame_panel_paused_soon">Deine Flamme ruht ab morgen, bis %1$s.</string>
     <string name="game_flame_panel_relight">Flamme neu entzünden · %1$s</string>

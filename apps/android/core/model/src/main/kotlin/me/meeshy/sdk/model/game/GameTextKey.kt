@@ -236,6 +236,7 @@ public enum class GameTextKey(public val androidName: String, public val form: G
     FlamePauseAction("game_flame_panel_pause", GameTextForm.Plain),
     FlamePausedSoon("game_flame_panel_paused_soon", GameTextForm.Plain),
     FlamePaused("game_flame_panel_paused", GameTextForm.Plain),
+    FlamePauseNext("game_flame_panel_pause_next", GameTextForm.Plain),
     FlamePauseQuarterlyLimit("game_error_flame_pause_quarterly_limit", GameTextForm.Plain),
     FlamePauseAlreadyPaused("game_error_flame_pause_already_paused", GameTextForm.Plain),
     FlamePauseNoFlame("game_error_flame_pause_no_flame", GameTextForm.Plain),

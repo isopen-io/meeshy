@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Deixar descansar · %1$s</string>
     <string name="game_flame_panel_pause_days">Duração do descanso</string>
     <string name="game_flame_panel_pause_intro">Uma pausa? Sua Chama espera por você até %1$s, uma vez por trimestre.</string>
+    <string name="game_flame_panel_pause_next">Sua Chama poderá descansar de novo a partir de %1$s.</string>
     <string name="game_flame_panel_paused">Sua Chama descansa até %1$s.</string>
     <string name="game_flame_panel_paused_soon">Sua Chama começa a descansar amanhã, até %1$s.</string>
     <string name="game_flame_panel_relight">Reacender a Chama · %1$s</string>

@@ -657,6 +657,7 @@
     <string name="game_flame_panel_pause">Mettre en veille · %1$s</string>
     <string name="game_flame_panel_pause_days">Durée de la veille</string>
     <string name="game_flame_panel_pause_intro">Une pause ? Ta Flamme t’attend jusqu’à %1$s, une fois par trimestre.</string>
+    <string name="game_flame_panel_pause_next">Ta prochaine veille sera possible dès le %1$s.</string>
     <string name="game_flame_panel_paused">Ta Flamme est en veille jusqu’au %1$s.</string>
     <string name="game_flame_panel_paused_soon">Ta Flamme se met en veille demain, jusqu’au %1$s.</string>
     <string name="game_flame_panel_relight">Rallumer la Flamme · %1$s</string>

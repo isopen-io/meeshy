@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.game.GloryRank
 import me.meeshy.sdk.model.game.LevelTierKey
 import me.meeshy.sdk.model.game.TreasuryTierKey
 import me.meeshy.sdk.model.game.GameNumberFormat
+import me.meeshy.app.game.pages.dayMonthLabel
 import me.meeshy.app.game.pages.weekdayLabel
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -181,5 +182,17 @@ class GameCopyTest {
             .isEqualTo("Ta Flamme a déjà eu sa veille ce trimestre.")
         assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.flamePauseAction(1))).isEqualTo("Let it rest · 1 day")
         assertThat(weekdayLabel("pas-un-jour", Locale.FRENCH)).isEqualTo("pas-un-jour")
+    }
+
+    @Test
+    fun `le trimestre pris dit des quand la prochaine veille sera possible, sans le jour de la semaine`() {
+        val day = dayMonthLabel("2027-01-01", Locale.FRENCH)
+        assertThat(day).isEqualTo("1 janvier")
+        assertThat(GameCopy.resolve(resourcesIn("fr"), GameCopyLaws.flamePauseNext(day)))
+            .isEqualTo("Ta prochaine veille sera possible dès le 1 janvier.")
+        val english = dayMonthLabel("2027-01-01", Locale.ENGLISH)
+        assertThat(GameCopy.resolve(resourcesIn("en"), GameCopyLaws.flamePauseNext(english)))
+            .isEqualTo("Your Flame can rest again from January 1.")
+        assertThat(dayMonthLabel("pas-un-jour", Locale.FRENCH)).isEqualTo("pas-un-jour")
     }
 }

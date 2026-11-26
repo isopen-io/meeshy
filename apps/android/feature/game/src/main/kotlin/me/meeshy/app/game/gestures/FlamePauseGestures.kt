@@ -31,6 +31,7 @@ import me.meeshy.app.game.pages.GameActionButton
 import me.meeshy.app.game.pages.GameErrorLine
 import me.meeshy.app.game.pages.GameNote
 import me.meeshy.app.game.pages.count
+import me.meeshy.app.game.pages.dayMonthLabel
 import me.meeshy.app.game.pages.currentLocale
 import me.meeshy.app.game.pages.weekdayLabel
 import me.meeshy.sdk.model.game.FlamePauseSection
@@ -48,7 +49,8 @@ import me.meeshy.ui.theme.MeeshyTheme
  * LA FLAMME EN VEILLE (#17372, #20511 — iOS `GameFlamePanelView.pauseSection`, #20510 ; web #20509). Une Flamme vivante
  * se met en veille en DEUX gestes : la durée (1 à 7 jours, sept choisis d'avance), puis l'annonce. Tant qu'une veille
  * est servie — ou vient d'être annoncée, en attendant la relecture —, la carte dit jusqu'à quand elle attend, et
- * l'annonce se tait. Rien sur une Flamme absente ou éteinte.
+ * l'annonce se tait. Le trimestre pris (#20535), l'annonce se tait aussi et la carte dit dès quand la prochaine veille
+ * sera possible. Rien sur une Flamme absente ou éteinte.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -61,6 +63,10 @@ internal fun FlamePauseGestures(game: GameBlock, gestures: GameGesturesUiState, 
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.SemiBold,
             color = MeeshyTheme.tokens.textPrimary,
+        )
+        is FlamePauseSection.Next -> GameNote(
+            gameString(GameCopyLaws.flamePauseNext(dayMonthLabel(section.from, currentLocale()))),
+            modifier = Modifier.testTag("game.flame.pause.next"),
         )
         FlamePauseSection.Chooser -> {
             var days by rememberSaveable { mutableIntStateOf(GameFlamePauseLaw.MAX_DAYS) }

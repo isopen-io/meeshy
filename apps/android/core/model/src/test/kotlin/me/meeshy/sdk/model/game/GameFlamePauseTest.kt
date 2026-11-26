@@ -49,6 +49,46 @@ class GameFlamePauseTest {
         }
     }
 
+    private fun servedNext(next: JsonElement?): GameFlame? {
+        val flame = buildJsonObject {
+            GameBlockFixtures.flame().forEach { (key, value) -> put(key, value) }
+            if (next != null) put("nextPauseFrom", next)
+        }
+        return GameBlockParser.parse(GameBlockFixtures.block(overrides = mapOf("flame" to flame)))?.flame
+    }
+
+    @Test
+    fun `le bloc lit des quand la prochaine veille sera possible, et un serveur anterieur n en dit rien`() {
+        assertThat(servedNext(JsonPrimitive("2027-01-01"))?.nextPauseFrom).isEqualTo("2027-01-01")
+        val older = servedNext(null)
+        assertThat(older).isNotNull()
+        assertThat(older?.nextPauseFrom).isNull()
+    }
+
+    @Test
+    fun `une date de prochaine veille illisible se tait et la Flamme se lit quand meme`() {
+        val unreadable = listOf(JsonPrimitive("bientot"), JsonPrimitive(20270101), JsonPrimitive("2027-13-40"), pauseJson())
+        unreadable.forEach { shape ->
+            val flame = servedNext(shape)
+            assertThat(flame).isNotNull()
+            assertThat(flame?.nextPauseFrom).isNull()
+        }
+    }
+
+    @Test
+    fun `le trimestre pris tait l annonce et dit des quand la prochaine veille sera possible`() {
+        val taken = GameOptimisticFixtures.flame(status = FlameStatus.Lit).replacing(nextPauseFrom = Put("2027-01-01"))
+        assertThat(GameFlamePauseLaw.section(taken, shown = null, today = "2026-12-05"))
+            .isEqualTo(FlamePauseSection.Next(from = "2027-01-01"))
+        val paused = GameFlamePause(from = "2026-12-06", until = "2026-12-08")
+        assertThat(GameFlamePauseLaw.section(taken, shown = paused, today = "2026-12-05"))
+            .isEqualTo(FlamePauseSection.Paused(paused, startsTomorrow = true))
+        assertThat(GameFlamePauseLaw.section(taken.replacing(status = FlameStatus.Out), shown = null, today = "2026-12-05"))
+            .isEqualTo(FlamePauseSection.Hidden)
+        assertThat(GameCopyLaws.flamePauseNext(dayLabel = "1 janvier"))
+            .isEqualTo(GameText.of(GameTextKey.FlamePauseNext, GameTextArg.Verbatim("1 janvier")))
+    }
+
     @Test
     fun `une veille annoncee commence demain et dure de un a sept jours`() {
         assertThat(GameFlamePauseLaw.canPause(today = "2026-10-05", days = 7, status = FlameStatus.Lit, pause = null))
