@@ -1,4 +1,5 @@
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { POST_NOTIFICATION_LINK_PATHS } from './postNotificationLinkPaths';
 import {
   retractedNotificationOf,
   type RetractedNotificationAnnouncer,
@@ -81,13 +82,7 @@ export const POST_NOTIFICATION_RETRACTION_BATCH_SIZE = 200;
  */
 const MAX_RETRACTION_BATCHES = 200;
 
-/**
- * Les chemins qui lient une ligne à une publication (voir le filtre plus bas).
- * Chacun est INDEXÉ par `packages/shared/prisma/migrations/2026-11-01-notification-post-link-indexes.mongodb.js`
- * (#14254) : sans index, chaque lot parcourait toute la collection. Un chemin
- * ajouté ici sans son index rougit le témoin de cette migration.
- */
-export const POST_NOTIFICATION_LINK_PATHS = ['context.postId', 'metadata.repostId', 'metadata.originalPostId'] as const;
+export { POST_NOTIFICATION_LINK_PATHS };
 
 type RawObjectId = string | { $oid?: string };
 
