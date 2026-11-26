@@ -410,6 +410,10 @@ model User {
   /// déjà dépensée à la frappe. Déduite des prochaines étincelles gagnées (poche seule : cycle et total à vie montent
   /// du gain entier) ; tant qu'elle est > 0, la frappe est refusée (`MINT_BLOCKED_BY_DEBT`). Absente = 0. BigInt (`long`).
   sparksDebt BigInt?
+  /// LE JOUR UTC (`AAAA-MM-JJ`) du dernier gain d'étincelles (#20619) — le seul marqueur par compte du seau quotidien
+  /// `GameSparksDay` : il dit si un gain est le premier du jour, donc s'il compte un joueur de plus. Écrasé à chaque
+  /// premier gain du jour, aucune histoire gardée. Absent = aucun gain depuis le déploiement.
+  sparksEarnedDay String?
   /// LA RÉVISION DE L'ÉTAT DU JEU (#10912) — horloge logique hybride PAR COMPTE, gravée avec l'état : chaque écriture du
   /// jeu (frappe, crédit, reprise, Prestige, dépense de Meesh, Gloire…) y pose `max(maintenant, révision lue + 1)` dans la
   /// même écriture, donc elle ne recule jamais, quelles que soient les horloges des passerelles. Les lectures servent
@@ -6700,6 +6704,18 @@ model GameWeekPoints {
 
   @@unique([userId, weekKey, dayKey])
   @@index([weekKey])
+}
+
+/// LES ÉTINCELLES GAGNÉES PAR JOUR (#20619, #17363) — un document par jour UTC, aucune ligne par compte : la somme
+/// des gains écrits ce jour-là et le nombre de joueurs qui en ont gagné (`User.sparksEarnedDay` dit le premier gain du
+/// jour). BRUT : une reprise de contenu retiré ne le diminue pas. Commence au déploiement, sans rattrapage. Lu par
+/// `GET /admin/analytics/game` (`daily[].sparksEarned`, `daily[].sparkEarners`).
+model GameSparksDay {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  day       String   @unique
+  sparks    Int      @default(0)
+  earners   Int      @default(0)
+  updatedAt DateTime @updatedAt
 }
 
 /// La mission en DUO d'une semaine (#9385) : deux amis, une mission commune, une
