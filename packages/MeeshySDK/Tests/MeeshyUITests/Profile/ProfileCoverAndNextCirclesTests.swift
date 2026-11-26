@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 import MeeshySDK
 @testable import MeeshyUI
 
@@ -32,6 +33,27 @@ final class ProfileCoverAndNextCirclesTests: XCTestCase {
 
     func test_backSwipe_withoutAMeasuredWidth_neverLeaves() {
         XCTAssertFalse(ProfileCoverBackSwipe.commits(translation: 300, predictedEnd: 900, width: 0))
+    }
+
+    // MARK: - L'entrée latérale
+
+    func test_entrance_comesFromTheTrailingEdge_likeAPush() {
+        XCTAssertEqual(ProfileCoverEntrance.startOffset(width: 390, reduceMotion: false), 390)
+        XCTAssertEqual(ProfileCoverEntrance.startOpacity(width: 390, reduceMotion: false), 1)
+    }
+
+    func test_entrance_underReduceMotion_fadesInPlace() {
+        XCTAssertEqual(ProfileCoverEntrance.startOffset(width: 390, reduceMotion: true), 0)
+        XCTAssertEqual(ProfileCoverEntrance.startOpacity(width: 390, reduceMotion: true), 0)
+    }
+
+    func test_entrance_beforeTheWidthIsMeasured_staysHidden() {
+        XCTAssertEqual(ProfileCoverEntrance.startOpacity(width: 0, reduceMotion: false), 0)
+    }
+
+    /// La montée du plein écran d'iOS n'est pas jouée : c'est la fiche qui entre par le côté.
+    func test_entrance_presentsTheCoverWithoutItsRisingAnimation() {
+        XCTAssertTrue(ProfileCoverEntrance.presentationTransaction().disablesAnimations)
     }
 
     // MARK: - Pour aller plus loin
