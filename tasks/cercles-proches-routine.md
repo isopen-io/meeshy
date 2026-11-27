@@ -2040,6 +2040,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
   dès que #20514 est fusionnée ou abandonnée.
 
+## 2026-11-27 — réveil de 13 h (second, en parallèle) : le témoin du relais talkie se compte en travail (#20130)
+
+- Reprise : aucune PR de la routine ouverte ; #20417 et #20463 sont fusionnées. Le lot suivant (iOS de #20416 point 2
+  et #20308) est CÉDÉ : #20514, ouverte par une autre session, découpe `SharedLocationSharingCenter.swift` en huit
+  fichiers et n'est pas fusionnée. Ce réveil prend #20130, qui ne touche aucun de ces chemins.
+- Lot : le témoin « p95 sous 5 ms sur 300 fragments » (horloge murale, sans marge, `dev` rouge au hasard) devient un
+  compte de TRAVAIL. Sur 300 fragments : 300 lectures du cache de coupure, 0 appel à la porte, 0 au compteur de débit ;
+  et le fragment part dans les microtâches qui suivent la lecture, sans aucune attente de plus. Rouge prouvé par
+  mutation : un `judge` par fragment rend `judge: 300` ; un `setImmediate` après la lecture rend `[0, 0]` au lieu de
+  `[0, 1]`. Le code du relais ne change pas.
+- Audit adversarial : non requis (témoin seul, aucun accès ni chiffrement touché).
+- Gates : passerelle `bun run test` talkie 216/216 (10 suites) ; `tsc` passerelle 0.
+- Prochain lot : quand #20514 est fusionnée, iOS de #20416 (point 2) et de #20308 sur les fichiers découpés ; puis
+  #20054, #20056.
+
 ## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
 
 - Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
