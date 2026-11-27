@@ -58,6 +58,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   contactActivityEnabled: true,
   bringEnabled: true,
   bloodProximityEnabled: true,
+  togetherEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -545,6 +546,36 @@ describe('les notifications', () => {
       const label = host.querySelector('[data-setting="bloodProximityEnabled"]')?.getAttribute('aria-label') ?? '';
       expect(label).not.toContain('settings.');
       expect(label).not.toBe(BLOOD_NEAR);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* #17990 — l'interrupteur GLOBAL des invitations « ensemble » (`togetherReception`) :
+     coupé, personne ne peut plus inviter ce compte à regarder ou écouter ensemble. */
+  const TOGETHER = 'Recevoir les invitations « ensemble »';
+
+  test('« Recevoir les invitations « ensemble » » se bascule, écrit SA clé, dit ce qu’il coupe et suit le Bring', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ togetherEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, TOGETHER);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('togetherEnabled');
+    expect(host.textContent).toContain('regarder ou écouter ensemble');
+    const order = [...host.querySelectorAll('[data-setting]')].map((node) => node.getAttribute('data-setting'));
+    expect(order.indexOf('togetherEnabled')).toBe(order.indexOf('bringEnabled') + 1);
+  });
+
+  test('« Recevoir les invitations « ensemble » » est activé par défaut', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, TOGETHER)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Recevoir les invitations « ensemble » » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="togetherEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(TOGETHER);
       expect(label).not.toBe('');
     }
   });

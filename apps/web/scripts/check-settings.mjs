@@ -177,10 +177,14 @@ try {
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
         `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
-      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 13, `${label} : treize bascules que la passerelle obéit`);
+      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 14, `${label} : quatorze bascules que la passerelle obéit`);
       check(
         (await page.$$('section[aria-labelledby="settings-notifications"] [role="switch"][data-setting="bringEnabled"]')).length === 1,
         `${label} : « Recevoir des Bring » vit en Notifications, synchronisé par /me/preferences (#16588)`,
+      );
+      check(
+        (await page.$$('section[aria-labelledby="settings-notifications"] [role="switch"][data-setting="togetherEnabled"]')).length === 1,
+        `${label} : « Recevoir les invitations « ensemble » » vit en Notifications, synchronisé par /me/preferences (#17990)`,
       );
       check(
         (await page.$$('section[aria-labelledby="settings-privacy"] [role="switch"][data-setting="saveMediaToGallery"]')).length === 1,
