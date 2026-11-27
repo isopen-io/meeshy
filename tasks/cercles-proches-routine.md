@@ -2034,5 +2034,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   efface chez l'autre les alertes qu'il tenait de ce sens. Retraits silencieux. Choix : purge ciblée plutôt qu'index
   TTL, pour ne pas poser de migration ni toucher aux autres types de notification.
 - Témoins jugés sur des documents (`helpers/notification-raw-store.ts`), ROUGE prouvé par mutation sur chaque chemin.
+- Audit adversarial : non bloquant. Corrigés dans le lot : l'effacement passe AVANT l'écriture du retrait (sinon un
+  échec n'était plus jamais soldé au rejeu), le magasin de test refuse un `userId` en chaîne nue, un en-tête à jour.
+  Suivis ouverts : #20688 (départ d'un compte), #20689 (alerte en vol après un retrait).
 - Prochain lot : les lots iOS de la position quand #20514 est fusionnée ou abandonnée ; sinon #19888 (web, carte des
   cercles) ou #20130 (témoin de latence du talkie sans marge).

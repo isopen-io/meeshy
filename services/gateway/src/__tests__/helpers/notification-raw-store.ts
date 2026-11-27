@@ -6,7 +6,8 @@
  *
  * Le filtre brut est JUGÉ sur les documents, pas comparé à une copie de lui-même : égalité de champ
  * (chemin pointé compris), `{ $oid }`, `$or`, `$and`. Toute autre forme LÈVE — un témoin ne passe
- * jamais au vert sur un opérateur qu'il ne sait pas lire.
+ * jamais au vert sur un opérateur qu'il ne sait pas lire. `userId` étant un ObjectId en base, une
+ * chaîne nue LÈVE aussi : sur MongoDB elle n'apparierait rien, et le retrait serait inopérant.
  */
 import { matchesMongoWhere, type MongoDocument } from './mongo-where';
 
@@ -26,6 +27,9 @@ function matchesRaw(row: MongoDocument, filter: MongoDocument): boolean {
     if (key === '$or') return (expected as MongoDocument[]).some((branch) => matchesRaw(row, branch));
     if (key === '$and') return (expected as MongoDocument[]).every((branch) => matchesRaw(row, branch));
     if (key.startsWith('$')) throw new Error(`notification-raw-store: opérateur non jugé ${key}`);
+    if (key === 'userId' && (expected === null || typeof expected !== 'object')) {
+      throw new Error('notification-raw-store: `userId` est un ObjectId en base — une chaîne nue n’y correspond jamais, il faut `{ $oid }`');
+    }
     if (expected !== null && typeof expected === 'object') {
       const keys = Object.keys(expected);
       if (keys.length === 1 && keys[0] === '$oid') return valueAt(row, key) === (expected as { $oid: string }).$oid;

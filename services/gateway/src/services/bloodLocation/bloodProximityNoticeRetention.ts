@@ -16,8 +16,9 @@
  *   que le destinataire tenait de cet émetteur.
  *
  * Les retraits sont SILENCIEUX — rien n'est émis : une ligne disparue n'apprend rien à l'autre, et
- * une annonce lui dirait qu'on vient d'effacer ou de retirer. Un échec ne fait pas échouer le geste
- * qui l'a demandé : la ligne expirée part de toute façon au balayage suivant.
+ * une annonce lui dirait qu'on vient d'effacer ou de retirer. Un échec LÈVE : l'effacement de
+ * l'historique et le réglage répondent alors en erreur, et le rejeu le solde (un retrait de
+ * proximité ne s'écrit qu'APRÈS l'effacement, dans `withdrawRitualSharesBetween`).
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { BLOOD_PROXIMITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/blood-location';
