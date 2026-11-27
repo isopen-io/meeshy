@@ -8,8 +8,8 @@ Compte rendu daté du 2026-11-27, base `dev @ 467263ce24 (2026-11-27)`. L'issue 
 |---|---|
 | Découverte | `INVENTORY.md`, `DEPENDENCY-GRAPH.md` |
 | Référence TS | `baselines/2026-11-27.md` |
-| Épingles de sécurité montées (#20725) | branche `claude/overrides-epingles-securite-20725` |
-| Fuseau des témoins web (#20729) | branche `claude/web-temoins-fuseau-20729`, témoin rouge puis vert |
+| Épingles de sécurité montées (#20725) | PR #20736, `reports/regression-report.md` |
+| Fuseau des témoins web (#20729) | PR #20735, témoin rouge puis vert |
 | Contrôle des versions résolues par les images | `scripts/check-image-resolution.mjs`, 20 écarts mesurés |
 
 ## Ouvert

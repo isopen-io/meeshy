@@ -11,9 +11,9 @@ Base : `dev` @ `467263ce24`, passe du 2026-11-27. Détail des mesures : `../base
 | Bibliothèques | 3 (shared, design-tokens, MeeshySDK), plus 2 tiers embarqués |
 | Composants audités en profondeur (phases A à E) | 0 |
 | Composants dont le build, le type-check et les tests ont été rejoués | 3 (shared, design-tokens, web) |
-| Constats | 6 |
+| Constats | 7 |
 | Corrigés sur branche | 2 (#20725, #20729) |
-| Ouverts | 3 (#20730, #20731, #20732) |
+| Ouverts | 4 (#20730, #20731, #20732, #20737) |
 | Déjà pris par une autre session | 1 (PR #20719) |
 
 ## Ce que la passe a établi
