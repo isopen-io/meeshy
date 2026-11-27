@@ -108,9 +108,9 @@ describe('#16695 — un salon d’une communauté privée n’accueille que ce q
 
   it('un compte non vivant ou bloqué n’entre pas, même par un admin', async () => {
     const mort = await entrer({ lignes: [membre(ACTEUR, 'admin')], vivants: [ACTEUR] }, { kind: 'registered', userId: ENTRANT });
-    expect(mort.verdict).toEqual({ kind: 'refused', reason: 'not-addable' });
+    expect(mort.verdict).toEqual({ kind: 'refused', reason: 'not-addable', attempted: 1 });
     const bloque = await entrer({ lignes: [membre(ACTEUR, 'admin')], bloque: true }, { kind: 'registered', userId: ENTRANT });
-    expect(bloque.verdict).toEqual({ kind: 'refused', reason: 'not-addable' });
+    expect(bloque.verdict).toEqual({ kind: 'refused', reason: 'not-addable', attempted: 1 });
   });
 
   it('qui n’est plus membre ne rentre pas par son propre lien', async () => {

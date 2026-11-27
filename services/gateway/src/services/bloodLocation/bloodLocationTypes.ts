@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import type { PairAccessDb } from '../relations/pairAccess';
+import type { BloodProximityRetraction } from './bloodProximityRetraction';
 
 export type BloodLocationDb = PairAccessDb &
   Pick<PrismaClient, 'bloodLocationPoint' | 'bloodLocationConsultation' | 'relationFeatureSetting'>;
@@ -38,6 +39,11 @@ export type BloodLocationDeps = {
    * cadence déjà prise. Absente, rien ne part ; un échec n'arrête jamais l'alerte.
    */
   readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
+  /**
+   * Retire les notifications `blood_proximity` d'une portée (#20542) : l'effacement de l'historique
+   * les emporte avec les points. Strict — une panne LÈVE, et l'effacement échoue.
+   */
+  readonly retractProximityNotices?: (scope: BloodProximityRetraction) => Promise<number>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };
