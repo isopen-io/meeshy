@@ -2021,20 +2021,30 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
 
-## 2026-11-27 — réveil de 13 h : web, chaque épingle dit ce que vit la personne (#20658, tranche de #19888)
+## 2026-11-27 — réveil de 13 h : web de #19888, chaque épingle dit ce que vit la personne
 
-- Reprise : le run du 2026-11-24 a été coupé avant toute écriture. #20417 (iOS de #20249) et #20463 (#19884) sont
-  fusionnées. Aucune PR de la routine ouverte.
-- Garde anti-collision : la PR #20514 (autre session) découpe `SharedLocationSharingCenter.swift` et ses voisins, donc
-  les lots iOS de #20416, #20308, #20054 et #20056 lui cèdent. `claude/cercles-20542-purge-alerte-sang` et
-  `claude/dev-vert-sang-ci-20540` sont réservées : #20540 et #20542 aussi.
-- Lot : #20658, tranche web de #19888. L'épingle de la carte des cercles passe à son avatar l'écoute (bandeau
-  défilant), la batterie et le téléphone injoignable de SA personne, lus dans les caches déjà servis
-  (`useListeningBand`, `useBatteryBadge`, `usePhoneUnreachableBadge`, aucune requête de plus). Le libellé de l'épingle
-  et la ligne de la liste disent la même chose au lecteur d'écran. Rien ne part du serveur.
-- Audit adversarial : non requis (affichage de signaux déjà servis à ce lecteur, aucun accès ni chiffrement touché).
-- Gates : `shared-locations-map-view.test.tsx` 28/28 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
-  hérité (`act-leak-guard`, rouge aussi sans ce lot) ; `tsc` web 0.
-- Reste de #19888 : zone sûre, feuille rangeable, appui long ⇒ talkie ; l'avatar web ne sait pas encore peindre
-  l'inactivité ni l'appel en cours.
-- Prochain lot : suite web de #19888, ou les lots iOS de position quand #20514 sera fusionnée.
+- Reprise : aucune PR de la routine ouverte. Le journal s'était arrêté le 2026-11-23 ; entre-temps, d'autres sessions
+  ont fusionné l'alerte « un Sang s'approche » (#20540) et réservé `claude/cercles-20542-purge-alerte-sang` (#20542).
+  #20514 (découpage iOS du partage de position, ouverte depuis le 2026-11-24) écrit les fichiers iOS de
+  `SharedLocation/` : les lots iOS de #20416, #20308 et #20054 lui cèdent. #19682 attend toujours la décision du porteur.
+- Lot : la part « épingles vivantes » de #19888, iso `PeerLiveOverlays` (iOS #19885). Chaque épingle de la carte des
+  cercles porte l'écoute (bandeau défilant), la batterie, le téléphone injoignable (qui prime sur la batterie),
+  « En appel » et l'alerte d'inactivité, lus dans leurs caches tels que servis à ce lecteur, et les dit dans le nom de
+  l'épingle. `usePinLife` / `pinLifeLabel` (`apps/web/src/lib/shared-locations/pin-life.ts`). Rien de nouveau ne part
+  du serveur ; aucune requête de plus.
+- Audit adversarial : non requis (affichage de signaux déjà servis et déjà tronqués par la passerelle).
+- Gates : témoins `shared-locations-map-pin-life` 7/7 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
+  hérité (`act-leak-guard`) ; `tsc` web 0.
+- Reste de #19888 : commandes dans la zone sûre, « Autour de toi » et la fiche rangeables, appui long ⇒ talkie,
+  chrome lisible sur fond clair. La chute (#18748) n'a pas encore de glyphe d'avatar sur le web.
+- Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
+  dès que #20514 est fusionnée ou abandonnée.
+
+## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
+
+- Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
+  (867e62f8b, plus complet : appel et inactivité en plus). Selon la règle « celui qui a payé le second cède », ce run
+  a repris la version de `dev` et n'a gardé que ce qu'elle ne faisait pas.
+- Lot : #20658. La ligne de la liste des positions dit la même vie que le nom de l'épingle (`usePinLife` /
+  `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
+- Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.

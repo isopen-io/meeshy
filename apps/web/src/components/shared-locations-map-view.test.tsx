@@ -1,15 +1,12 @@
-import { act } from 'react';
-import { createRoot } from 'react-dom/client';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { SharedLocation } from '@/lib/api/shared-locations';
 import { loadCirclesCatalog } from '@/lib/i18n-circles-catalog';
-import { listeningStore } from '@/lib/now-playing/listening-live';
 import { metersToPixels } from '@/lib/map/slippy';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { SharedLocationsMapView, type SharedLocationLife, type SharedLocationPerson } from './shared-locations-map-view';
+import { SharedLocationsMapView, type SharedLocationPerson } from './shared-locations-map-view';
 
 /**
  * **LA CARTE DES POSITIONS PARTAGÉES, SA VUE (#16984)** — pose ce que le serveur a servi,
@@ -226,73 +223,5 @@ describe('les états', () => {
     const html = render({ language: 'en' });
     expect(html).toContain('Map of the locations shared with you');
     expect(html).toContain('The web can’t share your location');
-  });
-});
-
-describe('ce que vit la personne, sur son épingle (#20658, iso iOS #19885)', () => {
-  const listening = { glyph: '♪', text: 'Nina Simone', spoken: 'écoute Nina Simone' };
-  const battery = { tone: 'low' as const, level: 12, charging: false, spoken: 'batterie à 12 %' };
-  const unreachable = { spoken: 'téléphone injoignable depuis 10:00' };
-  const lifeOf = (lives: Readonly<Record<string, SharedLocationLife>>) => (userId: string): SharedLocationLife => lives[userId] ?? {};
-  const pinOf = (html: string, id: string): string => new RegExp(`data-shared-location-pin="${id}"[\\s\\S]*?</span></span>`).exec(html)?.[0] ?? '';
-
-  test('l’écoute servie défile sur l’avatar de l’épingle, et le lecteur d’écran l’entend avec le nom', () => {
-    const html = render({ usePersonLife: lifeOf({ 'u-ada': { listening } }) });
-    expect(html).toContain('Nina Simone');
-    expect(html).toContain('aria-label="Ada Lovelace · à un quartier près · jusqu’à 11:30, écoute Nina Simone"');
-  });
-
-  test('la batterie servie se pose sur l’épingle et se dit', () => {
-    const html = render({ usePersonLife: lifeOf({ 'u-ada': { battery } }) });
-    expect(html).toContain('aria-label="Ada Lovelace · à un quartier près · jusqu’à 11:30, batterie à 12 %"');
-  });
-
-  test('un téléphone injoignable l’emporte sur la batterie, comme sur l’avatar', () => {
-    const html = render({ usePersonLife: lifeOf({ 'u-ada': { battery, unreachable } }) });
-    expect(html).toContain('téléphone injoignable depuis 10:00');
-    expect(html).not.toContain('batterie à 12 %');
-  });
-
-  test('rien de servi : l’épingle ne dit que le nom, la précision et le terme', () => {
-    const html = render({ usePersonLife: lifeOf({}) });
-    expect(html).toContain('aria-label="Ada Lovelace · à un quartier près · jusqu’à 11:30"');
-    expect(html).not.toContain('Nina Simone');
-  });
-
-  test('chaque épingle garde la vie de SA personne', () => {
-    const html = render({
-      locations: [location({ userId: 'u-a' }), location({ userId: 'u-b', latitude: 48.86 })],
-      usePersonLife: lifeOf({ 'u-a': { listening } }),
-    });
-    expect(pinOf(html, 'u-a')).toContain('Nina Simone');
-    expect(pinOf(html, 'u-b')).not.toContain('Nina Simone');
-  });
-
-  test('la liste dit la même chose que l’épingle', () => {
-    const html = render({ usePersonLife: lifeOf({ 'u-ada': { listening, unreachable } }) });
-    const row = /data-shared-location-row="u-ada"[^>]*>([^<]*)</.exec(html)?.[1] ?? '';
-    expect(row).toContain('écoute Nina Simone');
-    expect(row).toContain('téléphone injoignable depuis 10:00');
-  });
-});
-
-describe('par défaut, la vie vient des caches servis (#20658)', () => {
-  test('une écoute reçue par le magasin défile sur l’épingle de SA personne, et disparaît avec elle', () => {
-    listeningStore.getState().receive({ userId: 'u-ada', category: 'music', updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 60_000).toISOString() });
-    const container = document.createElement('div');
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-    globals.IS_REACT_ACT_ENVIRONMENT = true;
-    act(() => root.render(<SharedLocationsMapView language="fr" locations={[location()]} view={VIEW} personOf={people} formatTime={() => '11:30'} online status="ready" onRetry={() => undefined} onZoom={() => undefined} onPan={() => undefined} />));
-    const served = container.innerHTML;
-    act(() => listeningStore.getState().clear('u-ada'));
-    const cleared = container.innerHTML;
-    act(() => root.unmount());
-    container.remove();
-    delete globals.IS_REACT_ACT_ENVIRONMENT;
-    expect(served).toContain('data-listening-band');
-    expect(served).toContain('Écoute de la musique');
-    expect(cleared).not.toContain('data-listening-band');
   });
 });

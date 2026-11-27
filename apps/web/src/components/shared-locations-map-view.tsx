@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react';
+import type { QueryClient } from '@tanstack/react-query';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
@@ -6,17 +7,16 @@ import { translateCircles } from '@/lib/i18n-circles-catalog';
 import { relationLevelIcon, relationLevelLabel, relationLevelTint } from '@/lib/relations/level-labels';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocation } from '@/lib/api/shared-locations';
-import { useBatteryBadge } from '@/lib/battery/use-battery';
-import type { BatteryBadge } from '@/lib/battery/battery-view';
-import { useListeningBand, type ListeningBand } from '@/lib/now-playing/listening-band';
-import type { PhoneUnreachableBadge } from '@/lib/phone-reachability/phone-reachability-view';
-import { usePhoneUnreachableBadge } from '@/lib/phone-reachability/use-phone-reachability';
 import { spreadPins, type ScreenPoint } from '@/lib/map/fan';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
+import { appQueryClient } from '@/lib/api/query-client';
+import { pinLifeLabel, usePinLife } from '@/lib/shared-locations/pin-life';
 
 import { Avatar } from './avatar';
 import { MeeshyAvatarMorph } from './kit/meeshy-avatar-morph';
 import { MeeshyMapPin } from './kit/meeshy-map-pin';
+import { InactivityGlyph } from './inactivity-glyph';
+import { PhoneCallGlyph } from './phone-call-glyph';
 
 /**
  * **LA CARTE DES POSITIONS PARTAGÉES, SA VUE** (#16984) — le web REÇOIT les positions de
@@ -37,11 +37,11 @@ import { MeeshyMapPin } from './kit/meeshy-map-pin';
  * - **Personne ne cache personne** (#19883) : des épingles qui se recouvrent (toutes au même
  *   centre à la précision « ville ») s'ouvrent en éventail autour du point servi ; le flou
  *   reste centré sur ce point, et chaque épingle garde le cercle de SA personne.
- * - **Ce que vit la personne** (#20658, iso iOS #19885) : son écoute défile sur l'avatar
- *   de l'épingle, sa batterie ou son téléphone injoignable s'y posent, lus dans les caches
- *   déjà servis — aucune requête de plus, rien sans entrée servie. L'épingle et la ligne
- *   de la liste le disent au lecteur d'écran.
- * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx`.
+ * - **Chaque épingle dit ce que vit la personne** (#19888, iso iOS #19885) : son écoute, sa batterie, son téléphone
+ *   injoignable, « En appel » et l'alerte d'inactivité, lus dans leur cache tels que servis à ce lecteur, et dits
+ *   dans le nom de l'épingle. Rien de servi : l'épingle d'avant.
+ * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx` ; la vie des personnes, par
+ *   les caches de leurs signaux, que la carte observe sans jamais rien demander.
  */
 
 export type SharedLocationPerson = {
@@ -51,29 +51,6 @@ export type SharedLocationPerson = {
   /** Servie ou absente : jamais déduite d'ici. */
   readonly presence: UserPresenceStatus | undefined;
 };
-
-/** Ce que la personne vit, tel que servi à ce lecteur : chaque signal absent n'ajoute rien. */
-export type SharedLocationLife = {
-  readonly listening?: ListeningBand;
-  readonly battery?: BatteryBadge;
-  readonly unreachable?: PhoneUnreachableBadge;
-};
-
-/** Les caches de l'onglet, observés sans requête (`enabled: false`) : la même source que l'en-tête d'un direct. */
-export function useServedLife(userId: string, language: InterfaceLanguage): SharedLocationLife {
-  const listening = useListeningBand(userId, language);
-  const battery = useBatteryBadge(userId, language);
-  const unreachable = usePhoneUnreachableBadge(userId, language);
-  return { ...(listening === undefined ? {} : { listening }), ...(battery === undefined ? {} : { battery }), ...(unreachable === undefined ? {} : { unreachable }) };
-}
-
-/** Le téléphone injoignable l'emporte sur la batterie, comme sur l'avatar (`avatar.tsx`). */
-export function lifeSpoken(life: SharedLocationLife): readonly string[] {
-  const device = life.unreachable?.spoken ?? life.battery?.spoken;
-  return [life.listening?.spoken, device].filter((part): part is string => part !== undefined);
-}
-
-const withLife = (text: string, life: SharedLocationLife): string => [text, ...lifeSpoken(life)].join(', ');
 
 export type SharedLocationsMapViewProps = {
   readonly language: InterfaceLanguage;
@@ -93,8 +70,8 @@ export type SharedLocationsMapViewProps = {
   readonly onSelect?: (userId: string) => void;
   /** Ce qui se dit de la personne choisie, posé SOUS la carte et non par-dessus : la carte reste manipulable. */
   readonly detail?: ReactNode;
-  /** Ce que vit chaque personne ; par défaut les caches servis (`useServedLife`). Appelé comme un hook, une fois par épingle et par ligne. */
-  readonly usePersonLife?: (userId: string, language: InterfaceLanguage) => SharedLocationLife;
+  /** Le cache des signaux de vie (batterie, téléphone, appel, inactivité) ; celui de l'app par défaut. */
+  readonly client?: QueryClient;
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
@@ -124,6 +101,27 @@ export function rowText({ language, location, person, formatTime }: { readonly l
 
 const isOnMap = (at: ScreenPoint, view: MapView): boolean => at.x >= 0 && at.y >= 0 && at.x <= view.width && at.y <= view.height;
 
+const LIFE_GLYPH = 12;
+
+/** « En appel » et l'inactivité, posés en haut à gauche de l'épingle, hors de la découpe ronde de l'avatar ; muets, l'épingle les dit. */
+function PinLifeMarks({ call, inactivity }: { readonly call: boolean; readonly inactivity: boolean }) {
+  if (!call && !inactivity) return null;
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute left-0 top-0 flex gap-0.5" style={{ zIndex: 2 }}>
+      {inactivity ? (
+        <span data-pin-life="inactivity" className="grid place-items-center rounded-full p-0.5" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-error)' }}>
+          <InactivityGlyph responded={false} size={LIFE_GLYPH} />
+        </span>
+      ) : null}
+      {call ? (
+        <span data-pin-life="call" className="grid place-items-center rounded-full p-0.5" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-ok)' }}>
+          <PhoneCallGlyph active size={LIFE_GLYPH} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function Pin({
   location,
   text,
@@ -133,10 +131,10 @@ function Pin({
   selected,
   onSelect,
   language,
-  usePersonLife,
+  client,
 }: {
   readonly language: InterfaceLanguage;
-  readonly usePersonLife: (userId: string, language: InterfaceLanguage) => SharedLocationLife;
+  readonly client: QueryClient;
   readonly location: SharedLocation;
   readonly text: string;
   readonly person: SharedLocationPerson;
@@ -146,7 +144,7 @@ function Pin({
   readonly selected: boolean;
   readonly onSelect: ((userId: string) => void) | undefined;
 }) {
-  const life = usePersonLife(location.userId, language);
+  const life = usePinLife(location.userId, language, client);
   const at = screenPoint(location, view);
   if (!isOnMap(at, view)) return null;
   const blur = Math.round(metersToPixels(location.radiusMeters, location.latitude, view.zoom) * 2);
@@ -174,8 +172,9 @@ function Pin({
         className="absolute grid place-items-center"
         style={{ left: pinAt.x - PIN_SIZE / 2, top: pinAt.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
       >
+        <PinLifeMarks call={life.call !== undefined} inactivity={life.inactivity !== undefined} />
         <MeeshyMapPin
-          label={withLife(text, life)}
+          label={pinLifeLabel(text, life)}
           isSelected={selected}
           precision="exact"
           {...(location.circle === undefined
@@ -196,9 +195,11 @@ function Pin({
               color="var(--color-brand)"
               size={PIN_AVATAR}
               {...(person.presence === undefined ? {} : { presence: person.presence })}
+              {...(life.listening === undefined ? {} : { listening: life.listening })}
+              {...(life.battery === undefined ? {} : { battery: life.battery })}
+              {...(life.unreachable === undefined ? {} : { unreachable: life.unreachable })}
               {...(person.avatar === undefined ? {} : { src: person.avatar })}
               {...(person.name === null ? {} : { name: person.name })}
-              {...life}
               redundant
             />
           </MeeshyAvatarMorph>
@@ -208,16 +209,17 @@ function Pin({
   );
 }
 
-function Row({ userId, text, language, usePersonLife }: { readonly userId: string; readonly text: string; readonly language: InterfaceLanguage; readonly usePersonLife: (userId: string, language: InterfaceLanguage) => SharedLocationLife }) {
-  const life = usePersonLife(userId, language);
+/** La ligne de la liste dit ce que dit le nom de l'épingle (#20658) : qui n'a pas la carte entend la même vie. */
+function Row({ userId, text, language, client }: { readonly userId: string; readonly text: string; readonly language: InterfaceLanguage; readonly client: QueryClient }) {
+  const life = usePinLife(userId, language, client);
   return (
     <li data-shared-location-row={userId} className="text-body">
-      {withLife(text, life)}
+      {pinLifeLabel(text, life)}
     </li>
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, usePersonLife = useServedLife }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
@@ -293,7 +295,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           />
         ))}
         {rows.map(({ location, person, text }) => (
-          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} language={language} usePersonLife={usePersonLife} />
+          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} language={language} client={client} />
         ))}
         <div className="absolute right-2 top-2 grid gap-2" onPointerDown={keepsItsTouch}>
           {zoomButton(1, 'positions.zoomIn', '+')}
@@ -332,7 +334,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           <h2 className="text-title font-bold">{t('positions.list.title')}</h2>
           <ul className="grid gap-2">
             {rows.map(({ location, text }) => (
-              <Row key={location.userId} userId={location.userId} text={text} language={language} usePersonLife={usePersonLife} />
+              <Row key={location.userId} userId={location.userId} text={text} language={language} client={client} />
             ))}
           </ul>
         </div>
