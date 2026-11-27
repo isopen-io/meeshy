@@ -29,8 +29,32 @@ extension CallChromeVisibility {
 
     /// Pendant le fondu de disparition, le bouton est encore VU : il doit
     /// encore répondre. Il ne refuse le toucher qu'une fois le fondu achevé.
+    /// Un intervalle négatif ou indéfini ne prolonge jamais la grâce : il dit que
+    /// l'horloge n'est pas fiable, et le fondu est alors tenu pour achevé.
     static func acceptsTouches(isVisible: Bool, hiddenFor: TimeInterval) -> Bool {
-        MeeshyGlassPillPresenceRule.acceptsTouches(presence: isVisible ? .shown : .stowed, stowedFor: hiddenFor)
+        guard isVisible || hiddenFor >= 0 else { return false }
+        return MeeshyGlassPillPresenceRule.acceptsTouches(presence: isVisible ? .shown : .stowed, stowedFor: hiddenFor)
+    }
+}
+
+/// #20300 — l'instant où le chrome a commencé à disparaître, en secondes de
+/// l'horloge MONOTONE (`CallMonotonicClock.seconds`), jamais de l'horloge murale :
+/// une heure murale qui recule pendant le fondu rendait l'intervalle négatif, et
+/// la commande masquée captait encore les touchers.
+struct CallChromeFadeGrace: Equatable, Sendable {
+    let hiddenAt: TimeInterval?
+
+    static let shown = CallChromeFadeGrace(hiddenAt: nil)
+
+    static func hidden(at now: TimeInterval) -> CallChromeFadeGrace {
+        CallChromeFadeGrace(hiddenAt: now)
+    }
+
+    func acceptsTouches(isVisible: Bool, now: TimeInterval) -> Bool {
+        CallChromeVisibility.acceptsTouches(
+            isVisible: isVisible,
+            hiddenFor: hiddenAt.map { now - $0 } ?? .infinity
+        )
     }
 }
 
