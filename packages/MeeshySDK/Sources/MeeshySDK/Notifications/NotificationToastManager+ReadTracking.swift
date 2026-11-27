@@ -26,8 +26,16 @@ extension NotificationToastManager {
         openConversationStack.removeAll { $0 == conversationId }
         openConversationStack.append(conversationId)
         MessageSocketManager.shared.openConversationIds = openConversationIds
-        if consumes { peekingConversationIds.remove(conversationId) } else { peekingConversationIds.insert(conversationId) }
-        guard conversationId != activeConversationId else { return }
+        // Une ouverture LUE pendant qu'un regard de la même conversation est
+        // encore à l'écran (« Ouvrir la conversation » depuis la feuille, la
+        // fermeture du regard étant différée) met fin au regard : elle
+        // consomme malgré le garde d'idempotence ci-dessous (#18721).
+        let endsPeek = consumes && peekingConversationIds.remove(conversationId) != nil
+        if !consumes { peekingConversationIds.insert(conversationId) }
+        guard conversationId != activeConversationId else {
+            if endsPeek { consumeConversationLocally(conversationId) }
+            return
+        }
 
         activeConversationId = conversationId
         MessageSocketManager.shared.activeConversationId = conversationId

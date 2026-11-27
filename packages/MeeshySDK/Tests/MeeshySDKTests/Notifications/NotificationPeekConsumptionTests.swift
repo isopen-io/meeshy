@@ -101,6 +101,37 @@ final class NotificationPeekConsumptionTests: XCTestCase {
         XCTAssertEqual(emitted(), ["peek-5"])
     }
 
+    /// « Ouvrir la conversation entière » depuis la feuille du regard pousse un
+    /// écran LU pendant que celui du regard se ferme encore (fermeture
+    /// différée) : la conversation est déjà l'active, et l'ouverture lue ne
+    /// doit pas s'arrêter au garde d'idempotence sans consommer.
+    func test_onConversationOpened_reading_whileThePeekIsStillOpen_consumes() {
+        let manager = neuf()
+        manager.onConversationOpened("peek-8", consumes: false)
+        var bag = Set<AnyCancellable>()
+        let emitted = reads(manager, into: &bag)
+        var purged: [NotificationRef] = []
+        manager.deliveredBannerPurger = { purged.append($0) }
+
+        manager.onConversationOpened("peek-8")
+        manager.onConversationClosed("peek-8")
+        manager.onConversationReadingStarted("peek-8")
+
+        XCTAssertEqual(emitted(), ["peek-8"])
+        XCTAssertEqual(purged, [.conversation(id: "peek-8")])
+    }
+
+    func test_onConversationOpened_reading_twice_consumesOnlyOnce() {
+        let manager = neuf()
+        manager.onConversationOpened("peek-9")
+        var bag = Set<AnyCancellable>()
+        let emitted = reads(manager, into: &bag)
+
+        manager.onConversationOpened("peek-9")
+
+        XCTAssertEqual(emitted(), [], "le garde d'idempotence tient hors regard (tempête de /read)")
+    }
+
     // MARK: - Ce qui arrive pendant le regard attend
 
     func test_handleNewNotification_duringAPeek_staysUnreadAndCounts_withoutBanner() throws {
