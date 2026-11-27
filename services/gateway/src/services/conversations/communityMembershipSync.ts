@@ -21,7 +21,9 @@ export type CommunityAdmission =
       readonly reactivations: ReadonlyArray<CommunityEntrant & { readonly id: string }>;
       readonly creations: ReadonlyArray<CommunityEntrant>;
     }
-  | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' | 'not-addable' };
+  | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' }
+  /** `attempted` : combien d'entrants la requête portait — une tentative refusée se paie (#20464). */
+  | { readonly kind: 'refused'; readonly reason: 'not-addable'; readonly attempted: number };
 
 export type CommunityAdmissionRequest = {
   readonly communityId: string;
@@ -118,7 +120,7 @@ export async function planCommunityAdmission(
     return { kind: 'refused', reason: 'invite-forbidden' };
   }
   if (!(await everyoneAddable(prisma, request.actorId, entering))) {
-    return { kind: 'refused', reason: 'not-addable' };
+    return { kind: 'refused', reason: 'not-addable', attempted: entering.length };
   }
 
   const actorEntering = request.admitActor === false || rowOf.get(request.actorId)?.isActive === true

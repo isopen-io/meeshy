@@ -26,6 +26,7 @@ import { bloodLockStateBetween, type BloodLockState } from '../../services/relat
 import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
 import { bloodLockResponseProperties, sendBloodLocked } from './blood-lock';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
+import { bloodProximityRetractorOf } from '../../services/bloodLocation/bloodProximityRetraction';
 
 /**
  * BLOQUER le Bring, le talkie ou les invitations « ensemble » ne s'écrit que pour une personne qui EXISTE et avec qui un lien
@@ -282,6 +283,12 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
         }
       } else if (Object.keys(data).length > 0) {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
+      }
+      // #20542 — retirer la proximité à quelqu'un efface chez lui les alertes « tout près » qui me nomment —
+      // dès l'écriture, même si la réponse dit ensuite 404 (blocage sans lien).
+      if (requested.proximityShared === false) {
+        await bloodProximityRetractorOf(fastify.prisma)({ kind: 'at', ownerId, readerId: userId })
+          .catch((error: unknown) => logError(fastify.log, 'Blood proximity notices not retracted after withdrawal:', error));
       }
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
