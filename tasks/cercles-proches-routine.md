@@ -2020,3 +2020,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : une baisse sous Ami éteint ma pastille chez l'autre (#19539, passerelle)
+
+- Reprise : aucune PR de la routine ouverte (#20463 et #20417 fusionnées le 23). Le run du 26 a été coupé avant toute
+  écriture. Les lots iOS de #20416, #20308, #20054 et #20056 écrivent `SharedLocationSharingCenter.swift`, que la PR
+  ouverte #20514 (découpage par responsabilité, autre session) réécrit déjà : ce réveil cède et prend #19539.
+- Lot : après une baisse (`POST /relations/:userId/level`) ou la rupture d'une amitié acceptée, la passerelle rejuge ce
+  que chacun des deux voit de la présence de l'autre et pousse, dans la seule room du lecteur dont la présence SERVIE a
+  changé, la transition `user:status` que la loi lui sert désormais (`isOnline` faux sous Ami, `lastActiveAt` nul sous
+  Proche). Forme d'une transition ordinaire, rien vers un tiers, rien quand la valeur servie ne change pas (RG-07).
+  Module unique : `services/gateway/src/services/presence/presenceAfterLinkChange.ts`, patron capture / rafraîchissement
+  de la batterie et de la position. L'instantané `presence:snapshot` rejuge déjà la visibilité à chaque service : son
+  cache de 60 s ne garde que la liste brute.
+- Clients : aucun changement. Web : témoin de non-régression (la charge neutre éteint la pastille, sans garder l'ancienne
+  activité). iOS remplace l'entrée entière à chaque `user:status` (`PresenceManager`) ; Android à vérifier par son issue.
+- Audit adversarial : non requis au sens strict (présence, aucun chiffrement ni migration), relecture faite sur le
+  silence RG-07.
+- Gates : passerelle `relation-presence-after-drop-19539` 6/6 (4 rouges avant le câblage), relations + annuaire 53
+  suites / 619 verts, sécurité + présence 53 suites / 474 verts, `tsc` 0 ; web `presence-live` 18/18.
+- Prochain lot : iOS de #20416 / #20308 / #20054 / #20056 dès que #20514 est fusionnée ou abandonnée ; sinon #19538
+  (une Connaissance née seule apparaît aussitôt dans « Mes cercles »).

@@ -19,6 +19,7 @@ import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/
 import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
+import { capturePresenceBefore, refreshPresenceAfter } from '../../services/presence/presenceAfterLinkChange';
 import { relationIoOf } from '../../socketio/relationEvents';
 
 type DemandeRetirable = DemandeARepondre & { readonly status?: string };
@@ -66,6 +67,8 @@ async function rompreLien(
   const batterieAvant = await captureBatteryBefore(batterie, { userA: demande.senderId, userB: demande.receiverId });
   const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not cleared after link withdrawal:', error) };
   const positionAvant = await captureSharedLocationBefore(position, { userA: demande.senderId, userB: demande.receiverId });
+  const presence = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Presence not refreshed after link withdrawal:', error) };
+  const presenceAvant = await capturePresenceBefore(presence, { userA: demande.senderId, userB: demande.receiverId });
   await lowerPair(fastify.prisma, {
     userA: demande.senderId,
     userB: demande.receiverId,
@@ -90,6 +93,8 @@ async function rompreLien(
   await refreshSharedLocationAfter(position, { userA: demande.senderId, userB: demande.receiverId, before: positionAvant });
   // #17012 — le lien rompu : la séance « ensemble » de la paire est rejugée.
   await rejudgeTogetherAfter(ecoute, { userA: demande.senderId, userB: demande.receiverId });
+  // #19539 — et la pastille « en ligne » s'éteint chez l'ancien ami.
+  await refreshPresenceAfter(presence, { userA: demande.senderId, userB: demande.receiverId, before: presenceAvant });
 }
 
 type DemandesDb = Pick<PrismaClient, 'friendRequest' | 'userRelation'>;
