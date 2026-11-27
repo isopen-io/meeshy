@@ -2033,8 +2033,10 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `notification`, optimiste avec retour arrière, sept langues. Le libellé dit « vos Proches ne peuvent plus vous
   inviter » et non « personne » : entre Sangs ayant donné l'accord du palier, la coupure ne ferme pas (#20361).
 - Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
-- Gates : web `bun test` 35 588 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0. Les scripts Playwright du
-  gate ne se lancent pas en conteneur (navigateur d'une autre version) : la CI fait foi.
+- Gates : web `bun test` 35 588 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0 ; `build` 0 ;
+  `check-settings` (quatorze bascules) et `check-interface-language` verts avec `CHROMIUM=/opt/pw-browsers/chromium-1243/…`
+  ; `check-verbosity` vert après un relèvement motivé de `settings` (307 → 330, même convention que #20544). La CI des
+  PR est gelée (`PR_CI_GEL`, jobs sautés) : la preuve du lot est locale.
 - Reste : iOS #17988 et Android #17989 (même interrupteur) ; le talkie global (`talkieEnabled`) n'a pas d'interrupteur
   web non plus.
 - Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
