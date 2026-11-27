@@ -245,7 +245,7 @@ function Pin({
           if (talks) hold.down();
         }}
         {...(talks ? holdHandlers(hold) : {})}
-        className="absolute grid place-items-center transition-transform duration-150 motion-reduce:transition-none"
+        className="absolute grid place-items-center transition-transform motion-reduce:transition-none"
         style={{
           left: pinAt.x - PIN_SIZE / 2,
           top: pinAt.y - PIN_SIZE / 2,
