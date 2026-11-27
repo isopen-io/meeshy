@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.sdk.model.relation.TalkieBlockBody
+import me.meeshy.sdk.model.relation.TogetherBlockBody
 import me.meeshy.sdk.net.api.BringApi
 import me.meeshy.sdk.net.api.BringStopResponse
 import me.meeshy.sdk.net.api.RelationsApi
@@ -163,6 +164,19 @@ class BringRepositoryTest {
         assertThat(served?.isBlocked(RelationReceptionSetting.TALKIE)).isTrue()
         assertThat(served?.isBlocked(RelationReceptionSetting.BRING)).isFalse()
         coVerify(exactly = 0) { relations.setBringBlocked(any(), any()) }
+    }
+
+    @Test
+    fun `couper les invitations ensemble d'une personne ecrit son seul champ, ni Bring ni talkie`() = runTest {
+        val repository = repository()
+        coEvery { relations.setTogetherBlocked("u2", TogetherBlockBody(true)) } returns
+            ApiResponse(success = true, data = RelationPersonSettings("u2", togetherBlocked = true))
+
+        val served = repository.setReceptionBlocked("u2", RelationReceptionSetting.TOGETHER, blocked = true)
+
+        assertThat(served?.isBlocked(RelationReceptionSetting.TOGETHER)).isTrue()
+        coVerify(exactly = 0) { relations.setBringBlocked(any(), any()) }
+        coVerify(exactly = 0) { relations.setTalkieBlocked(any(), any()) }
     }
 
     @Test

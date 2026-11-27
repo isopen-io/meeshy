@@ -49,6 +49,31 @@ class RelationPersonSwitchTest {
     @Test
     fun `les blocages d'un collegue sans lien restent des receptions, sans partage`() {
         assertThat(CirclePersonSetting.receptionAt(RelationLevel.BLOOD))
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER)
+            .inOrder()
+    }
+
+    @Test
+    fun `la coupure des invitations ensemble est lue, et un serveur plus ancien qui ne la sert pas vaut ouverte`() {
+        val cut = json.decodeFromString<RelationPersonSettings>("""{"userId":"u2","togetherBlocked":true}""")
+        val older = json.decodeFromString<RelationPersonSettings>("""{"userId":"u2","talkieBlocked":true}""")
+
+        assertThat(cut.isBlocked(RelationReceptionSetting.TOGETHER)).isTrue()
+        assertThat(cut.isBlocked(RelationReceptionSetting.TALKIE)).isFalse()
+        assertThat(older.isBlocked(RelationReceptionSetting.TOGETHER)).isFalse()
+    }
+
+    @Test
+    fun `le corps de la coupure ensemble n'ecrit que son propre champ`() {
+        assertThat(json.encodeToString(TogetherBlockBody(true))).isEqualTo("""{"togetherBlocked":true}""")
+    }
+
+    @Test
+    fun `couper les invitations ensemble s'ouvre des Proche, juste apres le talkie`() {
+        assertThat(CirclePersonSetting.TOGETHER.personSwitch)
+            .isEqualTo(RelationPersonSwitch.Reception(RelationReceptionSetting.TOGETHER))
+        assertThat(CirclePersonSetting.offered(RelationLevel.FRIEND)).doesNotContain(CirclePersonSetting.TOGETHER)
+        val close = CirclePersonSetting.offered(RelationLevel.CLOSE)
+        assertThat(close.indexOf(CirclePersonSetting.TOGETHER)).isEqualTo(close.indexOf(CirclePersonSetting.TALKIE) + 1)
     }
 }

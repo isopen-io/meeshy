@@ -2084,6 +2084,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   web non plus.
 - Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
 
+## 2026-11-27 — réveil de 14 h 40 (heure de Paris) : sur Android, on coupe les invitations « ensemble » d'un Proche (#17989)
+
+- Reprise : les trois runs de 13 h ont fusionné (#20698, #20686, #20696) ; aucune PR de la routine ouverte. Les lots
+  iOS de la position restent cédés à #20514 (brouillon, autre session) ; #20659 (iOS de #20416) est vivante ailleurs.
+- Lot : la part FICHE de #17989. `RelationPersonSettings.togetherBlocked` décodé (absent ⇒ ouvert),
+  `RelationReceptionSetting.TOGETHER` écrit seul (`TogetherBlockBody`, `RelationsApi.setTogetherBlocked`),
+  `CirclePersonSetting.TOGETHER` ouvert dès Proche, juste après le talkie ; la fiche d'un collègue de l'équipe sans
+  lien l'offre aussi (`receptionAt`). Libellé repris du web, sept langues, `android-only` tant qu'iOS (#17988) ne
+  porte pas la clé `circles.settings.blockTogether`.
+- Pas d'explication sous l'interrupteur : le cliquet de verbosité de `:feature:contacts` (9 libellés > 80 car.) la
+  refuse. Le web dit « Elle n'en est pas prévenue » ; l'Android ne le dit pas encore (à ranger derrière un (i)).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Reste de #17989 : la bascule globale `togetherEnabled`, à poser avec celle des Bring (#18834) dans une section
+  « Réception » des réglages de notification Android, qui n'existe pas encore. iOS : #17988.
+
 ## 2026-11-27 — réveil de 14 h 40 : web de #20700 (couper le talkie de tous ses Proches)
 
 - Reprise : le run précédent de ce fil avait été coupé le 26/11 sans rien pousser. Aucune PR de la routine à finir dans
@@ -2115,6 +2130,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste de #19888 : commandes dans la zone sûre, feuilles « Autour de toi » et fiche rangeables, chrome sur fond clair.
 - Prochain lot : le reste de #19888 ; iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ou abandonnée ;
   #20697 si #20691 est abandonnée.
+
+## 2026-11-27 — réveil de 15 h 20 : web de #19888, la liste des positions et la fiche se rangent
+
+- Reprise : #20701 (talkie à l'appui long) et #20708 fusionnées ; aucune PR de ce fil ouverte. Les lots natifs restent
+  cédés (CI des PR gelée, #20514 sur les fichiers iOS de la position).
+- Lot : la dernière part web de #19888, iso iOS #19885. « Liste des positions » porte un bouton « Ranger la liste » /
+  « Voir qui est autour » (`aria-expanded`, `aria-controls`) qui range la liste sans retirer aucune épingle ; une fiche
+  fermée se rouvre par « Afficher {name} » tant que la personne partage (rien ne promet une position finie). Sept
+  langues. Zone sûre et chrome sur fond clair : déjà tenus sur le web (en-tête `pt-safe`, carte posée dans la page,
+  commandes sur panneau opaque, jamais de verre) — constaté, rien à changer.
+- Audit adversarial : non requis (affichage seul, aucune donnée ni accès nouveaux).
+- Gates : témoins `shared-locations-map-fold` 7 (3 rouges avant le code) ; web `bun test` 35 627 verts, 2 rouges dont
+  l'hérité `act-leak-guard` et le cliquet d'appui, recalé dans le lot par une réponse d'appui (899 tenu) ; `tsc` web 0 ;
+  `build` 0 ; `check-verbosity` (90 vues), `check-interface-language` et `check-ts-catalog-dead-entries` verts.
+- Reste de #19888 : rien côté web. Android : #19889.
+- Prochain lot : iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ; #20697 si #20691 est abandonnée ;
+  sinon un lot web/serveur du jalon 2.
 
 ## 2026-11-27 — réveil de 13 h : Android du mouvement sur la carte (#20665, tranche de #19887)
 
