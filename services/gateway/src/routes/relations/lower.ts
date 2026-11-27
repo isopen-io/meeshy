@@ -11,7 +11,7 @@ import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { capturePresenceBefore, livePresenceOf, refreshPresenceAfter } from '../../services/relations/presenceAfterDrop';
 import { emitRelationLevelLowered, relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
-import { loadRelationLink } from '../../services/relations/relationLinks';
+import { loadRelationLink, servedRelationLink } from '../../services/relations/relationLinks';
 import { thresholdsNow } from '../../services/relations/relationRequestGate';
 import { forgetFriends } from '../../services/relations/relationCaches';
 import { withdrawSharesAfterDrop } from '../../services/relations/ritualShareWithdrawal';
@@ -93,8 +93,10 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       // #19539 — sous Ami, la pastille « en ligne » s'éteint chez qui la voyait ; sous Proche, la dernière connexion.
       await refreshPresenceAfter(presence, { userA: viewerId, userB: otherId, before: presenceAvant });
       // #19366 — mes autres appareils relisent le lien ; rejoué même sur une baisse déjà écrite, pour qu'ils convergent.
-      emitRelationLevelLowered(ecoute.io, { actorId: viewerId, otherId, grantedByMe: link.grantedByMe, effectiveLevel: link.effectiveLevel, at: now });
-      return sendSuccess(reply, link);
+      // #19571 — vers un compte inutilisable, la réponse et mes autres appareils lisent la vue fermée de `GET /relations`.
+      const served = await servedRelationLink(fastify.prisma, link);
+      emitRelationLevelLowered(ecoute.io, { actorId: viewerId, otherId, grantedByMe: served.grantedByMe, effectiveLevel: served.effectiveLevel, at: now });
+      return sendSuccess(reply, served);
     } catch (error) {
       if (error instanceof z.ZodError) return sendBadRequest(reply, 'Donnees invalides');
       logError(fastify.log, 'Lower relation error:', error);

@@ -2188,3 +2188,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `lawRoleOf`. Laissé au porteur : une charge émise À L'INSTANT de la baisse est un signal temporel (RG-07).
 - Prochain lot : après la fusion de #20514, iOS de #20416 / #20308, #20054, #20056 ; sinon #19538 ou #19540
   (présence et cercles côté passerelle).
+
+## 2026-11-27 — réveil de 13 h (seconde session) : #19571 (un compte suspendu ou supprimé quitte « Mes cercles »)
+
+- Reprise : le journal s'arrêtait au 2026-11-23 ; #20417 et #20463 sont fusionnées, #20249 et #19884 fermées. Aucune PR
+  de la routine ouverte. Les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift`, que la PR #20514 (autre session, découpage par responsabilité) réécrit : ce
+  réveil les lui cède et prend un lot serveur du jalon 1/2.
+- Lot : #19571. `GET /relations` ne liste plus un lien vers un compte inactif, désactivé ou supprimé en attente de purge
+  (`USABLE_ACCOUNT_WHERE`, une lecture de plus, bornée aux candidats) ; `GET /relations/:userId` le sert comme un inconnu
+  (vue vide, `canRaise` faux, `accessLevel` PUBLIC) par les MÊMES lectures inconditionnelles ; `POST /relations/:userId/level`
+  écrit la baisse et ses effets sur le niveau réel, mais rend et diffuse à mes appareils la vue fermée. Le résumé suit la
+  liste. Le lien n'est ni effacé ni baissé : la réactivation rend le niveau d'avant.
+- Prochain lot : les lots iOS de la position quand #20514 aura fusionné ; sinon un autre lot serveur du jalon (#19539,
+  #19538, #19450).
