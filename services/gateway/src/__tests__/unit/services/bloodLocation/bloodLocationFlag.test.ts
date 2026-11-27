@@ -6,7 +6,7 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import { bloodLocationEnabledFor } from '../../../../services/bloodLocation/bloodLocationFlag';
+import { bloodLocationEnabledFor, bloodLocationSwitchedOn } from '../../../../services/bloodLocation/bloodLocationFlag';
 
 const COMPTE = '6400000000000000000000a1';
 const AUTRE = '6400000000000000000000a2';
@@ -33,5 +33,16 @@ describe('bloodLocationEnabledFor', () => {
 
   it('une identité absente est refusée', () => {
     expect(bloodLocationEnabledFor('', { BLOOD_LOCATION_ENABLED: 'true', BLOOD_LOCATION_ALLOWLIST: '*' })).toBe(false);
+  });
+});
+
+describe('le drapeau allumé pour l’environnement arme le balayage des alertes échues (#20542)', () => {
+  it('allumé, même sans liste blanche : des alertes ont pu naître quand la liste en portait une', () => {
+    expect(bloodLocationSwitchedOn({ BLOOD_LOCATION_ENABLED: ' TRUE ' })).toBe(true);
+  });
+
+  it('absent ou autre que `true`, il reste éteint : aucune purge ne tourne en production sans décision', () => {
+    expect(bloodLocationSwitchedOn({})).toBe(false);
+    expect(bloodLocationSwitchedOn({ BLOOD_LOCATION_ENABLED: 'yes' })).toBe(false);
   });
 });
