@@ -7,15 +7,20 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * seule phrase pour la feuille « Inviter » et pour la création : combien sont
  * entrés, et si quelqu'un n'a pas pu l'être. Elle ne dit jamais POURQUOI une
  * personne a été refusée (compte inconnu, désactivé, bloqué : la passerelle
- * rend le même 404).
+ * rend le même 404). Un budget d'ajouts plein (#20657) se dit à part, et
+ * l'emporte sur une panne voisine : réessayer aussitôt n'y servirait à rien.
+ * La phrase ne dit pas QUI est saturé — l'acteur ou la personne ajoutée — pas
+ * plus que la passerelle, qui rend le même code pour les deux.
  */
 export function inviteStatusOf(language: InterfaceLanguage, outcome: InviteOutcome): string {
   if (outcome.status === 'offline') return t(language, 'community.invite.offline');
   if (outcome.invited === 0) {
+    if (outcome.throttled > 0) return t(language, 'community.invite.throttled');
     if (outcome.failed > 0) return t(language, 'community.invite.failed');
     return t(language, outcome.already > 0 && outcome.refused === 0 ? 'community.invite.member' : 'community.invite.refused');
   }
   const added = outcome.invited === 1 ? t(language, 'community.invite.done.one') : t(language, 'community.invite.done.other', { count: String(outcome.invited) });
+  if (outcome.throttled > 0) return `${added} ${t(language, 'community.invite.throttled')}`;
   return outcome.refused + outcome.failed > 0 ? `${added} ${t(language, 'community.invite.partial')}` : added;
 }
 
