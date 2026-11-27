@@ -32,6 +32,8 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateParticipantsPresence } from './participants-presence';
@@ -102,6 +104,7 @@ export function registerCreateConversationRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        429: errorResponseSchema, // #20464 — budget des ajouts à une communauté
         500: errorResponseSchema,
         503: errorResponseSchema
       }
@@ -219,11 +222,13 @@ export function registerCreateConversationRoute(
             participantIds: uniqueParticipantIds,
           })
         : null;
-      if (communityAdmission?.kind === 'refused') {
-        return communityAdmission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendNotFound(reply, 'User to invite not found');
+      if (communityAdmission?.kind === 'refused' && communityAdmission.reason === 'invite-forbidden') {
+        return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
       }
+      // #20464 — le budget de `POST …/invite` (#19812) se paie au nombre d'entrants, avant toute écriture.
+      const budget = communityAdmission ? await spendCommunitySalonAdmission(fastify, userId, communityAdmission) : null;
+      if (budget && !budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
+      if (communityAdmission?.kind === 'refused') return sendNotFound(reply, 'User to invite not found');
 
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject
