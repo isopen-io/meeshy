@@ -1,17 +1,22 @@
 /**
- * CE QUE L'ALERTE DE PROXIMITÉ LAISSE DERRIÈRE ELLE (#20542). La notification `blood_proximity`
- * (#20540) est une COPIE persistée de « X est tout près, à 500 m » : sans retrait, elle survivait à
- * l'effacement de l'historique et au retrait du consentement de X, au-delà des 30 jours des points.
+ * CE QUE L'ALERTE DE PROXIMITÉ LAISSE DERRIÈRE ELLE (#20542) — site unique. La notification
+ * `blood_proximity` (#20540) est une COPIE persistée de « X est tout près, à 500 m » : sans retrait,
+ * elle survivait à l'effacement de l'historique, au retrait du consentement de X et à sa propre
+ * échéance, au-delà des 30 jours des points.
  *
- * Deux retraits, un seul geste chacun :
+ * Trois gestes l'effacent, tous ici :
  * - `everywhere` — X efface son historique : toute alerte qui NOMME X, chez tous ses Sangs, et toute
  *   alerte de SA cloche (« Y est tout près » dit aussi où X était) ;
- * - `at` — X retire `location.proximity` à Y : les alertes qui nomment X chez Y, et elles seules.
+ * - `at` — X retire `location.proximity` à Y, par le réglage ou parce que le lien tombe sous le Sang
+ *   (`withdrawRitualSharesBetween`) : les alertes qui nomment X chez Y, et elles seules ;
+ * - l'ÉCHÉANCE (2 h) : l'index TTL partiel de `2026-11-27-notification-blood-proximity-ttl.mongodb.js`
+ *   la tient une fois posé ; d'ici là, et partout où il ne l'est pas, `purgeExpiredBloodProximityNotices`
+ *   balaie toutes les heures les lignes échues (tâche armée par `BLOOD_LOCATION_ENABLED`).
  *
- * Les lignes sont SUPPRIMÉES puis ANNONCÉES (`notification:deleted` sur les appareils connectés,
- * révocation push sinon), chacune par `retractedNotificationOf`, le site unique qui lit
- * `delivery.pushSent`. L'expiration des 2 h, elle, est tenue par l'index TTL partiel de
- * `2026-11-27-notification-blood-proximity-ttl.mongodb.js`.
+ * Les lignes retirées sont SUPPRIMÉES puis ANNONCÉES (`notification:deleted` sur les appareils du
+ * lecteur, révocation push sinon) par `retractedNotificationOf`, le site unique qui lit
+ * `delivery.pushSent` : la copie quitte aussi l'écran du lecteur. Une panne de la base LÈVE — le
+ * geste qui l'appelle répond en erreur et le rejeu le solde ; une panne de l'annonce, non.
  */
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { BLOOD_PROXIMITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/blood-location';
@@ -61,4 +66,12 @@ export async function retractBloodProximityNotices(
 /** Le retrait câblé au service de notifications partagé (absent : les lignes partent sans annonce). */
 export function bloodProximityRetractorOf(prisma: Pick<PrismaClient, 'notification'>): (scope: BloodProximityRetraction) => Promise<number> {
   return (scope) => retractBloodProximityNotices(prisma, getSharedNotificationService() ?? null, scope);
+}
+
+/** Les alertes échues : leur ligne part, sans annonce (la lecture les masque déjà). Rend combien. */
+export async function purgeExpiredBloodProximityNotices(prisma: Pick<PrismaClient, 'notification'>, now: Date): Promise<number> {
+  const { count } = await prisma.notification.deleteMany({
+    where: { type: BLOOD_PROXIMITY_NOTIFICATION_TYPE, expiresAt: { lt: now } },
+  });
+  return count;
 }

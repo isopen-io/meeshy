@@ -273,6 +273,24 @@ describe('effacer — chacun efface le sien', () => {
     await expect(eraseBloodLocationHistory(w.deps, MOI)).resolves.toEqual({ erased: 1 });
     expect(w.points.rows.map((r) => r.ownerId)).toEqual([SANG]);
   });
+
+  it('efface aussi les alertes « un Sang s’approche » qui le nomment chez son Sang, et celles qu’il a reçues (#20542)', async () => {
+    const alerte = (id: string, userId: string, actorId: string) => ({ id, userId, type: 'blood_proximity', actor: { id: actorId }, expiresAt: new Date(T0 + HEURE) });
+    const w = bloodWorldAvecConsentements({
+      notifications: [alerte('moi-chez-sang', SANG, MOI), alerte('sang-chez-moi', MOI, SANG), alerte('autre-chez-sang', SANG, AUTRE_SANG)],
+    });
+
+    await eraseBloodLocationHistory(w.deps, MOI);
+
+    expect(w.notifications.rows().map((r) => r.id)).toEqual(['autre-chez-sang']);
+  });
+
+  it('une purge des alertes qui échoue fait échouer l’effacement : il ne répond jamais « fait » sur une copie restée', async () => {
+    const w = bloodWorldAvecConsentements();
+    const deps = { ...w.deps, retractProximityNotices: async () => { throw new Error('mongo injoignable'); } };
+
+    await expect(eraseBloodLocationHistory(deps, MOI)).rejects.toThrow('mongo injoignable');
+  });
 });
 
 describe('la proximité — une alerte aux deux, une par paire toutes les 2 h', () => {
