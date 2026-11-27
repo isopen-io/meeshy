@@ -361,3 +361,32 @@ describe('#20502 — un réglage écrit sur une paire bloquée répond EXACTEMEN
     },
   );
 });
+
+describe('#20542 — retirer la proximité efface chez l’autre les alertes « un Sang s’approche » qu’il tenait de moi', () => {
+  const alerte = (id: string, userId: string, actorId: string) => ({ id, userId, type: 'blood_proximity', actor: { id: actorId }, expiresAt: new Date(NOW.getTime() + 3_600_000) });
+
+  it('mon retrait efface ses alertes qui me nomment, et laisse les miennes qui le nomment', async () => {
+    const app = await buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, {
+      liens: [lien('BLOOD', 'BLOOD')],
+      reglages: [{ ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, locationShared: true, locationHistoryShared: true, proximityShared: true }],
+      notifications: [alerte('moi-chez-autre', AUTRE, MOI), alerte('autre-chez-moi', MOI, AUTRE)],
+    });
+    const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/settings`, { proximityShared: false }, MOI);
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(app.notifications().map((n) => n.id)).toEqual(['autre-chez-moi']);
+  });
+
+  it('un autre retrait (la position continue) n’efface aucune alerte', async () => {
+    const app = await buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, {
+      liens: [lien('BLOOD', 'BLOOD')],
+      reglages: [{ ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, locationShared: true, locationHistoryShared: true, proximityShared: true }],
+      notifications: [alerte('moi-chez-autre', AUTRE, MOI)],
+    });
+    await app.call('PUT', `/api/v1/relations/${AUTRE}/settings`, { locationShared: false }, MOI);
+    await app.close();
+
+    expect(app.notifications().map((n) => n.id)).toEqual(['moi-chez-autre']);
+  });
+});

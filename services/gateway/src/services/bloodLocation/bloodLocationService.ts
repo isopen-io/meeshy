@@ -163,6 +163,7 @@ export async function readBloodLocationHistory(
 
 export async function eraseBloodLocationHistory(deps: BloodLocationDeps, ownerId: string): Promise<{ readonly erased: number }> {
   const { count } = await deps.prisma.bloodLocationPoint.deleteMany({ where: { ownerId } });
+  await deps.eraseProximityNotices(ownerId);
   return { erased: count };
 }
 

@@ -19,7 +19,7 @@
  * une annonce lui dirait qu'on vient d'effacer ou de retirer. Un échec ne fait pas échouer le geste
  * qui l'a demandé : la ligne expirée part de toute façon au balayage suivant.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { BLOOD_PROXIMITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/blood-location';
 
 export type BloodProximityNoticeStore = Pick<PrismaClient, '$runCommandRaw'>;
@@ -30,7 +30,7 @@ export type BloodProximityPair = { readonly emitterId: string; readonly readerId
 
 const OBJECT_ID = /^[0-9a-f]{24}$/i;
 
-async function deleteNotices(prisma: BloodProximityNoticeStore, branches: ReadonlyArray<Record<string, unknown>>): Promise<void> {
+async function deleteNotices(prisma: BloodProximityNoticeStore, branches: readonly Prisma.InputJsonObject[]): Promise<void> {
   if (branches.length === 0) return;
   await prisma.$runCommandRaw({
     delete: 'Notification',

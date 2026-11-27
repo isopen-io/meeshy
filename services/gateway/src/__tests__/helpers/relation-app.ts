@@ -5,6 +5,7 @@
  * et les émissions qui parlent, jamais la clause envoyée.
  */
 import { jest } from '@jest/globals';
+import { notificationRawStore, type StoredNotification } from './notification-raw-store';
 import Fastify from 'fastify';
 import { relationStore, type RelationStore } from './user-relation-store';
 import { clearPrivacyPreferencesCache } from '../../services/preferences/privacy-cache';
@@ -48,6 +49,8 @@ export const semaineActive = (weeksAgo: number, userLowId: string, userHighId: s
 };
 
 export type AppOptions = {
+  /** Les lignes `Notification` déjà en base (#20542). */
+  readonly notifications?: readonly StoredNotification[];
   readonly userId?: string;
   readonly demandes?: ReadonlyArray<Record<string, unknown>>;
   readonly liens?: ReadonlyArray<Record<string, unknown>>;
@@ -63,6 +66,8 @@ export type AppOptions = {
 };
 
 export type TestApp = {
+  /** Les lignes `Notification` restées en base après les appels (#20542). */
+  readonly notifications: () => readonly StoredNotification[];
   readonly store: RelationStore;
   readonly emissions: Emission[];
   readonly notifier: Record<string, jest.Mock>;
@@ -106,7 +111,9 @@ export async function buildRelationApp(
       birthDate: options.naissances?.[id] ?? null, username: `u${id.slice(-2)}`, displayName: `U${id.slice(-2)}`,
     }]),
   );
+  const notes = notificationRawStore(options.notifications ?? []);
   const prisma = {
+    $runCommandRaw: notes.prisma.$runCommandRaw,
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
       findMany: jest.fn(async () => []),
@@ -178,7 +185,7 @@ export async function buildRelationApp(
   await app.ready();
   void CACHE;
   return {
-    store, emissions, notifier, consents, prisma, reglages: () => reglages.map((r) => ({ ...r })),
+    store, emissions, notifier, consents, prisma, notifications: notes.rows, reglages: () => reglages.map((r) => ({ ...r })),
     call: async (method, url, body, as) => {
       acting = as ?? options.userId ?? MOI;
       const res = await app.inject({

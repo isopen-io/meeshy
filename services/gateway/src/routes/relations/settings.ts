@@ -8,6 +8,7 @@ import {
 } from '@meeshy/shared/types/relation-person-settings';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWithdrawal';
+import { retractBloodProximityNotices } from '../../services/bloodLocation/bloodProximityNoticeRetention';
 import { teamMayGrantShares } from '../../services/relations/teamShareGrant';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
@@ -283,6 +284,8 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       } else if (Object.keys(data).length > 0) {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
+      // #20542 — retirer la proximité efface chez l'autre les alertes « un Sang s'approche » qu'il tenait de moi.
+      if (withdrawn.includes('proximityShared')) await retractBloodProximityNotices(fastify.prisma, [{ emitterId: ownerId, readerId: userId }]);
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');

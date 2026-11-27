@@ -16,6 +16,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { niveauEffectif, type RelationLevelDb } from '../friendship';
+import { retractBloodProximityNotices, type BloodProximityPair } from '../bloodLocation/bloodProximityNoticeRetention';
 import {
   RELATION_RITUAL_SHARES,
   RELATION_RITUAL_SHARE_WITHDRAWN_AT,
@@ -39,32 +40,44 @@ export const ritualShareWithdrawalOf = (
         at === null ? [[share, false]] : [[share, false], [RELATION_RITUAL_SHARE_WITHDRAWN_AT[share], at]]),
   );
 
+/** Rend `true` quand la proximité de ce sens vient de s'éteindre : ses alertes chez l'autre sont à effacer. */
 async function withdrawOwnerShares(
   prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
   params: { readonly ownerId: string; readonly otherId: string; readonly at: Date | null },
-): Promise<void> {
+): Promise<boolean> {
   const current = (await prisma.relationFeatureSetting.findUnique({
     where: { ownerId_otherId: { ownerId: params.ownerId, otherId: params.otherId } },
     select: SHARES_SELECT,
   })) as Partial<RitualSharesRow> | null;
   const data = ritualShareWithdrawalOf(current, RELATION_RITUAL_SHARES, params.at);
-  if (Object.keys(data).length === 0) return;
+  if (Object.keys(data).length === 0) return false;
   await prisma.relationFeatureSetting.updateMany({ where: { ownerId: params.ownerId, otherId: params.otherId }, data });
+  return current?.proximityShared === true;
 }
+
+export type RitualSharesWithdrawalDb = Pick<PrismaClient, 'relationFeatureSetting' | '$runCommandRaw'>;
 
 /**
  * Le lien est tombé sous le Sang par le geste de `actorId` : les partages du rituel
  * s'éteignent dans les DEUX sens — datés chez l'acteur, sans date chez l'autre.
  * `at` nul : la chute n'est le geste de personne (course du rituel), aucun côté n'est daté.
+ *
+ * Un sens dont la proximité vient de s'éteindre efface, chez l'autre, les alertes
+ * « un Sang s'approche » qu'il en tenait (#20542) : elles disaient où il se trouvait.
  */
 export async function withdrawRitualSharesBetween(
-  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  prisma: RitualSharesWithdrawalDb,
   params: { readonly actorId: string; readonly otherId: string; readonly at: Date | null },
 ): Promise<void> {
-  await Promise.all([
+  const [actorCut, otherCut] = await Promise.all([
     withdrawOwnerShares(prisma, { ownerId: params.actorId, otherId: params.otherId, at: params.at }),
     withdrawOwnerShares(prisma, { ownerId: params.otherId, otherId: params.actorId, at: null }),
   ]);
+  const pairs: BloodProximityPair[] = [
+    ...(actorCut ? [{ emitterId: params.actorId, readerId: params.otherId }] : []),
+    ...(otherCut ? [{ emitterId: params.otherId, readerId: params.actorId }] : []),
+  ];
+  await retractBloodProximityNotices(prisma, pairs);
 }
 
 const BUNDLE_FORGOTTEN = { bloodBundleAcceptedAt: null, bloodBundleVersion: null } as const;
@@ -150,7 +163,7 @@ export async function withdrawListeningCategoryBetween(
  * d'écoute et l'accord de batterie aussi. Rejouable sans condition : un retrait échoué se solde au rejeu.
  */
 export async function withdrawSharesAfterDrop(
-  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  prisma: RitualSharesWithdrawalDb,
   params: { readonly actorId: string; readonly otherId: string; readonly level: RelationLevel; readonly at: Date },
 ): Promise<void> {
   if (params.level === 'BLOOD') return;

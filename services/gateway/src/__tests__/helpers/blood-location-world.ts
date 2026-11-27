@@ -10,6 +10,8 @@ import { matchesMongoWhere, type MongoDocument } from './mongo-where';
 import { ADULT_BIRTH, messagingWorld, type CircleLink, type Row } from './messaging-circle-world';
 import type { BloodLocationDeps } from '../../services/bloodLocation/bloodLocationService';
 import { sealPoint, type SealedPoint } from '../../services/bloodLocation/bloodLocationSeal';
+import { eraseBloodProximityNoticesOf } from '../../services/bloodLocation/bloodProximityNoticeRetention';
+import { notificationRawStore, type StoredNotification } from './notification-raw-store';
 
 export const T0 = Date.parse('2026-11-09T12:00:00.000Z');
 export const MINUTE = 60_000;
@@ -107,6 +109,8 @@ export type BloodLocationWorldSeed = {
   /** `[propriétaire, bénéficiaire, partages]` : ce que `propriétaire` partage à `bénéficiaire`. */
   readonly consents?: ReadonlyArray<readonly [string, string, Consentements & Row]>;
   readonly cooldownDown?: boolean;
+  /** Les lignes `Notification` déjà en base (#20542). */
+  readonly notifications?: readonly StoredNotification[];
   /** Le compteur d'évaluations de proximité en panne. */
   readonly counterDown?: boolean;
   /** Les comptes que le drapeau n'admet pas (hors liste blanche). */
@@ -149,6 +153,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
     bloodLocationConsultation: consultations,
   };
   const emissions: Emission[] = [];
+  const notifications = notificationRawStore(seed.notifications ?? []);
   const cooldowns = new Map<string, number>();
   const counters = new Map<string, { value: number; until: number }>();
   let now = T0;
@@ -164,6 +169,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
       cooldowns.set(key, now + ttlSeconds * 1000);
       return true;
     },
+    eraseProximityNotices: (userId) => eraseBloodProximityNoticesOf(notifications.prisma as never, userId),
     countProximityEvaluations: async (key, by, ttlSeconds) => {
       if (seed.counterDown) throw new Error('redis injoignable');
       const current = counters.get(key);
@@ -177,6 +183,8 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
     deps,
     prisma,
     emissions,
+    /** Les lignes `Notification` que la base porterait (#20542) : ce qu'un effacement doit retirer. */
+    notifications,
     points,
     consultations,
     settings,

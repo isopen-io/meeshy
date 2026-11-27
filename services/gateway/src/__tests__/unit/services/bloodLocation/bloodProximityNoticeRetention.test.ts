@@ -71,11 +71,12 @@ describe('retirer la proximité efface chez le lecteur ce que l’émetteur lui 
       alerte('lina-chez-moi', MOI, LINA),
       alerte('moi-chez-lina', LINA, MOI),
       alerte('lina-chez-tiers', TIERS, LINA),
+      alerte('tiers-chez-moi', MOI, TIERS),
     ]);
 
     await retractBloodProximityNotices(store.prisma as never, [{ emitterId: LINA, readerId: MOI }]);
 
-    expect(ids(store.rows())).toEqual(['lina-chez-tiers', 'moi-chez-lina']);
+    expect(ids(store.rows())).toEqual(['lina-chez-tiers', 'moi-chez-lina', 'tiers-chez-moi']);
   });
 
   it('les deux sens d’une baisse sous le Sang partent ensemble, en une commande', async () => {

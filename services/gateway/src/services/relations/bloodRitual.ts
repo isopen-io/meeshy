@@ -78,7 +78,7 @@ export type RitualOutcome =
 
 export type RitualDb = Pick<
   PrismaClient,
-  'friendRequest' | 'userRelation' | 'pairInteractionDay' | 'relationFeatureSetting' | 'user'
+  'friendRequest' | 'userRelation' | 'pairInteractionDay' | 'relationFeatureSetting' | 'user' | '$runCommandRaw'
 >;
 
 export type RitualDeps = {

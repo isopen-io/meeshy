@@ -38,6 +38,12 @@ export type BloodLocationDeps = {
    * cadence déjà prise. Absente, rien ne part ; un échec n'arrête jamais l'alerte.
    */
   readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
+  /**
+   * Efface les alertes `blood_proximity` qui nomment `userId`, chez tous les destinataires, et celles
+   * qu'il a reçues (#20542) : l'effacement de l'historique n'en laisse aucune copie. REQUISE — une
+   * dépendance absente laisserait l'effacement répondre « fait » sur une copie restée en base.
+   */
+  readonly eraseProximityNotices: (userId: string) => Promise<void>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };

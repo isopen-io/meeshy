@@ -12,6 +12,7 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { bloodLocationEnabledFor } from './bloodLocationFlag';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { bloodProximityNotifierOf } from './bloodProximityNotice';
+import { eraseBloodProximityNoticesOf } from './bloodProximityNoticeRetention';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 export function bloodLocationDepsOf(params: {
@@ -26,6 +27,7 @@ export function bloodLocationDepsOf(params: {
     enabledFor: (userId) => bloodLocationEnabledFor(userId),
     report: params.report,
     notifyProximity: bloodProximityNotifierOf({ prisma: params.prisma, notifications: getSharedNotificationService() ?? null }),
+    eraseProximityNotices: (userId) => eraseBloodProximityNoticesOf(params.prisma, userId),
     claimProximityCooldown: async (pairKey, ttlSeconds) => {
       const client = getCacheStore().getNativeClient();
       if (!client) throw new Error('blood proximity cooldown store unavailable');
