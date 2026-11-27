@@ -27,6 +27,7 @@ jest.mock('../../../services/preferences/privacy-cache', () => ({
 }));
 
 import { MentionSuggestionFinder } from '../../../services/mentions/mentionSuggestions';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 const ME = '507f1f77bcf86cd799439099';
 const id = (n: number): string => `507f1f77bcf86cd7994390${String(n).padStart(2, '0')}`;
@@ -115,6 +116,10 @@ function fakePrisma(world: World) {
     },
     conversationMessageStats: { findUnique: jest.fn(async () => null) },
     user: {
+      // La confidentialité mesurée ici est celle de la DÉCOUVRABILITÉ ; le
+      // blocage est une autre porte, et son verdict unitaire manquait au double
+      // (#20717) — personne n'est bloqué dans ce monde.
+      ...noBlockUserDelegate(),
       findMany: jest.fn(async ({ where }: { where: AnyWhere }) => {
         const ids = inList(where.id);
         if (ids) return ids.flatMap((u) => (PEOPLE[u] && PEOPLE[u].isActive ? [PEOPLE[u]] : []));

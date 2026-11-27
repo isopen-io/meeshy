@@ -66,6 +66,7 @@ import {
   socialEventsRateLimitKey,
   SOCIAL_EVENTS_BATCH_CAP,
 } from '../../../../routes/social/events';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -153,6 +154,10 @@ function makePrisma() {
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postMention: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    // La porte de consommation lit la séparation par blocage avant de créditer
+    // une vue ou une impression (#20717) : sans ses trois méthodes, la passe de
+    // lot se ferme et aucune écriture n'arrive dans `ecritures`.
+    user: noBlockUserDelegate(),
   };
   return prisma;
 }
@@ -797,7 +802,11 @@ describe('#10772 — une session de lecture passe par le statut d’analyse que 
   };
   const withUser = (row: Record<string, unknown> | null) => ({
     ...makePrisma(),
-    user: { findUnique: jest.fn<any>().mockResolvedValue(row) },
+    // Ce témoin MESURE le statut d'analyse, qui se lit par `findUnique` : sa
+    // ligne de consentement gagne donc sur le délégué de séparation, dont ne
+    // restent que les deux autres méthodes (la lecture de blocage se contente
+    // d'un `blockedUserIds` absent).
+    user: { ...noBlockUserDelegate(), findUnique: jest.fn<any>().mockResolvedValue(row) },
   });
   const standingSent = () => (mockRecordEngagementBatch.mock.calls[0] as any)[2];
   const post = (app: FastifyInstance, payload: Record<string, unknown>) =>

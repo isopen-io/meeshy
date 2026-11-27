@@ -15,6 +15,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { MentionSuggestionFinder } from '../../../services/mentions/mentionSuggestions';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 const ME = '507f1f77bcf86cd799439099';
 const POST = '6a0000000000000000000001';
@@ -67,6 +68,10 @@ function fakePrisma(world: World) {
     userContact: { findMany: jest.fn(async () => []) },
     participant: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
     user: {
+      // `findUnique` PORTE les blocages du monde (`blockedByMe`) : il gagne sur
+      // le délégué, qui n'apporte ici que le `findFirst` du verdict unitaire de
+      // la porte du post (#20717).
+      ...noBlockUserDelegate(),
       findMany: jest.fn(async ({ where }: { where: AnyWhere }) => {
         const ids = inList(where.id);
         if (ids) return ids.flatMap((id) => (people.has(id) ? [people.get(id) as Person] : []));

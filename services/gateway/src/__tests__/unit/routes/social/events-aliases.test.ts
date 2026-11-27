@@ -65,6 +65,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
 import { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from '../../../../routes/social/deprecation';
 import { enTetesDeDepreciation } from '../../../../utils/deprecation';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const VISIBLE_ID = '507f1f77bcf86cd799439022';
@@ -127,6 +128,10 @@ function makePrisma() {
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postMention: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    // Les alias d'événement se mesurent sur CE que la route écrit : la porte de
+    // consommation lit la séparation par blocage avant d'écrire (#20717), et
+    // son échec refuserait l'écriture sans que le témoin voie pourquoi.
+    user: noBlockUserDelegate(),
   };
 }
 

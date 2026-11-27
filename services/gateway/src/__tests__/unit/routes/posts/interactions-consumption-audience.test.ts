@@ -74,6 +74,7 @@ jest.mock('../../../../utils/withMutationLog', () => ({
 }));
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -136,8 +137,11 @@ function makePrisma(opts: {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
     postComment: { findFirst: jest.fn<any>().mockResolvedValue(null) },
-    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
-    user: { findFirst: async () => null },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun
+    // ici. #20717 — la porte de consommation le lit AUSSI, par `findMany` +
+    // `findUnique` sur le chemin de LOT : les trois méthodes ensemble, sinon
+    // l'impression se refuse en silence.
+    user: noBlockUserDelegate(),
     postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 0 }),

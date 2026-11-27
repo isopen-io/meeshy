@@ -38,6 +38,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 import { MentionService } from '../../../services/MentionService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { searchTokensFor } from '../../../utils/search-tokens';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 type Row = Record<string, unknown>;
 
@@ -184,6 +185,10 @@ function fakePrisma(world: World) {
     userPreferences: { findMany: jest.fn(async () => []) },
     userPreference: { findMany: jest.fn(async () => []) },
     user: {
+      // L'annuaire mentionnable GARDE ses deux lectures ; seule manquait celle
+      // du verdict unitaire de blocage, que la porte du post interroge avant de
+      // suggérer quoi que ce soit (#20717). Ce monde n'a aucun blocage.
+      ...noBlockUserDelegate(),
       findMany: jest.fn(async ({ where, take }: { where: Row; take?: number }) =>
         world.users
           .filter(u => matchesWhere(u as unknown as Row, where))

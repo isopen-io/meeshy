@@ -106,6 +106,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -172,8 +173,11 @@ async function buildApp(authenticated = true): Promise<FastifyInstance> {
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     },
-    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
-    user: { findFirst: async () => null },
+    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun
+    // ici. #20717 — la porte de consommation le lit AUSSI, par `findMany` +
+    // `findUnique` sur le chemin de LOT : les trois méthodes ensemble, sinon
+    // l'impression se refuse en silence.
+    user: noBlockUserDelegate(),
     post: {
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 2 }),

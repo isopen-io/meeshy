@@ -68,6 +68,15 @@ const world = (accounts: readonly Account[] = ACCOUNTS, preferences: Record<stri
   const prisma = {
     ...store.prisma,
     user: {
+      // #20717 — le verdict UNITAIRE lit la séparation par `findFirst`, là où le
+      // lot la lit par `findMany` + `findUnique`. Ce monde PORTE un blocage
+      // (`BLOCKER`), et le témoin « le lot et le verdict ne divergent sur aucun
+      // lecteur » n'a de valeur que si les deux chemins lisent la MÊME base :
+      // d'où une clause honorée ici aussi, jamais un « personne n'est bloqué ».
+      findFirst: jest.fn<any>(async ({ where, select }: any) => {
+        const row = users.find((candidate) => matchesMongoWhere(candidate, where));
+        return row ? project(row, select) : null;
+      }),
       findMany: jest.fn<any>(async ({ where, select }: any) => users.filter((row) => matchesMongoWhere(row, where)).map((row) => project(row, select))),
       findUnique: jest.fn<any>(async ({ where, select }: any) => {
         const row = users.find((candidate) => candidate.id === where.id);
