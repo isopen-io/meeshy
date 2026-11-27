@@ -2083,3 +2083,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : iOS #17988 et Android #17989 (même interrupteur) ; le talkie global (`talkieEnabled`) n'a pas d'interrupteur
   web non plus.
 - Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
+
+## 2026-11-27 — réveil de 14 h 40 (heure de Paris) : sur Android, on coupe les invitations « ensemble » d'un Proche (#17989)
+
+- Reprise : les trois runs de 13 h ont fusionné (#20698, #20686, #20696) ; aucune PR de la routine ouverte. Les lots
+  iOS de la position restent cédés à #20514 (brouillon, autre session) ; #20659 (iOS de #20416) est vivante ailleurs.
+- Lot : la part FICHE de #17989. `RelationPersonSettings.togetherBlocked` décodé (absent ⇒ ouvert),
+  `RelationReceptionSetting.TOGETHER` écrit seul (`TogetherBlockBody`, `RelationsApi.setTogetherBlocked`),
+  `CirclePersonSetting.TOGETHER` ouvert dès Proche, juste après le talkie ; la fiche d'un collègue de l'équipe sans
+  lien l'offre aussi (`receptionAt`). Libellé repris du web, sept langues, `android-only` tant qu'iOS (#17988) ne
+  porte pas la clé `circles.settings.blockTogether`.
+- Pas d'explication sous l'interrupteur : le cliquet de verbosité de `:feature:contacts` (9 libellés > 80 car.) la
+  refuse. Le web dit « Elle n'en est pas prévenue » ; l'Android ne le dit pas encore (à ranger derrière un (i)).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Reste de #17989 : la bascule globale `togetherEnabled`, à poser avec celle des Bring (#18834) dans une section
+  « Réception » des réglages de notification Android, qui n'existe pas encore. iOS : #17988.
