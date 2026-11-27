@@ -18,6 +18,9 @@ const enContactDiscovery = {
   'settings.notif.together': 'Receive “together” invitations',
   'settings.notif.together.info':
     'A close friend can invite you to watch or listen together. Off, your close friends no longer can.',
+  'settings.notif.talkie': 'Receive walkie-talkie',
+  'settings.notif.talkie.info':
+    'A close friend can talk to you live, without you picking up. Off, your close friends no longer can.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default enContactDiscovery;

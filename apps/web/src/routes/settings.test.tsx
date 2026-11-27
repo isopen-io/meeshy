@@ -59,6 +59,7 @@ const preferencesOf = (overrides: Partial<AppPreferences> = {}): AppPreferences 
   bringEnabled: true,
   bloodProximityEnabled: true,
   togetherEnabled: true,
+  talkieEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -553,6 +554,36 @@ describe('les notifications', () => {
       const label = host.querySelector('[data-setting="togetherEnabled"]')?.getAttribute('aria-label') ?? '';
       expect(label).not.toContain('settings.');
       expect(label).not.toBe(TOGETHER);
+      expect(label).not.toBe('');
+    }
+  });
+
+  /* #20700 — l'interrupteur GLOBAL du talkie (#14407) : coupé, la passerelle rend
+     « talkie coupé » à chaque Proche qui veut parler à ce compte. */
+  const TALKIE = 'Recevoir le talkie';
+
+  test('« Recevoir le talkie » se bascule, écrit SA clé, dit ce qu’il coupe et suit les invitations « ensemble »', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready({ talkieEnabled: false })} disabled={false} onToggle={noop} onRetry={noop} />);
+    const toggle = switchNamed(host, TALKIE);
+    expect(toggle?.getAttribute('aria-checked')).toBe('false');
+    expect(toggle?.getAttribute('data-setting')).toBe('talkieEnabled');
+    expect(host.textContent).toContain('vos Proches ne peuvent plus vous parler');
+    const order = [...host.querySelectorAll('[data-setting]')].map((node) => node.getAttribute('data-setting'));
+    expect(order.indexOf('talkieEnabled')).toBe(order.indexOf('togetherEnabled') + 1);
+  });
+
+  test('« Recevoir le talkie » est activé par défaut', () => {
+    const host = dom(<NotificationsSection language="fr" view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+    expect(switchNamed(host, TALKIE)?.getAttribute('aria-checked')).toBe('true');
+  });
+
+  test('« Recevoir le talkie » se dit dans chaque langue du catalogue, jamais par sa clé', async () => {
+    for (const language of ['en', 'es', 'de', 'it', 'pt', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      const host = dom(<NotificationsSection language={language} view={ready()} disabled={false} onToggle={noop} onRetry={noop} />);
+      const label = host.querySelector('[data-setting="talkieEnabled"]')?.getAttribute('aria-label') ?? '';
+      expect(label).not.toContain('settings.');
+      expect(label).not.toBe(TALKIE);
       expect(label).not.toBe('');
     }
   });
