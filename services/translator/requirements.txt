@@ -81,7 +81,7 @@ pyarrow==25.0.1
 # tant que datasets reste sur 5.0.1 — revalider avec `uv pip compile` si l'un bouge.
 huggingface_hub==1.33.0
 safetensors==0.8.0
-peft==0.21.2
+peft==0.21.3
 # PIN EXACT — comme toute lib ML de ce fichier. Le service tourne SCIEMMENT sur
 # transformers 5.x : la task « translation » a disparu du PIPELINE_REGISTRY en 5.0
 # et NLLB passe depuis par un wrapper maison (cf. TRANSFORMERS_V5_MIGRATION.md).
