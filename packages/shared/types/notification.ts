@@ -662,7 +662,8 @@ export interface ContactJoinedNotificationMetadata extends BaseNotificationMetad
 }
 
 /** Le contenu qu'un retrait par la modération a visé (#11149). */
-export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
+/** `sound` : un son de la bibliothèque retiré par la modération (#9856). */
+export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment' | 'sound';
 
 /**
  * Metadata de `content_removed` (#11149) — adressée à l'AUTEUR seul. Le motif

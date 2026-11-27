@@ -53,9 +53,10 @@ export type ContentRemovalAudit = {
   readonly actorUserId: string;
   /** `null` pour un expéditeur anonyme : la ligne se rattache alors à l'acteur. */
   readonly authorUserId: string | null | undefined;
-  readonly entity: 'Message' | 'Post' | 'Comment';
+  readonly entity: 'Message' | 'Post' | 'Comment' | 'Sound';
   readonly entityId: string;
-  readonly reason: string;
+  /** `null` quand le rang de modération retire sans motif (un son, #9856). */
+  readonly reason: string | null;
 };
 
 export async function recordContentRemoval(
@@ -107,6 +108,7 @@ const TITLE_KEY: Readonly<Record<RemovedContentType, NotificationStringKey>> = {
   reel: 'moderation.removedReel',
   story: 'moderation.removedStory',
   comment: 'moderation.removedComment',
+  sound: 'moderation.removedSound',
 };
 
 const MADE_PRIVATE_KEY: Readonly<Partial<Record<RemovedContentType, NotificationStringKey>>> = {

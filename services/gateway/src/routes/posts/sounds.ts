@@ -12,6 +12,8 @@ import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbid
 import { depreciee } from '../../utils/deprecation';
 import { rankedListingPage } from '../../services/social/listingContext';
 import { isPrivilegedPlatformRole } from '@meeshy/shared/utils/platform-privilege';
+import { moderationReasonOf, recordContentRemoval } from '../../services/moderation/contentRemoval';
+import { noticeAdminRemoval } from '../../services/moderation/adminRemovalNotices';
 
 /**
  * Forme d'identifiant `Sound`/`Post` (ObjectId Mongo) — exportée pour
@@ -277,6 +279,25 @@ export function mayRemoveSound(
   return typeof actor.role === 'string' && isPrivilegedPlatformRole(actor.role);
 }
 
+/**
+ * Un son retiré par la MODÉRATION sur le son d'autrui (#9856) : une ligne
+ * `AdminAuditLog` `REMOVE_CONTENT` (acteur, son, motif), attendue mais sans
+ * effet sur la réponse en cas d'échec, puis la notification `content_removed`
+ * à l'auteur, DÉTACHÉE, qui ne nomme pas le modérateur. Le motif est
+ * FACULTATIF : les clients qui retirent sans corps restent servis.
+ */
+async function completeModeratedSoundRemoval(
+  prisma: PrismaClient,
+  removal: { readonly actorUserId: string; readonly authorUserId: string; readonly soundId: string; readonly reason: string | null },
+): Promise<void> {
+  await recordContentRemoval(prisma, {
+    actorUserId: removal.actorUserId, authorUserId: removal.authorUserId, entity: 'Sound', entityId: removal.soundId, reason: removal.reason,
+  });
+  noticeAdminRemoval({ prisma }, {
+    actorUserId: removal.actorUserId, authorUserId: removal.authorUserId, contentType: 'sound', contentId: removal.soundId, reason: removal.reason,
+  });
+}
+
 export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClient, requiredAuth: any) {
   fastify.get('/sounds/mine', {
     preValidation: [requiredAuth],
@@ -422,13 +443,17 @@ export function registerSoundRoutes(fastify: FastifyInstance, prisma: PrismaClie
     // Écriture CONDITIONNÉE à l'absence de `deletedAt` : deux retraits
     // simultanés ne réécrivent pas la date du premier. On relit ensuite la date
     // qui a gagné.
-    const deletedAt = sound.deletedAt ?? await (async () => {
-      await prisma.sound.updateMany({
+    const removal = sound.deletedAt ? { deletedAt: sound.deletedAt, removedNow: false } : await (async () => {
+      const { count } = await prisma.sound.updateMany({
         where: { id: request.params.id, ...NOT_DELETED_SOUND_WHERE }, data: { deletedAt: new Date() },
       });
       const after = await prisma.sound.findUnique({ where: { id: request.params.id }, select: { deletedAt: true } });
-      return after?.deletedAt ?? null;
+      return { deletedAt: after?.deletedAt ?? null, removedNow: count > 0 };
     })();
+    const deletedAt = removal.deletedAt;
+    if (removal.removedNow && actor.id !== sound.uploaderId) {
+      await completeModeratedSoundRemoval(prisma, { actorUserId: actor.id, authorUserId: sound.uploaderId, soundId: sound.id, reason: moderationReasonOf(request.body) });
+    }
 
     const stats = await loadSoundStats(prisma, [request.params.id]);
     return sendSuccess(reply, {
