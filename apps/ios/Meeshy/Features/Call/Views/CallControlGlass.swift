@@ -158,15 +158,12 @@ struct CallControlsBlockSurface<S: Shape>: ViewModifier {
 private struct CallChromeVisibilityModifier: ViewModifier {
     let isVisible: Bool
 
-    @State private var hiddenAt: Date?
-    @State private var clock = Date()
+    @State private var fade = CallChromeFadeGrace.shown
+    @State private var clock = CallMonotonicClock.seconds()
     @Environment(\.callChromeInteraction) private var reportInteraction
 
     private var acceptsTouches: Bool {
-        CallChromeVisibility.acceptsTouches(
-            isVisible: isVisible,
-            hiddenFor: hiddenAt.map { clock.timeIntervalSince($0) } ?? .infinity
-        )
+        fade.acceptsTouches(isVisible: isVisible, now: clock)
     }
 
     func body(content: Content) -> some View {
@@ -195,14 +192,14 @@ private struct CallChromeVisibilityModifier: ViewModifier {
             .accessibilityHidden(!isVisible)
             .animation(.easeInOut(duration: CallChromeVisibility.fadeDuration), value: isVisible)
             .adaptiveOnChange(of: isVisible) { _, visible in
-                let now = Date()
-                hiddenAt = visible ? nil : now
+                let now = CallMonotonicClock.seconds()
+                fade = visible ? .shown : .hidden(at: now)
                 clock = now
             }
-            .task(id: hiddenAt) {
-                guard hiddenAt != nil else { return }
+            .task(id: fade) {
+                guard fade.hiddenAt != nil else { return }
                 guard await cancellableSleep(for: .nanoseconds(CallChromeVisibility.fadeDurationNanoseconds)), !Task.isCancelled else { return }
-                clock = Date()
+                clock = CallMonotonicClock.seconds()
             }
     }
 }
