@@ -24,6 +24,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { getCacheStore, type CacheStore } from './CacheStore';
 import { guardedInterval } from '../utils/guarded-timer';
+import { SIGNUP_ACTIVE_DAYS_SELECT, SignupActiveDaysRecorder, type SignupActiveDaysRow } from './game/SignupActiveDays';
 
 export interface StatusUpdateMetrics {
   totalRequests: number;
@@ -76,7 +77,11 @@ export class StatusService {
     connectionUpdates: 0
   };
 
+  // Les jours d'activité des trente premiers jours (#20620), gardés au passage de lastActiveAt
+  private readonly signupActiveDays: SignupActiveDaysRecorder;
+
   constructor(private prisma: PrismaClient) {
+    this.signupActiveDays = new SignupActiveDaysRecorder(prisma);
     this.cache = getCacheStore();
     this.startCacheCleanup();
     logger.info('✅ StatusService initialisé (activity: 5s, connection: 60s, Redis presence TTL: 120s)');
@@ -178,9 +183,11 @@ export class StatusService {
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
       where: { id: userId },
-      data: { lastActiveAt: new Date() }
+      data: { lastActiveAt: new Date() },
+      select: SIGNUP_ACTIVE_DAYS_SELECT,
     })
-    .then(() => {
+    .then((row) => {
+      this.keepSignupActiveDay(userId, row);
       this.metrics.successfulUpdates++;
       this.metrics.activityUpdates++;
       logger.debug(`✓ User ${userId} lastActiveAt updated (activity)`);
@@ -217,9 +224,11 @@ export class StatusService {
     // Update asynchrone (ne bloque pas la requête)
     this.prisma.user.update({
       where: { id: userId },
-      data: { lastActiveAt: new Date() }
+      data: { lastActiveAt: new Date() },
+      select: SIGNUP_ACTIVE_DAYS_SELECT,
     })
-    .then(() => {
+    .then((row) => {
+      this.keepSignupActiveDay(userId, row);
       this.metrics.successfulUpdates++;
       this.metrics.connectionUpdates++;
       logger.debug(`✓ User ${userId} lastActiveAt updated (connection)`);
@@ -487,11 +496,22 @@ export class StatusService {
         data: { lastActiveAt: new Date() }
       });
     } else {
-      await this.prisma.user.update({
+      const row = await this.prisma.user.update({
         where: { id: userId },
-        data: { lastActiveAt: new Date() }
+        data: { lastActiveAt: new Date() },
+        select: SIGNUP_ACTIVE_DAYS_SELECT,
       });
+      this.keepSignupActiveDay(userId, row);
     }
+  }
+
+  /**
+   * Garde le jour d'activité d'un compte dans ses trente premiers jours (#20620), depuis la ligne que la mise à jour
+   * de lastActiveAt vient de rendre : aucune lecture de plus. Détachée — la présence ne l'attend jamais — et gardée :
+   * un échec n'est jamais celui de la présence.
+   */
+  private keepSignupActiveDay(userId: string, row: SignupActiveDaysRow | null | undefined): void {
+    this.signupActiveDays.observe(userId, row).catch(/* istanbul ignore next -- observe ne lève pas */ () => {});
   }
 
   /**

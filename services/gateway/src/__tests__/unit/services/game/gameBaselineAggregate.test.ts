@@ -37,6 +37,11 @@ describe('summarizeRollingRetention', () => {
       day1: { eligible: 4, returned: 3, rate: 75 },
       day7: { eligible: 4, returned: 2, rate: 50 },
       day30: { eligible: 4, returned: 1, rate: 25 },
+      classic: {
+        day1: { eligible: 0, returned: 0, rate: null },
+        day7: { eligible: 0, returned: 0, rate: null },
+        day30: { eligible: 0, returned: 0, rate: null },
+      },
     });
   });
 
@@ -77,6 +82,51 @@ describe('summarizeRollingRetention', () => {
 
   it('rend une liste vide sans compte', () => {
     expect(summarizeRollingRetention({ rows: [], now })).toEqual([]);
+  });
+});
+
+describe('summarizeRollingRetention — le retour CLASSIQUE au jour N (#20620)', () => {
+  const now = at('2026-11-10T12:00:00Z');
+  const tracked = (createdAt: string, activeDays: readonly number[]): SignupActivityRow => ({
+    createdAt: at(createdAt),
+    lastActiveAt: new Date(at(createdAt).getTime() + Math.max(...activeDays) * DAY),
+    activeDays,
+  });
+
+  it('compte revenu au jour N un compte actif CE jour-là, pas seulement plus tard', () => {
+    const [cohort] = summarizeRollingRetention({
+      rows: [tracked('2026-09-01T10:00:00Z', [0, 1, 30]), tracked('2026-09-01T10:00:00Z', [0, 8]), tracked('2026-09-02T10:00:00Z', [0, 7])],
+      now,
+    });
+
+    expect(cohort?.classic).toEqual({
+      day1: { eligible: 3, returned: 1, rate: 33 },
+      day7: { eligible: 3, returned: 1, rate: 33 },
+      day30: { eligible: 3, returned: 1, rate: 33 },
+    });
+    expect(cohort?.day7).toEqual({ eligible: 3, returned: 3, rate: 100 });
+  });
+
+  it('n’observe le jour N qu’une fois ce jour entièrement passé', () => {
+    const [cohort] = summarizeRollingRetention({ rows: [tracked('2026-11-09T06:00:00Z', [0])], now });
+
+    expect(cohort?.classic.day1).toEqual({ eligible: 0, returned: 0, rate: null });
+  });
+
+  it('écarte un compte dont le jour de l’inscription n’est pas gardé (inscrit avant la mesure)', () => {
+    const [cohort] = summarizeRollingRetention({
+      rows: [tracked('2026-10-06T10:00:00Z', [3, 7]), tracked('2026-10-06T10:00:00Z', [0, 7]), account('2026-10-06T10:00:00Z', 9)],
+      now,
+    });
+
+    expect(cohort?.accounts).toBe(3);
+    expect(cohort?.classic.day7).toEqual({ eligible: 1, returned: 1, rate: 100 });
+  });
+
+  it('lit un jour gardé deux fois comme un seul', () => {
+    const [cohort] = summarizeRollingRetention({ rows: [tracked('2026-10-06T10:00:00Z', [0, 1, 1, 0])], now });
+
+    expect(cohort?.classic.day1).toEqual({ eligible: 1, returned: 1, rate: 100 });
   });
 });
 

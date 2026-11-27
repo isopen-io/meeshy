@@ -329,6 +329,8 @@ export async function anonymizeUserIdentity(
       locationGhostAt: null,
       searchTokens: [],
       blockedUserIds: [],
+      // #20620 — les jours d'activité des trente premiers jours sont une donnée d'usage du compte : ils partent avec lui.
+      signupActiveDays: [],
       referralCode: null,
       // Défense en profondeur — le compte est déjà `isActive: false`, donc
       // injoignable par login ; un hash INERTE (jamais une chaîne non-bcrypt,

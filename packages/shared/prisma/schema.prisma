@@ -414,6 +414,13 @@ model User {
   /// `GameSparksDay` : il dit si un gain est le premier du jour, donc s'il compte un joueur de plus. Écrasé à chaque
   /// premier gain du jour, aucune histoire gardée. Absent = aucun gain depuis le déploiement.
   sparksEarnedDay String?
+  /// LES JOURS D'ACTIVITÉ DES TRENTE PREMIERS JOURS (#20620) — le rang (0 à 30) des jours pleins depuis `createdAt` où
+  /// le compte a été actif : 0 le jour de l'inscription. Sans contenu, sans heure, 31 valeurs au plus : il ne sert qu'au
+  /// retour CLASSIQUE au jour N que lit `GET /admin/analytics/game`. Écrit au premier passage du jour par
+  /// `SignupActiveDaysRecorder`, sauf pour un compte opposé à l'analyse (`analyticsConsentWithdrawnAt`) ; vidé quand le
+  /// compte a quatorze semaines (`purgeExpired`) et à l'anonymisation d'un compte supprimé ; rendu par `GET /me/export`.
+  /// Absent ou vide = rien de gardé (compte inscrit avant la mesure, opposé, ou plus de quatorze semaines).
+  signupActiveDays Int[]
   /// LA RÉVISION DE L'ÉTAT DU JEU (#10912) — horloge logique hybride PAR COMPTE, gravée avec l'état : chaque écriture du
   /// jeu (frappe, crédit, reprise, Prestige, dépense de Meesh, Gloire…) y pose `max(maintenant, révision lue + 1)` dans la
   /// même écriture, donc elle ne recule jamais, quelles que soient les horloges des passerelles. Les lectures servent

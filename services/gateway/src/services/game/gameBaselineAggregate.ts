@@ -2,10 +2,11 @@
  * LE POINT DE DÉPART DU JEU (#17363, #20617) — le retour des comptes par semaine d'inscription, et ce que le Jeu
  * fait vivre chaque jour.
  *
- * Le retour est GLISSANT : un compte est « revenu au jour N » s'il a encore été actif N jours pleins, ou plus, après
- * son inscription. Il se lit de deux colonnes que chaque compte porte déjà (`createdAt`, `lastActiveAt`) : aucune
- * trace d'activité par jour n'est gardée pour le calculer. Un horizon ne s'observe que sur les comptes qui ont eu le
- * temps de l'atteindre ; sans compte observable, le taux est `null`, jamais zéro.
+ * Le retour GLISSANT : un compte est « revenu au jour N » s'il a encore été actif N jours pleins, ou plus, après son
+ * inscription — il se lit de `createdAt` et `lastActiveAt`. Le retour CLASSIQUE (#20620) : il a été actif CE jour-là,
+ * lu des jours gardés (`User.signupActiveDays`), sur les seuls comptes dont le jour de l'inscription est gardé. Un
+ * horizon ne s'observe que sur les comptes qui ont eu le temps de l'atteindre ; sans compte observable, le taux est
+ * `null`, jamais zéro.
  *
  * Pur et total : aucune lecture, aucune levée. Les jours sont des jours UTC.
  */
@@ -25,6 +26,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export type SignupActivityRow = {
   readonly createdAt: Date;
   readonly lastActiveAt: Date;
+  /** `User.signupActiveDays` (#20620) : les rangs des jours actifs depuis l'inscription. Absent = rien de gardé. */
+  readonly activeDays?: readonly number[] | null;
 };
 
 /** Un document du seau quotidien des étincelles (#20619) : jour UTC, somme des gains, joueurs qui en ont gagné. */
@@ -64,15 +67,22 @@ export const signupWeekOf = (createdAt: Date): string => {
 
 const isReadable = (row: SignupActivityRow): boolean => isReadableDate(row.createdAt) && isReadableDate(row.lastActiveAt);
 
+const rateOf = (returned: number, eligible: number): number | null => (eligible === 0 ? null : Math.round((returned / eligible) * 100));
+
 const cellOf = (rows: readonly SignupActivityRow[], days: number, now: Date): RetentionCell => {
   const observable = rows.filter((row) => row.createdAt.getTime() + days * DAY_MS <= now.getTime());
   const returned = observable.filter((row) => row.lastActiveAt.getTime() - row.createdAt.getTime() >= days * DAY_MS).length;
-  return {
-    eligible: observable.length,
-    returned,
-    rate: observable.length === 0 ? null : Math.round((returned / observable.length) * 100),
-  };
+  return { eligible: observable.length, returned, rate: rateOf(returned, observable.length) };
 };
+
+const classicCellOf = (rows: readonly SignupActivityRow[], days: number, now: Date): RetentionCell => {
+  const observable = rows.filter((row) => row.activeDays?.includes(0) && row.createdAt.getTime() + (days + 1) * DAY_MS <= now.getTime());
+  const returned = observable.filter((row) => row.activeDays?.includes(days)).length;
+  return { eligible: observable.length, returned, rate: rateOf(returned, observable.length) };
+};
+
+const byHorizon = (cell: (days: number) => RetentionCell): Record<RetentionHorizon, RetentionCell> =>
+  Object.fromEntries(HORIZONS.map((horizon) => [horizon, cell(RETENTION_HORIZON_DAYS[horizon])])) as Record<RetentionHorizon, RetentionCell>;
 
 export function summarizeRollingRetention(params: { readonly rows: readonly SignupActivityRow[]; readonly now: Date }): RetentionCohort[] {
   const byWeek = groupBy(params.rows.filter(isReadable), (row) => signupWeekOf(row.createdAt));
@@ -82,7 +92,8 @@ export function summarizeRollingRetention(params: { readonly rows: readonly Sign
     .map(([weekStart, rows]) => ({
       weekStart,
       accounts: rows.length,
-      ...(Object.fromEntries(HORIZONS.map((horizon) => [horizon, cellOf(rows, RETENTION_HORIZON_DAYS[horizon], params.now)])) as Record<RetentionHorizon, RetentionCell>),
+      ...byHorizon((days) => cellOf(rows, days, params.now)),
+      classic: byHorizon((days) => classicCellOf(rows, days, params.now)),
     }));
 }
 

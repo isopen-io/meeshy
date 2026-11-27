@@ -46,7 +46,7 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
   const [signups, flames, offerings, ledger, gameHidden, notificationsOff, sparksDays] = await Promise.all([
     prisma.user.findMany({
       where: { createdAt: { gte: cohortStart } },
-      select: { createdAt: true, lastActiveAt: true },
+      select: { createdAt: true, lastActiveAt: true, signupActiveDays: true, analyticsConsentWithdrawnAt: true, deletedAt: true },
       orderBy: { createdAt: 'desc' },
       take: ROW_CAP,
     }),
@@ -81,7 +81,12 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
     cohortWeeks: GAME_BASELINE_COHORT_WEEKS,
     sampled: [signups, flames, offerings, ledger].some((rows) => rows.length >= ROW_CAP),
     retention: summarizeRollingRetention({
-      rows: signups.map((row) => ({ createdAt: row.createdAt, lastActiveAt: row.lastActiveAt ?? row.createdAt })),
+      rows: signups.map((row) => ({
+        createdAt: row.createdAt,
+        lastActiveAt: row.lastActiveAt ?? row.createdAt,
+        // #20620 — un compte opposé à l'analyse ou supprimé ne compte pas dans le retour classique.
+        activeDays: row.analyticsConsentWithdrawnAt || row.deletedAt ? null : row.signupActiveDays,
+      })),
       now,
     }),
     daily: summarizeDailyGameCounters({
@@ -101,7 +106,7 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
 
 /**
  * GET /api/v1/admin/analytics/game?days=14
- * Le point de départ du Jeu (#17363, #20617) : retour glissant à 1, 7 et 30 jours par semaine d'inscription,
+ * Le point de départ du Jeu (#17363, #20617) : retour glissant ET classique (#20620) à 1, 7 et 30 jours par semaine d'inscription,
  * Offrandes, Meeshes et étincelles gagnées par jour (#20619), Flammes de sept jours et plus, comptes en « Jeu masqué »
  * et sans notifications de jeu. Des agrégats : aucune ligne par compte ne quitte la passerelle. Fenêtre ≤ 30 jours, cache 10 min.
  */
@@ -111,7 +116,7 @@ export function registerGameBaselineRoute(fastify: FastifyInstance, guard: onReq
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const days = windowDaysOf((request.query as { days?: string }).days);
-      const cacheKey = `admin:analytics:game:v2:${days}`;
+      const cacheKey = `admin:analytics:game:v3:${days}`;
       const cached = await getCacheStore().get(cacheKey);
       if (cached) {
         return sendSuccess(reply, JSON.parse(cached));

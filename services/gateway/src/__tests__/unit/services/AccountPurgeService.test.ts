@@ -600,6 +600,14 @@ describe('anonymizeUserIdentity', () => {
     expect(data.email).toBe(`compte-supprime-${USER_ID}@deleted.meeshy.invalid`);
   });
 
+  it('vide les jours d’activité des trente premiers jours, donnée d’usage du compte (#20620)', async () => {
+    const prisma = fakeUserPrisma();
+    await anonymizeUserIdentity(prisma, USER_ID);
+
+    const [{ data }] = (prisma.user.updateMany as jest.Mock<any>).mock.calls[0] as [{ data: any }];
+    expect(data.signupActiveDays).toEqual([]);
+  });
+
   it('clears the identity/contact/avatar fields', async () => {
     const prisma = fakeUserPrisma();
     await anonymizeUserIdentity(prisma, USER_ID);
