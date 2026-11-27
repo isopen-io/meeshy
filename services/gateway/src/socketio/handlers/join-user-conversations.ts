@@ -28,6 +28,24 @@ export async function joinConversationRoomsWithRetry(socket: Socket, conversatio
 }
 
 /**
+ * La room d'identité `ROOMS.user(id)`, avec le même réessai borné (#16796).
+ *
+ * C'est par elle que les signaux de salon excluent un pair bloqué (#16800) :
+ * une socket assise dans une room de conversation sans sa room d'identité est
+ * INEXCLUABLE. L'appelant ne rejoint donc ses conversations que si cette
+ * jonction a réussi — `false` ⇒ fail-closed, aucune room de conversation.
+ */
+export async function joinIdentityRoomWithRetry(socket: Socket, identityId: string): Promise<boolean> {
+  const maxAttempts = 1 + JOIN_RETRY_ATTEMPTS;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const [result] = await Promise.allSettled([socket.join(ROOMS.user(identityId))]);
+    if (result.status === 'fulfilled') return true;
+  }
+  logger.error('identity room join failed after retries — socket joins no conversation room (cannot be excluded)', { identityId });
+  return false;
+}
+
+/**
  * Les rooms de conversation de ce compte, et ce que la jonction en a fait.
  *
  * Rend la liste des rooms DÉFINITIVEMENT échouées — souvent vide — ou

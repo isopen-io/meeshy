@@ -1,6 +1,6 @@
 import type { MeeshySocket as Socket } from '../typed-socket';
 import { joinE2EEDeviceRoom } from '../../services/e2ee/device-room';
-import { joinUserConversations, joinConversationRoomsWithRetry } from './join-user-conversations';
+import { joinUserConversations, joinConversationRoomsWithRetry, joinIdentityRoomWithRetry } from './join-user-conversations';
 import { PrismaClient, CallEndReason } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../services/StatusService';
 import { MaintenanceService } from '../../services/MaintenanceService';
@@ -390,16 +390,9 @@ export class AuthHandler {
     // arrive in the gap between registration and these awaited room joins
     // completing, be skipped from the offline queue (recipient looks
     // online), and never reach the room broadcast either — permanently lost.
-    try {
-      if (user.id && typeof user.id === 'string') {
-        await Promise.allSettled([
-          socket.join(ROOMS.user(user.id)),
-          socket.join(ROOMS.feed(user.id)),
-        ]);
-      }
-    } catch (error) {
-      logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
-    }
+    // #16796 — la room d'identité d'abord, et sans elle aucune conversation.
+    const identityJoined = await joinIdentityRoomWithRetry(socket, user.id);
+    await Promise.allSettled([socket.join(ROOMS.feed(user.id))]);
 
     // La cartographie SESSION → SOCKET (#4213).
     //
@@ -416,7 +409,9 @@ export class AuthHandler {
     // #3706 — la room de l'appareil E2EE lié à CETTE session : ses seules enveloppes y arrivent.
     await joinE2EEDeviceRoom(socket, this.prisma, { userId: user.id, sessionId: decoded.sid });
 
-    const failedRooms = await joinUserConversations(this.prisma, socket, user.id, false);
+    const failedRooms = identityJoined
+      ? await joinUserConversations(this.prisma, socket, user.id, false)
+      : undefined;
     // `undefined` ⇒ la lecture est tombée : aucune room rejointe, et aucune
     // liste à nommer. Un ensemble ne peut pas dire « toutes, dont j'ignore la
     // liste » — ce drapeau le dit, et la file le lit comme injoignable pour
@@ -616,13 +611,7 @@ export class AuthHandler {
     // any other personal broadcast that falls back to `participant.id`) never
     // reached anonymous participants — their unread badge stayed stale until a
     // manual REST refetch.
-    try {
-      if (socketUser.id && typeof socketUser.id === 'string') {
-        await socket.join(ROOMS.user(socketUser.id));
-      }
-    } catch (error) {
-      logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
-    }
+    const guestIdentityJoined = await joinIdentityRoomWithRetry(socket, socketUser.id);
 
     // Même réessai borné que la porte inscrite (`_joinUserConversations`), et
     // pour la même raison — mais l'enjeu est ici plus grand, pas plus petit.
@@ -638,7 +627,9 @@ export class AuthHandler {
     // échouée » vaut la TOTALITÉ de sa livraison temps réel, là où un inscrit
     // qui en perd une sur trente perd une fraction. La porte qui avait le plus
     // besoin du réessai était la seule à ne pas l'avoir.
-    const guestJoinFailed = await joinConversationRoomsWithRetry(socket, [participant.conversationId]);
+    const guestJoinFailed = guestIdentityJoined
+      ? await joinConversationRoomsWithRetry(socket, [participant.conversationId])
+      : [participant.conversationId];
     if (guestJoinFailed.length > 0) {
       logger.error('conversation room join failed after retries for anonymous user — no live message can reach this session', {
         anonymousId: socketUser.id,

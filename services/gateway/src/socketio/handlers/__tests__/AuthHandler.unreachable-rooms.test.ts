@@ -100,7 +100,11 @@ describe('AuthHandler — joignabilité par conversation (#16687)', () => {
   const marker = () => [...connectedUsers.values()][0]?.unreachableConversations;
 
   it('porte_le_marqueur_quand_la_room_echoue_definitivement', async () => {
-    await registered(jest.fn<any>().mockRejectedValue(new Error('adapter down')));
+    // Seule la room de CONVERSATION échoue : une room d'identité perdue relève
+    // d'une autre garde (#16796), qui ne rejoint alors aucune conversation.
+    await registered(jest.fn<any>().mockImplementation(async (room: string) => {
+      if (room.startsWith('conversation:')) throw new Error('adapter down');
+    }));
 
     // Toujours inscrite — c'est ce qui porte la présence et le nettoyage.
     expect(connectedUsers.size).toBe(1);
