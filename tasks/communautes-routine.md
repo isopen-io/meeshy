@@ -931,3 +931,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
+
+## 2026-11-27 — réveil 13:00 UTC
+
+- Début du run : aucune PR de la routine ouverte ; le réveil du 2026-11-24 a été coupé avant toute écriture. #20464 (le lot recommandé) a été réservé à 13:03 par une autre session de la même routine (`claude/communautes-budget-salon`) : cédé (« celui qui n'a rien écrit cède »). #19813 et #19811 attendent une décision produit.
+- Lot : #16740 (même milestone) — passer en privée une grande communauté fait sortir ses exclus en LOT. En cours.
