@@ -21,6 +21,46 @@ notification, le verdict de modération, et `GET /posts/:postId`. Les trois
 portes voisines — commenter, réagir, republier — et le fil de LISTE appliquaient
 la règle depuis longtemps.
 
+### CORRECTION (audit adversarial du lot, le jour même) — `GET /posts/:postId` n'est PAS fermé
+
+L'énumération ci-dessus comptait `GET /posts/:postId` parmi les portes fermées.
+**Mesuré faux**, et vérifié deux fois :
+
+- `PostService.ts` n'importe de `postVisibility` que `isEphemeralPostType` et
+  `RepostPassage` — il n'appelle **aucun** verdict de consommation ;
+- son filtre est `buildViewerVisibilityFilter`, qui passe `blockedAuthorIds = []`
+  (`viewerAudience.ts:44`), et `buildPostVisibilityOrFilter` court-circuite sur
+  une liste vide (`postVisibility.ts:165` : `if (blockedAuthorIds.length === 0)
+  return audience;`).
+
+Restent donc ouverts à un lecteur séparé : **lire la publication**
+(`GET /posts/:postId`), **compter une vue** (`recordView`, qui le fait en outre
+APPARAÎTRE dans la liste des vues de l'auteur), **télécharger ses médias**
+(`recordMediaDownloads`) et `recordEngagementBatch`.
+
+> **Le lot a commis, dans son propre commit, l'erreur dont il est le correctif.**
+> Il a mesuré qu'une délégation écrite désignait un domicile vide — puis a
+> compté parmi ses portes fermées une porte qui ne visite pas ce domicile, sur
+> la foi de la même délégation. Et il ÉCARTE explicitement, dans ses
+> alternatives, la seule modification qui l'aurait fermée (« poser le blocage
+> dans `buildViewerVisibilityFilter` »), tout en affirmant fermée la porte
+> qu'elle sert : les deux phrases vivent dans le même fichier.
+>
+> C'est mot pour mot la mise en garde du `CLAUDE.md` de la passerelle —
+> *« écrire une règle ne l'applique pas au lot qui l'écrit : la relire contre
+> son propre diff est une étape, pas une évidence »* — et c'est la seconde fois
+> que le dépôt la paie au même endroit.
+
+**Et le commentaire fautif de `viewerAudience.ts` n'est PAS réparé par ce lot** :
+il continue de nommer `getPostById`, `recordView` et `deletePost` comme les
+accès unitaires dont `canUserConsumePost` porte le blocage — trois accès qui ne
+l'appellent jamais. La délégation est désormais plus CRÉDIBLE qu'avant, puisque
+le délégataire applique enfin la règle : c'est un piège aggravé, pas réduit.
+
+Périmètre réel de ce lot : les portes qui passent par `canUserConsumePost`,
+`canUserConsumeThread`, `mayConsumePost`, `resolveConsumptionTarget`,
+`filterConsumablePostIds` et `consumablePostAuthors`. Suivi : **#20720**.
+
 **Décision.**
 
 1. **La règle se pose dans `canUserConsumePost`**, le domicile que le dépôt

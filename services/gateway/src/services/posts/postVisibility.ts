@@ -496,17 +496,35 @@ async function isSeparatedFromAuthor(
  * `viewerAudience.ts` écrit, depuis #7184, que le blocage des accès UNITAIRES
  * n'appartient pas au filtre de liste mais à cette fonction. Mesuré le
  * 2026-11-27 (#20717) : le délégataire ne le lisait pas. Une publication
- * `PUBLIC` d'un auteur qui avait bloqué le lecteur passait les huit portes que
- * ce verdict gouverne — `post:join` et sa salle temps réel, le décompte des
+ * `PUBLIC` d'un auteur qui avait bloqué le lecteur traversait tout ce que ce
+ * verdict gouverne — `post:join` et sa salle temps réel, le décompte des
  * réactions, le fil de commentaires, le favori, l'impression, le partage, la
- * réponse à une story, l'éligibilité d'une notification — alors que les trois
- * portes voisines (commenter, réagir, republier) et le fil de LISTE
- * l'appliquaient déjà.
+ * traduction et l'export d'un média, les réponses interactives, les
+ * suggestions de mention, l'ingestion sociale v2, la réponse à une story et
+ * l'éligibilité d'une notification — alors que les trois portes voisines
+ * (commenter, réagir, republier) et le fil de LISTE l'appliquaient déjà.
  *
  * > Une délégation ÉCRITE se vérifie chez le DÉLÉGATAIRE. La phrase de #7184
  * > est vraie des deux côtés — le filtre ne pose pas la règle, et le domicile
  * > désigné ne l'a jamais reçue — ce qui est exactement la forme sous laquelle
  * > une règle devient invisible : chaque moitié renvoie à l'autre.
+ *
+ * ─── CE QUE CE VERDICT NE GOUVERNE PAS, ET QU'IL FAUT DIRE ICI ────────────
+ *
+ * **`PostService.getPostById`, `recordView`, `recordMediaDownloads`,
+ * `recordEngagementBatch` et `deletePost` ne passent PAS par cette fonction**
+ * (mesuré le 2026-11-27 : `PostService` n'importe d'ici que
+ * `isEphemeralPostType` et `RepostPassage`). Ils se gardent par
+ * `buildViewerVisibilityFilter`, qui passe une liste de blocage VIDE, que
+ * `buildPostVisibilityOrFilter` court-circuite. Lire une publication, compter
+ * une vue et télécharger ses médias restent donc ouverts à un lecteur séparé —
+ * **suivi #20720**.
+ *
+ * Ce n'est pas une omission de l'énumération ci-dessus : c'est la raison pour
+ * laquelle une énumération de portes ne se recopie pas depuis la phrase qui les
+ * DÉLÈGUE. Le commentaire de `viewerAudience.ts` nomme ces trois accès comme
+ * relevant de cette fonction ; il dit l'INTENTION, jamais l'état, et le lot qui
+ * a fermé cette porte s'est lui-même trompé en le lisant.
  *
  * Il se pose AVANT l'audience : une séparation refuse quelle que soit la
  * visibilité, et il n'y a rien à apprendre du graphe d'un lien qu'un blocage
