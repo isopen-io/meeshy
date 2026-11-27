@@ -126,6 +126,7 @@ function replyDouble() {
 type Banc = {
   readonly prisma: ReturnType<typeof prismaDouble>;
   creer(actorId: string, participantIds: readonly string[]): Promise<{ status: number; body: any; headers: Record<string, string> }>;
+  promouvoir(actorId: string): void;
 };
 
 function banc(options: { readonly isPrivate?: boolean; readonly morts?: readonly string[]; readonly lignes?: readonly Ligne[] } = {}): Banc {
@@ -145,6 +146,9 @@ function banc(options: { readonly isPrivate?: boolean; readonly morts?: readonly
   registerCreateConversationRoute(fastify, prisma as never, jest.fn<any>());
   return {
     prisma,
+    promouvoir(actorId) {
+      monde.lignes.splice(0, monde.lignes.length, ...monde.lignes.map((l) => (l.userId === actorId ? { ...l, role: 'admin' } : l)));
+    },
     async creer(actorId, participantIds) {
       if (!monde.lignes.some((l) => l.userId === actorId)) monde.lignes.push({ userId: actorId, role: 'member', isActive: true });
       const reply = replyDouble();
@@ -228,7 +232,32 @@ describe('#20464 — POST /conversations dans une communauté débite le budget 
     for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.actorPerHour + 2; i += 1) {
       expect((await b.creer(moi, [personne(i)])).status).toBe(403);
     }
-    expect((await b.creer(moi, [])).status).not.toBe(429);
+    b.promouvoir(moi);
+    expect((await b.creer(moi, personnes(500, COMMUNITY_ADDITION_BUDGET.actorPerHour))).status).not.toBe(429);
+  });
+
+  it('un geste refusé ne coûte qu’UNE unité à l’acteur : 250 personnes refusées ne ferment pas la porte', async () => {
+    const b = banc();
+    const moi = acteur(8);
+    expect((await b.creer(moi, personnes(0, 250))).status).toBe(429);
+    expect((await b.creer(moi, personnes(300, COMMUNITY_ADDITION_BUDGET.actorPerHour - 1))).status).not.toBe(429);
+  });
+
+  it('un 429 sur une cible saturée REND les débits pris sur les précédentes : la victime n’est pas entamée en silence', async () => {
+    const b = banc();
+    const saturee = personne(60);
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.targetPerDay; i += 1) {
+      expect((await b.creer(acteur(300 + i), [saturee])).status).not.toBe(429);
+    }
+    const victime = personne(61);
+    for (let i = 0; i < 4; i += 1) {
+      for (let j = 0; j < COMMUNITY_ADDITION_BUDGET.pairPerDay; j += 1) {
+        expect((await b.creer(acteur(400 + i), [victime, saturee])).status).toBe(429);
+      }
+    }
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.targetPerDay; i += 1) {
+      expect((await b.creer(acteur(500 + i), [victime])).status).not.toBe(429);
+    }
   });
 
   it('débite le seau de chaque CIBLE : une personne n’entre pas dans plus de dix salons-communautés par jour', async () => {

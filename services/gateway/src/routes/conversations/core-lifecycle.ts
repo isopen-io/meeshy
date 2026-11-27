@@ -104,9 +104,7 @@ export function registerCreateConversationRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
-        // #20464 — un salon dans une communauté y fait entrer ses participants :
-        // `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After`, comme `POST …/invite`.
-        429: errorResponseSchema,
+        429: errorResponseSchema, // #20464 — budget des ajouts à une communauté
         500: errorResponseSchema,
         503: errorResponseSchema
       }
@@ -227,18 +225,10 @@ export function registerCreateConversationRoute(
       if (communityAdmission?.kind === 'refused' && communityAdmission.reason === 'invite-forbidden') {
         return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
       }
-      // #20464 — faire entrer ces personnes, c'est les ajouter : le budget de
-      // `POST …/invite` (#19812) se paie ici aussi, au nombre d'ENTRANTS, avant
-      // toute écriture. Une tentative vers un compte non ajoutable compte.
-      if (communityAdmission) {
-        const budget = await spendCommunitySalonAdmission(fastify, userId, communityAdmission);
-        if (!budget.allowed) {
-          return refuseCommunityAddition(reply, budget.retryAfter);
-        }
-      }
-      if (communityAdmission?.kind === 'refused') {
-        return sendNotFound(reply, 'User to invite not found');
-      }
+      // #20464 — le budget de `POST …/invite` (#19812) se paie au nombre d'entrants, avant toute écriture.
+      const budget = communityAdmission ? await spendCommunitySalonAdmission(fastify, userId, communityAdmission) : null;
+      if (budget && !budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
+      if (communityAdmission?.kind === 'refused') return sendNotFound(reply, 'User to invite not found');
 
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject

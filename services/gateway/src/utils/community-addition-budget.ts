@@ -120,8 +120,11 @@ function verdictOf(infos: ReadonlyArray<RateLimitInfo | null>): CommunityAdditio
 }
 
 /**
- * Débite UNE tentative d'ajout sur les deux fenêtres de l'ACTEUR. Les deux sont
- * débitées même quand l'une refuse : une tentative refusée a été REÇUE.
+ * Débite une tentative d'ajout sur les deux fenêtres de l'ACTEUR. Les deux sont
+ * débitées même quand l'une refuse : une tentative refusée a été REÇUE. Mais un
+ * geste refusé ne coûte qu'UNE unité, quel que soit son poids (#20464) : un
+ * salon de 250 personnes refusé ne ferme pas la porte à l'acteur pour 24 h, et
+ * un ajout d'une seule personne reste possible dès que l'heure se rouvre.
  */
 export async function spendCommunityAdditionByActor(
   fastify: FastifyInstance,
@@ -130,46 +133,82 @@ export async function spendCommunityAdditionByActor(
 ): Promise<CommunityAdditionVerdict> {
   const { acteurHeure, acteurJour } = seaux(fastify);
   const cle = `user:${actorId}`;
-  return verdictOf(await Promise.all([acteurHeure.consume(cle, attempts), acteurJour.consume(cle, attempts)]));
+  const verdict = verdictOf(await Promise.all([acteurHeure.consume(cle, attempts), acteurJour.consume(cle, attempts)]));
+  if (!verdict.allowed && attempts > 1) {
+    await Promise.all([acteurHeure.release(cle, attempts - 1), acteurJour.release(cle, attempts - 1)]);
+  }
+  return verdict;
 }
 
 const canonique = (id: string) => id.trim().toLowerCase();
+
+type DebitCible = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };
+
+/**
+ * Le seau d'une cible ne compte que des ajouts qui vont ÉCRIRE : tout débit
+ * refusé est rendu sur-le-champ, et `rendre()` défait un débit accepté quand le
+ * geste qui l'a pris est refusé plus loin (#20464).
+ */
+async function debiterCible(fastify: FastifyInstance, targetId: string, actorId: string): Promise<DebitCible> {
+  const { cibleJour, paireJour } = seaux(fastify);
+  const cible = canonique(targetId);
+  const clePaire = `pair:${canonique(actorId)}:${cible}`;
+  const cleCible = `user:${cible}`;
+  const paire = verdictOf([await paireJour.consume(clePaire, 1)]);
+  if (!paire.allowed) {
+    await paireJour.release(clePaire, 1);
+    return { verdict: paire, rendre: async () => undefined };
+  }
+  const deCible = verdictOf([await cibleJour.consume(cleCible, 1)]);
+  if (!deCible.allowed) {
+    await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
+    return { verdict: deCible, rendre: async () => undefined };
+  }
+  return {
+    verdict: deCible,
+    rendre: async () => {
+      await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
+    },
+  };
+}
 
 /**
  * Débite UN ajout qui va écrire sur le seau de la personne AJOUTÉE, tous acteurs
  * confondus. La clé est l'ObjectId CANONIQUE (minuscules) : la base décode
  * l'hexadécimal sans tenir compte de la casse, et une clé brute laissait chaque
- * variante de casse ouvrir un seau neuf pour la même personne.
+ * variante de casse ouvrir un seau neuf pour la même personne. Un sous-plafond
+ * par paire (acteur, cible) passe d'abord : un même acteur n'entame le seau
+ * d'une cible que `pairPerDay` fois par jour.
  */
 export async function spendCommunityAdditionOfTarget(
   fastify: FastifyInstance,
   targetId: string,
   actorId: string
 ): Promise<CommunityAdditionVerdict> {
-  const { cibleJour, paireJour } = seaux(fastify);
-  const cible = canonique(targetId);
-  const paire = verdictOf([await paireJour.consume(`pair:${canonique(actorId)}:${cible}`, 1)]);
-  if (!paire.allowed) return paire;
-  return verdictOf([await cibleJour.consume(`user:${cible}`, 1)]);
+  return (await debiterCible(fastify, targetId, actorId)).verdict;
 }
 
 /**
  * Débite chaque personne qu'un même geste fait entrer (un salon créé avec ses
- * participants), et s'arrête au premier refus : rien ne sera écrit, et les
- * personnes suivantes ne paient pas pour un geste refusé.
+ * participants). Au premier refus, rien ne sera écrit : les débits déjà pris sur
+ * les personnes précédentes sont RENDUS — sans quoi glisser une cible saturée
+ * derrière une victime entamerait le quota de la victime sans jamais l'ajouter.
  */
 export async function spendCommunityAdditionOfTargets(
   fastify: FastifyInstance,
   targetIds: readonly string[],
   actorId: string
 ): Promise<CommunityAdditionVerdict> {
-  return targetIds.reduce<Promise<CommunityAdditionVerdict>>(
-    async (precedent, targetId) => {
-      const verdict = await precedent;
-      return verdict.allowed ? spendCommunityAdditionOfTarget(fastify, targetId, actorId) : verdict;
-    },
-    Promise.resolve({ allowed: true, retryAfter: 0 })
-  );
+  const pris: DebitCible[] = [];
+  for (const targetId of targetIds) {
+    const debit = await debiterCible(fastify, targetId, actorId);
+    if (!debit.verdict.allowed) {
+      await Promise.all(pris.map((p) => p.rendre()));
+      return debit.verdict;
+    }
+    pris.push(debit);
+  }
+  return { allowed: true, retryAfter: 0 };
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {
