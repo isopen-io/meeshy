@@ -18,6 +18,9 @@ const deContactDiscovery = {
   'settings.notif.together': 'Einladungen „gemeinsam“ empfangen',
   'settings.notif.together.info':
     'Eine nahestehende Person kann dich einladen, gemeinsam zu schauen oder zu hören. Aus: Sie kann es nicht mehr.',
+  'settings.notif.talkie': 'Walkie-Talkie empfangen',
+  'settings.notif.talkie.info':
+    'Eine nahestehende Person kann live mit dir sprechen, ohne dass du abnimmst. Aus: Sie kann es nicht mehr.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default deContactDiscovery;
