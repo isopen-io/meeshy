@@ -83,6 +83,7 @@ public object GameBlockParser {
         prestige = obj.lenient("prestige", ::parsePrestigeBlock),
         visibility = obj.lenient("visibility", ::parseVisibility),
         achievementRarities = parseRarities(obj),
+        photo = obj.lenient("photo", ::parsePhotoBlock),
     )
 
     private fun parseLevel(obj: JsonObject): GameLevel = GameLevel(
