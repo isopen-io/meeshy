@@ -41,9 +41,10 @@ export type BloodLocationDeps = {
   readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
   /**
    * Retire les notifications `blood_proximity` d'une portée (#20542) : l'effacement de l'historique
-   * les emporte avec les points. Strict — une panne LÈVE, et l'effacement échoue.
+   * les emporte avec les points. REQUISE et stricte — une dépendance absente laisserait l'effacement
+   * répondre « fait » sur une copie restée en base, et une panne LÈVE : l'effacement échoue.
    */
-  readonly retractProximityNotices?: (scope: BloodProximityRetraction) => Promise<number>;
+  readonly retractProximityNotices: (scope: BloodProximityRetraction) => Promise<number>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };
