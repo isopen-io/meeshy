@@ -43,6 +43,7 @@ const preferences: AppPreferences = {
   bringEnabled: true,
   bloodProximityEnabled: true,
   togetherEnabled: true,
+  talkieEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,

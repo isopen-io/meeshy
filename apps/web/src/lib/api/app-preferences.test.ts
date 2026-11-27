@@ -58,6 +58,7 @@ const expected: AppPreferences = {
   bringEnabled: true,
   bloodProximityEnabled: true,
   togetherEnabled: true,
+  talkieEnabled: true,
   gameEnabled: false,
   gamePhotoEnabled: false,
   showOnlineStatus: false,
@@ -371,5 +372,40 @@ describe('« Recevoir les invitations ensemble » — le port le lit, le rend et
     const { calls, transport } = transportAnswering({ ok: true, data: wire() });
     await loadAppPreferences({ source: 'gateway', transport });
     expect(calls[0]?.path).toContain('notification.togetherEnabled');
+  });
+});
+
+/**
+ * « RECEVOIR LE TALKIE » (#20700) — l'interrupteur GLOBAL de la réception du
+ * talkie (`notification.talkieEnabled`, lu par `talkieGate`, #14407). Défaut
+ * serveur : activé. Un serveur qui ne le sert pas veut dire « reçu ».
+ */
+describe('« Recevoir le talkie » — le port le lit, le rend et l’écrit (#20700)', () => {
+  test('servi coupé, il est rendu coupé', () => {
+    expect(decodeAppPreferences(wire({ notification: { talkieEnabled: false } }))?.talkieEnabled).toBe(false);
+  });
+
+  test('absent (serveur plus ancien), il vaut « reçu »', () => {
+    expect(decodeAppPreferences(wire())?.talkieEnabled).toBe(true);
+  });
+
+  test('de mauvais type, la lecture est illisible plutôt que devinée', () => {
+    expect(decodeAppPreferences(wire({ notification: { talkieEnabled: 'non' } }))).toBeNull();
+  });
+
+  test('la réponse d’une écriture le rend s’il est servi, ne l’invente pas sinon', () => {
+    const base = { pushEnabled: true, soundEnabled: true, contactActivityEnabled: true };
+    expect(decodeServedPreferences({ notification: { ...base, talkieEnabled: false } })).toEqual({ ...base, talkieEnabled: false });
+    expect(decodeServedPreferences({ notification: base })).toEqual(base);
+  });
+
+  test('il part sous `notification`, seul, là où la passerelle le lit', () => {
+    expect(preferencesPatchBody({ talkieEnabled: false })).toEqual({ notification: { talkieEnabled: false } });
+  });
+
+  test('la lecture le demande avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('notification.talkieEnabled');
   });
 });
