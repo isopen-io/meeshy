@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">Ajustes para esta pessoa</string>
     <string name="circles_sheet_settings_unavailable">Em breve</string>
     <string name="contacts_tab_circles">Círculos</string>
+    <string name="circles_settings_block_together">Silenciar os convites «juntos» dessa pessoa</string>
 </resources>
