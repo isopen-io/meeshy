@@ -2,7 +2,7 @@
 
 **Issue** : #20717 · **Cycle** : 225 · routine messagerie temps réel
 
-## Le motif
+### Le motif
 
 Le dépôt sait déjà qu'**un commentaire qui ÉNONCE une contrainte est une
 AFFIRMATION, et se vérifie comme telle** (cycle 94, `encryptionMode`). Ce lot en
@@ -25,7 +25,7 @@ moitié — celle qui est devant lui — conclut que le commentaire dit vrai et 
 > ouvrant un AUTRE fichier, et c'est l'étape que personne ne fait : la phrase se
 > lit comme une décision déjà instruite, avec son numéro d'issue en appui.
 
-## La question à poser
+### La question à poser
 
 Devant toute phrase de la forme « X n'est pas ici, X appartient à Y » :
 
@@ -35,7 +35,7 @@ Pas « Y est-il le bon domicile ? » — c'est la question que la phrase invite 
 poser, et elle est presque toujours à répondre « oui ». La question utile est
 « Y l'a-t-il REÇU ? ».
 
-## Deux variantes à reconnaître
+### Deux variantes à reconnaître
 
 - **« c'est un lot à part »** — une dette ANNONCÉE n'est pas une dette TRACÉE.
   Celle-ci était nommée dans le commentaire de clôture d'une issue fermée, ce
@@ -44,7 +44,7 @@ poser, et elle est presque toujours à répondre « oui ». La question utile es
 - **« la garde dédiée existe déjà »** — la phrase dit « existe », le code dit
   « devrait exister ». Les deux lectures sont possibles sur le même mot.
 
-## Ce qui a fini par la trouver
+### Ce qui a fini par la trouver
 
 Pas une relecture du commentaire : **l'instruction d'un suivi hérité** (#20458).
 Le lot voisin #7416 avait indépendamment écrit la même mesure dans son
