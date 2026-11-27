@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
@@ -48,6 +48,8 @@ import { PhoneCallGlyph } from './phone-call-glyph';
  *   choisit toujours la personne ; tenu au-delà de 350 ms, l'appui ouvre la voix, qui part tant que le doigt (ou
  *   Espace) reste posé, et le relâcher ne choisit personne. Le cercle est celui que le SERVEUR a jugé pour moi ; sous
  *   Proche, sans cercle servi ou sans talkie tenu par l'hôte, l'épingle d'avant. Le serveur rejuge à chaque appui.
+ * - **La liste se range** (#19888, iso « Autour de toi » iOS #19885) : un bouton la range pour libérer la carte et la
+ *   rappelle ; il dit son état (`aria-expanded`) et ce qu'il commande. Ranger ne retire aucune épingle.
  * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx` ; la vie des personnes, par
  *   les caches de leurs signaux, que la carte observe sans jamais rien demander.
  */
@@ -82,6 +84,9 @@ export type SharedLocationsMapViewProps = {
   readonly client?: QueryClient;
   /** Le talkie que tient l'hôte (#19888) ; absent, l'appui long ne fait rien. */
   readonly talkie?: SharedLocationsMapTalkie | undefined;
+  /** La liste rangée par l'hôte (#19888) ; sans `onToggleList`, elle reste ouverte et ne se range pas. */
+  readonly listFolded?: boolean;
+  readonly onToggleList?: () => void;
 };
 
 /** Ce qu'une épingle demande au talkie de l'hôte : parler à quelqu'un, se taire. `schedule` : le minuteur du seuil. */
@@ -95,7 +100,7 @@ export type SharedLocationsMapTalkie = {
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
 /** Les libellés SANS paramètre : `translateCircles` exige les siens, et une union de clés ne les lui donne pas. */
-type PlainKey = 'positions.failed' | 'positions.retry' | 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.cannotEmit';
+type PlainKey = 'positions.failed' | 'positions.retry' | 'positions.offline' | 'positions.map.a11y' | 'positions.zoomIn' | 'positions.zoomOut' | 'positions.attribution' | 'positions.empty' | 'positions.list.title' | 'positions.list.fold' | 'positions.list.show' | 'positions.cannotEmit';
 const PIN_SIZE = 56;
 const PIN_AVATAR = 48;
 /** Sous ce diamètre le cercle ne se voit pas : l'épingle suffit (position exacte). */
@@ -307,8 +312,10 @@ function Row({ userId, text, language, client }: { readonly userId: string; read
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient, talkie }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient, talkie, listFolded = false, onToggleList }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
+  const listId = useId();
+  const folded = onToggleList !== undefined && listFolded;
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
   const placed = spreadPins(
@@ -418,12 +425,27 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           <div aria-busy="true" className="h-6" />
         ) : null
       ) : (
-        <div>
-          <h2 className="text-title font-bold">{t('positions.list.title')}</h2>
-          <ul className="grid gap-2">
-            {rows.map(({ location, text }) => (
-              <Row key={location.userId} userId={location.userId} text={text} language={language} client={client} />
-            ))}
+        <div className="grid gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-title font-bold">{t('positions.list.title')}</h2>
+            {onToggleList === undefined ? null : (
+              <button
+                type="button"
+                data-shared-locations-fold
+                aria-expanded={!folded}
+                aria-controls={listId}
+                onClick={onToggleList}
+                className="min-h-[44px] rounded-card px-4 font-semibold transition-transform active:scale-[0.98] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-brand)', border: '1px solid var(--color-border)' }}
+              >
+                {t(folded ? 'positions.list.show' : 'positions.list.fold')}
+              </button>
+            )}
+          </div>
+          <ul id={listId} data-shared-locations-list hidden={folded} className="grid gap-2">
+            {folded
+              ? null
+              : rows.map(({ location, text }) => <Row key={location.userId} userId={location.userId} text={text} language={language} client={client} />)}
           </ul>
         </div>
       )}

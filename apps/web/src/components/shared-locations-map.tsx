@@ -49,6 +49,8 @@ import { useSharedLocationsMapTalkie } from './shared-locations-map-talkie';
  *   conversations), puis de la fiche publique de qui n'y figure pas (au plus quarante,
  *   comme l'onglet « Cercles ») — chacun tel que le serveur l'a servi, présence comprise
  *   (loi d'amitié) : rien n'est inventé, une personne inconnue est « Quelqu'un ».
+ * - **Les feuilles se rangent** (#19888, iso iOS #19885) : la liste se range et revient ; la fiche fermée d'une personne
+ *   qui partage encore se rappelle par un bouton qui la nomme.
  * - **Le talkie** (#19888) : un émetteur pour toute la carte, emprunté par l'appui long sur un Proche ou un Sang.
  */
 
@@ -140,6 +142,7 @@ export function SharedLocationsMap({
   const placed = useRef(initialView !== undefined || locations.length > 0);
   const [selected, setSelected] = useState<string | null>(focusUserId ?? null);
   const [cardOpen, setCardOpen] = useState(focusUserId !== undefined);
+  const [listFolded, setListFolded] = useState(false);
   const [caughtUp, setCaughtUp] = useState(false);
   const sessionViewer = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user.id : null));
   const viewer = viewerId === undefined ? sessionViewer : viewerId;
@@ -206,8 +209,20 @@ export function SharedLocationsMap({
           setSelected(userId);
           setCardOpen(true);
         }}
+        listFolded={listFolded}
+        onToggleList={() => setListFolded((folded) => !folded)}
         detail={
-          selected !== null && cardOpen && (status === 'ready' || byUser[selected] !== undefined) ? (
+          selected !== null && !cardOpen && byUser[selected] !== undefined ? (
+            <button
+              type="button"
+              data-shared-location-recall={selected}
+              onClick={() => setCardOpen(true)}
+              className="min-h-[44px] justify-self-start rounded-card px-4 font-semibold transition-transform active:scale-[0.98] motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2"
+              style={{ backgroundColor: 'var(--color-panel)', color: 'var(--color-brand)', border: '1px solid var(--color-border)' }}
+            >
+              {translateCircles(language, 'positions.card.show', { name: personOf(selected).name ?? translateCircles(language, 'positions.someone') })}
+            </button>
+          ) : selected !== null && cardOpen && (status === 'ready' || byUser[selected] !== undefined) ? (
             <SharedLocationCard
               language={language}
               userId={selected}
