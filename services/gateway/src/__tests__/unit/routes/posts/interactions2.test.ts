@@ -138,11 +138,7 @@ function makePrisma() {
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
-    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun
-    // ici. #20717 — la porte de consommation le lit AUSSI, par `findMany` +
-    // `findUnique` sur le chemin de LOT : les trois méthodes ensemble, sinon
-    // l'impression se refuse en silence.
-    user: noBlockUserDelegate(),
+    user: noBlockUserDelegate(), // Blocage : #14242 au partage, #20717 à la consommation — aucun ici.
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
