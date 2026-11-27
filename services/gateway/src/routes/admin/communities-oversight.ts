@@ -388,6 +388,8 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
 
         // #16723 — même loi que la bascule du créateur : les occupants des
         // salons entrent sous son autorité avant, les autres sortent après.
+        // #20694 — sans le budget des ajouts : la bascule de l'équipe exige le
+        // rang d'administration, un motif et un journal d'audit (décision écrite).
         const closesSalons = isBecomingPrivate({ before: current.isPrivate, requested: isPrivate });
         const outsiders = closesSalons
           ? await admitSalonOccupants(fastify.prisma, { communityId, createdBy: current.creator.id }, communityMemberAnnouncerFrom(fastify))
