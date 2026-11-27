@@ -9,10 +9,11 @@
  * geste, ni que la déconnexion efface la session. Ce gate mesure, pour chaque
  * schéma × gabarit (390 × 844, 320 × 568) :
  *
- *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; treize bascules
+ *  1. l'écran d'attente a disparu ; les sections d'iOS sont là ; quatorze bascules
  *     (« Sauvegarder média » synchronisée en Confidentialité depuis #14641,
  *     « Recevoir des Bring » en Notifications depuis #16588, « Un de mes Sangs
- *     tout près » en Notifications depuis #20540), plus
+ *     tout près » en Notifications depuis #20540, « Recevoir les invitations
+ *     « ensemble » » en Notifications depuis #17990), plus
  *     celle de l'appareil (traduire sur cet appareil, #9898, réglage local) ;
  *     aucune entrée non portée n'est offerte — le legacy est décommissionné
  *     (#6702) — et aucun contrôle ne vise une autre origine : la suppression
@@ -177,7 +178,7 @@ try {
         ['COMPTE', 'CONFIDENTIALITÉ', 'APPARENCE', 'NOTIFICATIONS', 'DONNÉES', 'OUTILS', 'À PROPOS'].every((title) => sections.includes(title)),
         `${label} : les sections d'iOS, « Données » comprise depuis que l'export y mène (#6725) (${JSON.stringify(sections)})`,
       );
-      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 13, `${label} : treize bascules que la passerelle obéit`);
+      check((await page.$$('[role="switch"]:not([data-setting="deviceTranslation"])')).length === 14, `${label} : quatorze bascules que la passerelle obéit`);
       check(
         (await page.$$('section[aria-labelledby="settings-notifications"] [role="switch"][data-setting="bringEnabled"]')).length === 1,
         `${label} : « Recevoir des Bring » vit en Notifications, synchronisé par /me/preferences (#16588)`,
