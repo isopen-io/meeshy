@@ -263,6 +263,9 @@ final class SharedLocationSharingCenter: ObservableObject {
         replacing asked: SharedLocationPointReplacement? = nil
     ) async -> SharedLocationShareProblem? {
         await locked {
+            var answered: SharedLocationFixResult?
+            if asked != nil { answered = await self.fixes.currentFix() }
+            if let answered, let problem = Self.problem(of: answered) { return problem }
             let read = await (asked == nil ? self.readBeforeComposing() : self.readServedTruth())
             guard read else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
@@ -272,12 +275,9 @@ final class SharedLocationSharingCenter: ObservableObject {
                 let current = self.askedReplacement
                 guard let asked, current.isCovered(by: asked) else { return .replacesChosenPoint(current) }
             }
-            let fix: SharedLocationFix
-            switch await self.fixes.currentFix() {
-            case .fix(let current): fix = current
-            case .denied: return .locationDenied
-            case .unavailable: return .locationUnavailable
-            }
+            let taken: SharedLocationFixResult
+            if let answered { taken = answered } else { taken = await self.fixes.currentFix() }
+            guard case .fix(let fix) = taken else { return Self.problem(of: taken) }
             guard self.isLive else { return .refused(.failed) }
             let expected = self.expectedStart(showsPoint: showsPoint)
             let next = self.adding(userId, precision: precision, term: term, battery: battery).withFixedPoint(false)
@@ -285,6 +285,17 @@ final class SharedLocationSharingCenter: ObservableObject {
                                              replacesChosenPoint: showsPoint, expectedStartedAt: expected)
             guard self.rereadsAfter(problem) else { return problem }
             return await self.askAgainAfter(problem, expected: expected)
+        }
+    }
+
+    /// Ce qu'un relevé refusé dit à l'écran ; `nil` pour un relevé obtenu. Une réponse à « Montrer ta position réelle ? »
+    /// prend le relevé AVANT de relire (#20308) : un point relancé ailleurs pendant les secondes du GPS se voit à la
+    /// relecture, et la question se repose sans rien envoyer.
+    private static func problem(of result: SharedLocationFixResult) -> SharedLocationShareProblem? {
+        switch result {
+        case .fix: return nil
+        case .denied: return .locationDenied
+        case .unavailable: return .locationUnavailable
         }
     }
 
@@ -672,15 +683,17 @@ final class SharedLocationSharingCenter: ObservableObject {
             forgetPublishedStart(ifSent: fix)
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
-        case .refused(.fixedPoint):
-            return .refused(.fixedPoint)
-        case .refused(.startedElsewhere):
-            return .refused(.startedElsewhere)
+        case .refused(let outcome) where Self.nothingWritten.contains(outcome):
+            return .refused(outcome)
         case .refused(let outcome):
             forgetPublishedStart(ifSent: fix)
             return .refused(outcome)
         }
     }
+
+    /// Les refus que la passerelle rend AVANT toute écriture (#20416) : charge illisible, point choisi, partage nommé qui
+    /// n'est plus servi. Le démarrage publié d'ici tient ; seul un refus douteux le fait oublier.
+    private static let nothingWritten: Set<SharedLocationSendOutcome> = [.invalid, .fixedPoint, .startedElsewhere]
 
     /// La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la
     /// prise, session remplacée) : dans le doute, inconnu — deux appareils publient plutôt qu'aucun (#18580).

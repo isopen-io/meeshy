@@ -240,13 +240,15 @@ struct SharedLocationPointReplacement: Equatable, Sendable {
         startedAt == asked.startedAt && recipientIds.isSubset(of: asked.recipientIds)
     }
 
-    /// Ceux que la question nomme : au plus `limit`, dans l'ordre des noms connus ; les autres, inconnus d'ici compris
-    /// (ajoutés depuis un autre appareil), se comptent.
+    /// Ceux que la question nomme : au plus `limit`, dans l'ordre des noms connus (un nom vide ne nomme personne, #20308) ;
+    /// les autres, inconnus d'ici compris (ajoutés depuis un autre appareil), se comptent.
     func audience(knownNames: [(userId: String, name: String)], limit: Int = 3) -> (named: [String], others: Int) {
-        let known = knownNames.filter { recipientIds.contains($0.userId.lowercased()) }
+        let known = knownNames
+            .map { (userId: $0.userId.lowercased(), name: $0.name.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            .filter { !$0.name.isEmpty && recipientIds.contains($0.userId) }
         let unique = known.reduce(into: [(String, String)]()) { kept, pair in
-            guard !kept.contains(where: { $0.0 == pair.userId.lowercased() }) else { return }
-            kept.append((pair.userId.lowercased(), pair.name))
+            guard !kept.contains(where: { $0.0 == pair.userId }) else { return }
+            kept.append((pair.userId, pair.name))
         }
         let named = unique.prefix(limit).map(\.1)
         return (named, recipientIds.count - named.count)

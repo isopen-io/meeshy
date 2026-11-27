@@ -630,7 +630,7 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice, carol])
         XCTAssertTrue(sut.emitter.starts.isEmpty)
-        XCTAssertEqual(sut.fixes.asks, 0)
+        XCTAssertEqual(sut.fixes.asks, 1, "une réponse prend le relevé avant la relecture (#20308) ; rien ne part")
         XCTAssertTrue(sut.center.roster.isFixedPoint)
     }
 
