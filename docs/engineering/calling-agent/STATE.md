@@ -2760,3 +2760,116 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
 1. **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**, **#20459**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 80 — 2026-11-27
+
+- **Base** : `origin/dev` @ `424ee1aef`. Aucune PR d'appel n'était ouverte : le lot du cycle 79 est fusionné.
+- **Branche** : `claude/determined-volta-4f5f06`.
+- **Objectif** : **#20459**. Un `call:quality-report` reçu juste après le raccroché est persisté au lieu d'être ignoré sans bruit.
+- **Livré** (`services/gateway/` seulement, commit `3069e9e8c`) :
+  - `call-participants.ts` : `resolveQualityReporter(deps, userId, callId, { now })` et `QUALITY_REPORT_GRACE_MS = 30_000`.
+    - Une ligne active prime.
+    - Sinon, la sortie la plus récente est retenue si elle date de 30 s au plus. On obtient alors `departed: true`.
+    - Une sortie datée du futur ou illisible, un non-participant, ou une erreur de `getCallSession` rendent `null` (fail-closed).
+  - `CallEventsHandler.ts`, handler QUALITY_REPORT seulement, avec un solde de -1 ligne :
+    - un relevé `departed` persiste ses stats ;
+    - il efface la série dégradée ;
+    - il n'émet jamais `QUALITY_ALERT`.
+  - Le heartbeat, les bascules et les autres usages de `resolveActiveCallParticipant` ne changent pas.
+  - Aucun payload, événement, schéma ni champ ne change.
+- **Tests** :
+  - 11 tests de la fonction pure, horloge injectée : bornes à 30 s exactement et à 30 s + 1 ms, futur, illisible, deux lignes, invité anonyme, échec.
+  - 6 tests du handler.
+  - 2 tests existants adaptés au changement voulu : `leftAt` passé à -31 s, et nouveau libellé du log.
+  - Rouge constaté : 15 échecs sur 18.
+  - Relancés par l'orchestrateur : 18 pass sur 18.
+  - QA : suites d'appel 180/180 (2 130 tests), `tsc` 0, et 7 mutations détectées sur 7.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - `userId` vient de l'authentification du socket.
+  - `leftAt` n'est écrit que sur des lignes actives, donc aucune fenêtre ne se rouvre.
+  - Les octets ne font que grandir (CAS `planCallByteWrite`), donc aucun rejeu ne les fait régresser.
+  - R1 : la bulle de résumé, figée à `call:end`, ne reçoit pas le relevé tardif. Seul l'historique d'appels le reçoit. Ouvert dans **#20709**.
+  - R2 : `networkQuality` est à dernier-écrivain-gagnant. Rattaché à #20709.
+  - R3 : un décalage d'horloge entre instances de la passerelle peut rejeter un relevé (fail-closed).
+  - R4 : une course préexistante peut émettre une alerte quelques millisecondes après la fin. Le lot ne l'aggrave pas.
+- **Limites** :
+  - Personne n'a mesuré si les clients envoient leur dernier relevé dans les 30 s : à confirmer en recette staging.
+  - Rien n'a été testé contre un MongoDB réel.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #20710 non fusionnée.** Le run `ci.yml` 46036890384 sur `9d8bac4dc` est vert sur tous les jobs du lot, y compris les trois tranches passerelle. Il garde deux rouges qui viennent de `dev` :
+   - `Tests · shared`, dans `swift-socket-payload-shape-gate.test.ts:90` : `user:preferences-updated` a été réparé par #16858 (`4347bbcb9`) mais reste listé dans l'inventaire ;
+   - `Tests · web`, sur `CommunityInviteSheet`, qui passe en local.
+
+   Quand `dev` repasse au vert : fusionner `dev` dans la branche, relancer `ci.yml` en `workflow_dispatch`, puis fusionner la PR.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 81 — 2026-11-27
+
+- **Base** : `origin/dev` @ `eeef2d536`. La PR #20710 du cycle 80 (#20459) était ouverte, sa CI en file d'attente.
+- **Branche** : `claude/determined-volta-ia9zts`, **PR #20716, fusionnée** (`467263ce2`).
+- **Objectif** : **#20300** (doublon #20436). Sur iOS, la grâce du fondu des commandes d'appel se mesure sur l'horloge monotone.
+- **Coordination** :
+  - `apps/ios/tasks/routine-appels.md` n'a aucun point sur `CallControlGlass.swift` ;
+  - la routine iOS n'a fait aucun commit sous `Features/Call/Views/` depuis le 2026-11-24 ;
+  - aucune branche vivante n'écrit ce fichier.
+- **Livré** (`apps/ios/` seulement, 3 fichiers) :
+  - `CallChromeFadeGrace` (`Features/Call/Models/CallChromeInteraction.swift`) : l'instant de masquage, en secondes de `CallMonotonicClock`, et `acceptsTouches(isVisible:now:)`.
+  - `CallChromeVisibility.acceptsTouches` : un intervalle négatif ou NaN vaut un fondu achevé. Le pire cas est sans gravité : le toucher atteint la scène et rallume le chrome.
+  - `CallChromeVisibilityModifier` (`CallControlGlass.swift`) ne lit plus `Date()`. Durée du fondu, `.revive`, `hidden()` et animation sont inchangés.
+- **Tests** :
+  - 8 nouveaux tests dans `CallChromeInteractionTests` : recul d'horloge, bornes du fondu, absence de masquage, et une garde de texte (pas de `Date()`, `Date.now` ni `timeIntervalSince`).
+  - Le rouge n'a pas pu être constaté : pas de Swift dans le conteneur. Il se raisonne par mutation, et 4 mutations sont attrapées (QA).
+  - **`ios.yml` run 46044079660 sur `a565f6c92`** (qui contient `dev`) : build vert, **27/27** `CallChromeInteractionTests`.
+  - Gardes iOS (house rules, cohésion, inscription, couleurs) : ok sur l'arbre fusionné.
+- **QA** (indépendante) : favorable avec réserves.
+  - Pas de risque Swift 6 : isolation MainActor par défaut, et des précédents compilent déjà (`PlayerBannerHost.swift:396`, `CallCaptionsViews.swift:253`).
+  - Réserve : la garde de texte est une liste d'interdits.
+- **Suivi ouvert** : **#20715**. Le jumeau du kit SDK `MeeshyGlassPillStow` mesure encore son retrait sur `Date()`.
+- **PR #20710 (cycle 80)** :
+  - `dev` fusionnée dans la branche.
+  - Suites d'appel de la passerelle sur l'arbre fusionné : 56 suites et 783 tests verts, dont `tsc-never-loaded-tests-ratchet`.
+  - CI `ci.yml` 46036890384, sur `9d8bac4dc` : passerelle tranches 1, 2 et 3 vertes.
+  - Deux rouges, tous deux hors du lot :
+    - `Tests · shared` : `swift-socket-payload-shape-gate`, `user:preferences-updated` réparé par #16858 mais resté dans l'inventaire. Ce rouge est **aussi sur `dev`** (run 46027378749), et quatre PR ouvertes le corrigent (#20691, #20695, #20706, #20714).
+    - `Tests · web` : `CommunityInviteSheet`. Il n'est pas reproduit en local (3/3, trois fois, sur l'arbre fusionné), et le diff ne touche pas le web. Une relance des jobs rouges est demandée.
+- **Limites** : rien n'a été vérifié sur appareil. Les files de runners ont imposé plus d'une heure d'attente par run.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR #20710 n'est pas fusionnée : lire la relance de `Tests · web` sur le run 46036890384. Si elle est verte, ou si `dev` est revenue au vert entre-temps, fusionner `dev` dans la branche, puis la PR.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20715** (SDK), **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 82 — 2026-11-27
+
+- **Base** : `origin/dev` @ `467263ce2`. La PR #20710 du cycle 80 (#20459) était ouverte, bloquée par un rouge de `dev` (`Tests · shared`, `swift-socket-payload-shape-gate`).
+- **Branche** : `claude/determined-volta-gjaeas`, **PR #20727, fusionnée** (`a6d6fc9da1`).
+- **Objectif** : **#20715**. La pilule de verre du kit iOS mesure la grâce de son retrait sur l'horloge monotone. C'est le jumeau SDK du lot #20300.
+- **Coordination** : aucune branche vivante n'écrivait `MeeshyGlassPill*`.
+- **Livré** (`packages/MeeshySDK/` seulement, 3 fichiers, +69/−10) :
+  - `MeeshyGlassPillStow.swift` : `stowedAt` et `clock` deviennent des `ContinuousClock.Instant`. Plus aucun `Date()`. Durée, animations, `hidden()`, `onRevive`, hit-testing et accessibilité sont inchangés.
+  - `MeeshyGlassPillPresenceRule` : rangée, la pilule n'accepte un toucher que si `0 ≤ stowedFor < durée`. Un intervalle négatif ou NaN vaut donc un retrait achevé. Nouvelle fonction pure `stowedFor(since:now:)`, qui rend ∞ quand la pilule n'est pas rangée.
+  - Aucun appelant existant ne change de résultat. Le chrome d'appel de l'application avait déjà son garde `>= 0` (#20300). Les vecteurs K10 (`docs/product/kit/K10-MeeshyGlassPill.vectors.json`) ne sont lus que par iOS, et restent vrais.
+- **Tests** (Swift Testing, `MeeshyGlassPillTests`) :
+  - `presence_acceptsTouches_unreliableInterval` : négatif, ±∞, NaN et bornes, avec ou sans « réduire les animations ».
+  - `presence_stowedFor_monotonic` : `nil`, 0, +100 ms, +250 ms et −50 ms.
+  - `source_stowReadsTheMonotonicClock` : garde de texte.
+  - Garde existante renforcée.
+  - Le rouge se raisonne par mutation (7 mutations recensées). Le conteneur n'a pas de Swift.
+  - **`sdk-tests.yml` run 46065301468 sur `7e4cb886ac` : vert** (build, 6 tranches, 7 717 tests passés, 0 échec). Les témoins ne sont pas nommés dans la console, qui tourne en `-quiet`, et le proxy refuse l'artefact xcresult. Leur passage se déduit de la sélection de la tranche 6 et de son zéro échec.
+  - Gardes iOS sur les arbres fusionnés : house rules (42), cohésion, inscription (2 076) et couleurs, toutes ok.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. Les réserves sont la compilation, prouvée depuis par la CI, et une source double, ouverte dans **#20726**. Elle a vérifié la disponibilité sur iOS 16, l'isolation Swift 6 et l'inventaire des appelants.
+- **PR #20710 (cycle 80)** :
+  - `dev` (`7e0ba3f7c0`, qui contient le correctif #20691 de la garde shared) a été fusionnée dans la branche, ce qui donne `4e42d0f96f`.
+  - En local : les 3 suites du lot passent (36 tests sur 36), et `tsc` sort en 0.
+  - `ci.yml` run 46067733063 : encore en cours à l'échéance, sans aucun rouge. Les tranches passerelle 1 à 3, `shared`, web et Trivy sont vertes.
+- **Limites** : rien n'a été vérifié sur appareil. Les files de runners imposent toujours plus d'une heure par run.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #20710** : lire le Verdict du run 46067733063. S'il est vert, fusionner `origin/dev` dans la branche (règle #18654 ; les commits récents ne touchent pas les fichiers d'appel), puis fusionner la PR. S'il est rouge, comparer avec la tête de `dev`.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20726** (une seule source de la grâce), **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.

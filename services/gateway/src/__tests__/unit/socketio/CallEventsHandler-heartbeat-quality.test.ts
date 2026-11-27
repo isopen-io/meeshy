@@ -284,10 +284,10 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
       expect(callService.persistCallStats).not.toHaveBeenCalled();
     });
 
-    it('never persists stats when the caller already left THIS call (leftAt set)', async () => {
+    it('never persists stats when the caller left THIS call longer ago than the grace window (#20459)', async () => {
       const prisma = makePrisma();
       const callService = makeCallService({
-        participants: [{ participantId: 'participant-1', userId: USER_ID, leftAt: new Date() }],
+        participants: [{ participantId: 'participant-1', userId: USER_ID, leftAt: new Date(Date.now() - 31_000) }],
       });
       const { socket, io, handlers } = makeSocket();
 
@@ -343,7 +343,7 @@ describe('CallEventsHandler — call:heartbeat / call:quality-report hardening',
 
       expect(callService.persistCallStats).not.toHaveBeenCalled();
       expect(logger.warn).toHaveBeenCalledWith(
-        'resolveActiveCallParticipant: getCallSession failed, treating caller as unauthorized',
+        'resolveQualityReporter: getCallSession failed, treating caller as unauthorized',
         expect.objectContaining({ userId: USER_ID, callId: VALID_CALL_ID, error: 'Mongo connection lost' })
       );
     });
