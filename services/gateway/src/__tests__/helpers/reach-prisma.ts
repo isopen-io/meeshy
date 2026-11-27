@@ -17,6 +17,7 @@
 import { jest } from '@jest/globals';
 import { hashSessionToken } from '../../utils/session-token';
 import { makeMongoPostCounterStore, type StoredPost } from './mongo-post-counter-store';
+import { noBlockUserDelegate } from './separation-double';
 
 export type ReachPost = {
   readonly id: string;
@@ -234,6 +235,12 @@ export function makeReachPrisma(posts: readonly ReachPost[], guests: readonly Re
     friendRequest: { findFirst: jest.fn(async () => null) },
     postMention: { findFirst: jest.fn(async () => null) },
     user: {
+      // La porte de consommation lit la séparation par blocage (#20717) : sans
+      // ses trois méthodes, le crédit d'une vue ou d'une impression se refuse
+      // EN SILENCE et le témoin de portée compte zéro. `findUnique` garde la
+      // réponse du CONSENTEMENT, la seule que ces témoins mesurent — la lecture
+      // de blocage s'en contente (`blockedUserIds` absent ⇒ aucun blocage).
+      ...noBlockUserDelegate(),
       findUnique: jest.fn(async ({ where }: { where: { id: string } }) =>
         (world.consentedUserIds ?? []).includes(where.id)
           ? { analyticsConsentAt: new Date('2026-01-01'), dataProcessingConsentAt: new Date('2026-01-01') }

@@ -13,6 +13,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@je
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { counterWrite, postCounterWritesOf } from './helpers/posts-counter-writes';
+import { noBlockUserDelegate } from './helpers/separation-double';
 
 jest.mock('../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({})),
@@ -112,6 +113,9 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
       findUnique: postFindUnique,
       findMany: postFindMany,
     },
+    // L'audience consultée avant de compter inclut la séparation par blocage
+    // (#20717) ; ce témoin mesure le comptage, pas le blocage.
+    user: noBlockUserDelegate(),
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');

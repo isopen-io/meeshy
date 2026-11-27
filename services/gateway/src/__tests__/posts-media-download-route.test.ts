@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { noBlockUserDelegate } from './helpers/separation-double';
 
 const recordMediaDownloads = jest.fn<(...a: unknown[]) => Promise<unknown>>();
 
@@ -79,6 +80,9 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    // Un téléchargement ne se compte que si la porte de consommation s'ouvre, et
+    // elle interroge le blocage (#20717) — aucun blocage dans ce monde.
+    user: noBlockUserDelegate(),
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');

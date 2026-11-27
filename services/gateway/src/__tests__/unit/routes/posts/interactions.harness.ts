@@ -35,6 +35,7 @@ import { jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Doubles de `PostService` ─────────────────────────────────────────────────
 
@@ -220,6 +221,14 @@ export async function buildApp(opts: {
   // (`services/posts/postCounters.ts`). Un double qui ne le porte pas le reçoit
   // ici, pour que chaque témoin puisse relire ce qui a été écrit.
   prisma.$runCommandRaw ??= jest.fn<any>().mockResolvedValue({ ok: 1 });
+
+  // #20717 — la porte de consommation lit la séparation par blocage par TROIS
+  // méthodes (`findFirst` au verdict unitaire, `findMany` + `findUnique` au
+  // lot), et elle est FERMÉE sur l'échec : un double qui n'en porte qu'une
+  // rendrait 404 ou `recorded: 0` au lieu de lever. Les méthodes qu'un témoin a
+  // déclarées GAGNENT — celui qui mesure le blocage garde la sienne ; les
+  // autres reçoivent « personne n'est bloqué ».
+  prisma.user = { ...noBlockUserDelegate(), ...(prisma.user ?? {}) };
 
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma);
