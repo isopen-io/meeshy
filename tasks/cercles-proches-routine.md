@@ -2064,6 +2064,35 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : #20514 fusionnée ou abandonnée ⇒ iOS de #20416 / #20308, #20054, #20056 ; sinon un lot web/serveur
   du jalon 2 (#20540 suites, #19888).
 
+## 2026-11-27 — réveil de 13 h : #20542 (une alerte « un Sang s'approche » ne laisse pas de copie)
+
+- Reprise : aucune PR de la routine ouverte ; #20417 et #20463 fusionnées le 23, #20249 et #19884 fermées. Les lots
+  iOS de la position (#20416 point 2, #20308, #20054, #20056) CÈDENT : la PR #20514 (brouillon d'une autre session)
+  découpe `SharedLocationSharingCenter.swift` et ses voisins, les mêmes fichiers.
+- Lot : #20542, constat C3 de l'audit de #20540, passerelle seule (aucun client ne garde ces lignes à part).
+  `bloodProximityNoticeRetention.ts` : les alertes échues partent (balayage horaire, armé par `BLOOD_LOCATION_ENABLED`,
+  éteint en production : aucune purge de production sans décision) ; l'effacement de l'historique efface les alertes
+  qui nomment la personne chez tous ses Sangs et celles qu'elle a reçues (une purge en échec fait échouer
+  l'effacement) ; retirer `proximityShared`, ou tomber sous le Sang (baisse, rupture, course du rituel, blocage),
+  efface chez l'autre les alertes qu'il tenait de ce sens. Retraits silencieux. Choix : purge ciblée plutôt qu'index
+  TTL, pour ne pas poser de migration ni toucher aux autres types de notification.
+- Témoins jugés sur des documents (`helpers/notification-raw-store.ts`), ROUGE prouvé par mutation sur chaque chemin.
+- Audit adversarial : non bloquant. Corrigés dans le lot : l'effacement passe AVANT l'écriture du retrait (sinon un
+  échec n'était plus jamais soldé au rejeu), le magasin de test refuse un `userId` en chaîne nue, un en-tête à jour.
+  Suivis ouverts : #20688 (départ d'un compte), #20689 (alerte en vol après un retrait).
+- Une session parallèle a fusionné le web de #19888 (épingles vivantes, #20693) pendant ce lot : les deux entrées du
+  27 coexistent, `dev` gardée telle quelle à la fusion.
+- Collision sur #20542 même : #20698 (autre session) a fusionné à 13 h 34 un retrait jumeau
+  (`bloodProximityRetraction.ts`, index TTL partiel, lignes supprimées PUIS annoncées). Sa session a cédé et proposé
+  de converger ici. Site UNIQUE désormais `bloodProximityRetraction.ts` : sa primitive (`findRaw` + `deleteMany` +
+  annonce `notification:deleted` / révocation push, qui retire aussi la copie de l'écran du lecteur) sert les quatre
+  gestes ; ce lot y ajoute la chute sous le Sang (avant l'écriture) et la purge horaire, garde du TTL tant que sa
+  migration n'est pas jouée ; `bloodProximityNoticeRetention.ts` est retiré. Le silence cède à l'annonce : la ligne
+  disparaît de toute façon de la liste du lecteur, et l'annonce efface en plus la bannière. Le retrait du réglage
+  devient strict (une panne répond en erreur, le rejeu le solde) au lieu d'être avalé.
+- Prochain lot : le reste de #19888 (feuilles rangeables, talkie à l'appui long) ou #20130 ; iOS de la position dès que
+  #20514 est fusionnée ou abandonnée.
+
 ## 2026-11-27 — réveil de 13 h : web de #17990 (couper toutes les invitations « ensemble »)
 
 - Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées le 2026-11-23 ; aucune PR de la routine ouverte.
@@ -2148,31 +2177,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ; #20697 si #20691 est abandonnée ;
   sinon un lot web/serveur du jalon 2.
 
-## 2026-11-27 — réveil de 13 h : #20542 (une alerte « un Sang s'approche » ne laisse pas de copie)
+## 2026-11-27 — réveil de 13 h : iOS de #20416 (point 2) et de #20308
 
-- Reprise : aucune PR de la routine ouverte ; #20417 et #20463 fusionnées le 23, #20249 et #19884 fermées. Les lots
-  iOS de la position (#20416 point 2, #20308, #20054, #20056) CÈDENT : la PR #20514 (brouillon d'une autre session)
-  découpe `SharedLocationSharingCenter.swift` et ses voisins, les mêmes fichiers.
-- Lot : #20542, constat C3 de l'audit de #20540, passerelle seule (aucun client ne garde ces lignes à part).
-  `bloodProximityNoticeRetention.ts` : les alertes échues partent (balayage horaire, armé par `BLOOD_LOCATION_ENABLED`,
-  éteint en production : aucune purge de production sans décision) ; l'effacement de l'historique efface les alertes
-  qui nomment la personne chez tous ses Sangs et celles qu'elle a reçues (une purge en échec fait échouer
-  l'effacement) ; retirer `proximityShared`, ou tomber sous le Sang (baisse, rupture, course du rituel, blocage),
-  efface chez l'autre les alertes qu'il tenait de ce sens. Retraits silencieux. Choix : purge ciblée plutôt qu'index
-  TTL, pour ne pas poser de migration ni toucher aux autres types de notification.
-- Témoins jugés sur des documents (`helpers/notification-raw-store.ts`), ROUGE prouvé par mutation sur chaque chemin.
-- Audit adversarial : non bloquant. Corrigés dans le lot : l'effacement passe AVANT l'écriture du retrait (sinon un
-  échec n'était plus jamais soldé au rejeu), le magasin de test refuse un `userId` en chaîne nue, un en-tête à jour.
-  Suivis ouverts : #20688 (départ d'un compte), #20689 (alerte en vol après un retrait).
-- Une session parallèle a fusionné le web de #19888 (épingles vivantes, #20693) pendant ce lot : les deux entrées du
-  27 coexistent, `dev` gardée telle quelle à la fusion.
-- Collision sur #20542 même : #20698 (autre session) a fusionné à 13 h 34 un retrait jumeau
-  (`bloodProximityRetraction.ts`, index TTL partiel, lignes supprimées PUIS annoncées). Sa session a cédé et proposé
-  de converger ici. Site UNIQUE désormais `bloodProximityRetraction.ts` : sa primitive (`findRaw` + `deleteMany` +
-  annonce `notification:deleted` / révocation push, qui retire aussi la copie de l'écran du lecteur) sert les quatre
-  gestes ; ce lot y ajoute la chute sous le Sang (avant l'écriture) et la purge horaire, garde du TTL tant que sa
-  migration n'est pas jouée ; `bloodProximityNoticeRetention.ts` est retiré. Le silence cède à l'annonce : la ligne
-  disparaît de toute façon de la liste du lecteur, et l'annonce efface en plus la bannière. Le retrait du réglage
-  devient strict (une panne répond en erreur, le rejeu le solde) au lieu d'être avalé.
-- Prochain lot : le reste de #19888 (feuilles rangeables, talkie à l'appui long) ou #20130 ; iOS de la position dès que
-  #20514 est fusionnée ou abandonnée.
+- Reprise : le run du 2026-11-25 (volet iOS de #20540, « un Sang s'approche » ouvre la carte des deux) a été poussé
+  sur `dev` (e19d5dc93) sans entrée de journal ; #20540 reste ouverte pour la seule recette à deux téléphones. #20417
+  (iOS de #20249) est fusionnée : les lots iOS de la position sont libres. Aucune branche vivante sur ces chemins.
+- Lot : iOS de #20416 point 2 et de #20308, iso #20431 (web) et #20441 (Android).
+  - Un refus certain (`invalid`, `fixedPoint`, `startedElsewhere`, rendus avant toute écriture) ne fait plus oublier
+    `publishedStart` ; un refus douteux l'oublie encore (`SharedLocationSharingCenter.nothingWritten`).
+  - Une réponse à « Montrer ta position réelle ? » prend la position AVANT de relire le partage servi : un point relancé
+    ailleurs pendant le GPS se voit à la relecture, la question se repose et rien ne part.
+  - Un nom vide ou blanc ne se nomme plus dans la question (`SharedLocationPointReplacement.audience`).
+- Gates locaux : `check_house_rules` (42 règles), `check_cohesion_budget`, `check_test_registration`, garde des couleurs
+  d'accent verts. iOS ne se compile pas en conteneur : la CI iOS de la PR fait foi.
+- Prochain lot : #20054, #20056 ; puis #13934 (écoute + titre défilant) selon la spec.
