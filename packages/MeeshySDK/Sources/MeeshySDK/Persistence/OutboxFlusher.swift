@@ -177,8 +177,19 @@ public actor OutboxFlusher {
         "status", "attempts", "lastError", "updatedAt", "nextAttemptAt", "waitingForFanoutOriginSince",
     ]
 
+    /// #16659 — la passe attend que toute autre passe sur la même base ait
+    /// fini (`OutboxDrainLock`) : un arriéré part dans l'ordre où on l'a écrit,
+    /// quel que soit le nombre de déclencheurs qui se lèvent au même reconnect.
     @discardableResult
     public func flush() async -> Date? {
+        let base = OutboxDrainLock.key(for: pool)
+        await OutboxDrainLock.shared.acquire(base)
+        let nextRetry = await drainOnce()
+        await OutboxDrainLock.shared.release(base)
+        return nextRetry
+    }
+
+    private func drainOnce() async -> Date? {
         // BW1 — gate de bande passante : en mode avion / 1G saturé, dispatcher
         // brûlerait les `maxAttempts` en timeouts URLSession de 60 s chacun.
         //
@@ -193,38 +204,10 @@ public actor OutboxFlusher {
         // On rend désormais une échéance : le front montant reste le chemin
         // RAPIDE, cette échéance est le filet. Un moniteur menteur coûte un
         // retard, plus un blocage.
-        guard await isNetworkReachable() else {
-            // Uniquement s'il y a réellement quelque chose à reprendre : armer
-            // un réveil chaque minute sur une file VIDE ne ferait que réveiller
-            // l'app pour rien, ce que le gate cherchait précisément à éviter.
-            let hasWork = (try? await pool.read { db in
-                try OutboxRecord
-                    .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
-                        .contains(Column("status")))
-                    .fetchCount(db)
-            }) ?? 0
-            return hasWork > 0 ? Date().addingTimeInterval(Self.offlineRetrySeconds) : nil
-        }
+        guard await isNetworkReachable() else { return await offlineRetryDate() }
 
         let now = Date()
-        let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
-        do {
-            _ = try await pool.write { db in
-                try OutboxRecord
-                    .filter(Column("status") == OutboxStatus.inflight.rawValue)
-                    .filter(Column("updatedAt") < reclaimCutoff)
-                    .updateAll(
-                        db,
-                        Column("status").set(to: OutboxStatus.pending.rawValue),
-                        Column("updatedAt").set(to: now),
-                        Column("nextAttemptAt").set(to: now)
-                    )
-            }
-        } catch {
-            // Sans ce reclaim, une ligne restée `.inflight` (app tuée en plein
-            // envoi) n'est plus jamais rejouée : le message ne part pas.
-            outboxFlusherLog.error("Stale-inflight reclaim failed, rows may stay stuck: \(error.localizedDescription, privacy: .public)")
-        }
+        await reclaimStaleInflight(now: now)
         // outbox-06 — paginer jusqu'à épuisement du backlog échu : une seule
         // page de 50 laissait les rows 51+ `.pending` échues, invisibles
         // d'`earliestDeferred` (qui ne regarde que le futur) → timer annulé,
@@ -271,6 +254,41 @@ public actor OutboxFlusher {
             earliestDeferred = nil
         }
         return earliestDeferred?.nextAttemptAt
+    }
+
+    /// BW1 — l'échéance du réveil quand le réseau manque : seulement s'il y a
+    /// réellement quelque chose à reprendre. Armer un réveil chaque minute sur
+    /// une file VIDE ne ferait que réveiller l'app pour rien, ce que le gate
+    /// cherchait précisément à éviter.
+    private func offlineRetryDate() async -> Date? {
+        let hasWork = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                    .contains(Column("status")))
+                .fetchCount(db)
+        }) ?? 0
+        return hasWork > 0 ? Date().addingTimeInterval(Self.offlineRetrySeconds) : nil
+    }
+
+    private func reclaimStaleInflight(now: Date) async {
+        let reclaimCutoff = now.addingTimeInterval(-Self.staleInflightReclaimSeconds)
+        do {
+            _ = try await pool.write { db in
+                try OutboxRecord
+                    .filter(Column("status") == OutboxStatus.inflight.rawValue)
+                    .filter(Column("updatedAt") < reclaimCutoff)
+                    .updateAll(
+                        db,
+                        Column("status").set(to: OutboxStatus.pending.rawValue),
+                        Column("updatedAt").set(to: now),
+                        Column("nextAttemptAt").set(to: now)
+                    )
+            }
+        } catch {
+            // Sans ce reclaim, une ligne restée `.inflight` (app tuée en plein
+            // envoi) n'est plus jamais rejouée : le message ne part pas.
+            outboxFlusherLog.error("Stale-inflight reclaim failed, rows may stay stuck: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     /// S1 — atomically claim a pending row for dispatch. Flips pending→inflight

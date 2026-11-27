@@ -776,6 +776,42 @@ final class OutboxFlusherTests: XCTestCase {
             "two concurrent flushers must not double-dispatch the same row")
     }
 
+    /// #16659 — un arriéré écrit hors ligne part dans l'ordre où on l'a
+    /// écrit, même quand deux déclencheurs (isConnected + didReconnect du même
+    /// reconnect) construisent chacun leur videur sur le même pool. L'ordre
+    /// observé est celui où les envois ABOUTISSENT au réseau — le seul que la
+    /// passerelle horodate.
+    func test_concurrentFlushers_sharingAPool_deliverBacklogInWrittenOrder() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            for i in 1...3 {
+                try OutboxRecord(
+                    id: "\(i)", kind: .sendMessage, conversationId: "c1",
+                    clientMessageId: "cid_\(i)", payload: Data(), status: .pending,
+                    attempts: 0, lastError: nil,
+                    createdAt: now.addingTimeInterval(0.1 * Double(i)),
+                    updatedAt: now, nextAttemptAt: now
+                ).insert(db)
+            }
+        }
+        let network = GatedOutboxDispatcher(heldId: "1")
+        let a = OutboxFlusher(pool: pool, dispatcher: network)
+        let b = OutboxFlusher(pool: pool, dispatcher: network)
+
+        let passA = Task { _ = await a.flush() }
+        await network.waitUntilHeld()
+        let passB = Task { _ = await b.flush() }
+        await network.waitForDelivered(count: 2, timeout: .seconds(1))
+        await network.release()
+        _ = await (passA.value, passB.value)
+
+        let delivered = await network.deliveredIds
+        XCTAssertEqual(delivered, ["1", "2", "3"],
+                       "une seconde passe ne dépasse jamais l'envoi en vol de la première")
+    }
+
     private func makeFreshPool() throws -> DatabaseQueue {
         return try DatabaseQueue()
     }
@@ -897,9 +933,13 @@ final class OutboxFlusherTests: XCTestCase {
         XCTAssertEqual(row?.attempts, 1)
     }
 
-    /// Des claims .inflight FRAIS (un autre flusher au travail) ne doivent ni
-    /// être volés ni empêcher de drainer le backlog .pending au-delà de la
-    /// première page.
+    /// Témoin de RÉCLAMATION : des lignes .inflight fraîches qu'AUCUNE passe
+    /// vivante de ce processus ne tient (claims laissés par une passe morte,
+    /// en attente du reclaim à `staleInflightReclaimSeconds`) ne sont ni volées
+    /// ni bloquantes pour le reste du backlog. Ce n'est pas une licence de
+    /// dépasser une réclamation VIVANTE : deux passes sur la même base se
+    /// sérialisent (`OutboxDrainLock`, #16659, témoin
+    /// `test_concurrentFlushers_sharingAPool_deliverBacklogInWrittenOrder`).
     func test_flush_freshInflightClaims_doNotBlockBacklogDrain() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
@@ -930,7 +970,7 @@ final class OutboxFlusherTests: XCTestCase {
 
         let processed = await dispatcher.processedIds
         XCTAssertEqual(processed.count, 80,
-                       "tout le backlog .pending est drainé malgré les claims frais d'autrui")
+                       "tout le backlog .pending est drainé malgré les claims abandonnés")
         let pendingLeft = try await pool.read { db in
             try OutboxRecord.filter(Column("status") == OutboxStatus.pending.rawValue).fetchCount(db)
         }
@@ -938,7 +978,7 @@ final class OutboxFlusherTests: XCTestCase {
         let inflightLeft = try await pool.read { db in
             try OutboxRecord.filter(Column("status") == OutboxStatus.inflight.rawValue).fetchCount(db)
         }
-        XCTAssertEqual(inflightLeft, 20, "les claims frais d'un autre flusher restent intouchés")
+        XCTAssertEqual(inflightLeft, 20, "un claim abandonné mais frais attend son reclaim, il n'est pas volé")
     }
 }
 
@@ -969,4 +1009,43 @@ actor MockOutboxDispatcher: OutboxDispatching {
         }
     }
 
+}
+
+/// #16659 — retient l'envoi de `heldId` jusqu'à `release()` et journalise
+/// l'ordre où chaque envoi ABOUTIT, celui que le serveur horodate.
+actor GatedOutboxDispatcher: OutboxDispatching {
+    private let heldId: String
+    private var isHeld = false
+    private var gate: CheckedContinuation<Void, Never>?
+    private var released = false
+    private(set) var deliveredIds: [String] = []
+
+    init(heldId: String) {
+        self.heldId = heldId
+    }
+
+    func dispatch(_ record: OutboxRecord) async throws {
+        if record.id == heldId && !released {
+            isHeld = true
+            await withCheckedContinuation { gate = $0 }
+        }
+        deliveredIds.append(record.id)
+    }
+
+    func waitUntilHeld() async {
+        while !isHeld { await Task.yield() }
+    }
+
+    func waitForDelivered(count: Int, timeout: Duration) async {
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while deliveredIds.count < count && ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    func release() {
+        released = true
+        gate?.resume()
+        gate = nil
+    }
 }
