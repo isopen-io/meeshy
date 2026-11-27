@@ -931,3 +931,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
+
+- 2026-11-23 03:29 : #20465 fusionnée dans `dev` ; #19812 fermée.
+
+## 2026-11-27 — réveil 13:01 UTC (reprise d'un run coupé à 09:37)
+
+- Début du run : aucune PR de la routine ouverte ; la branche `claude/communautes-budget-salon` portait déjà le témoin rouge de #20464 (run précédent coupé par une erreur d'API avant la mise en œuvre). Aucune branche vivante sur `communityMembershipSync.ts` ni `community-addition-budget.ts`.
+- Lot : #20464 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `planCommunityAdmission` reçoit un port `budget` (`communityAdmissionBudget(fastify, acteur, communauté)`), passé par `POST /conversations` : l'acteur paie au nombre de personnes qui ENTRENT (déjà membres actifs gratuits), avant `everyoneAddable` ; chaque cible une unité pour un plan qui va écrire ; une cible saturée refuse le lot entier et rend les autres cibles. Refus `429 COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After`, rien n'est créé. Un salon sans invité ne coûte rien.
+- Seau cible : compte des paires (communauté, cible) DISTINCTES par jour (limiteur `paireJour`, max 1), aussi pour `…/invite` et `…/members` ; un ajout refusé démarque sa paire. Un cycle ajout/retrait dans une communauté ne ferme plus la porte des autres.
+- Témoins : `routes/conversations/community-salon-addition-budget-20464.test.ts` (9 ; rouge prouvé : 5 échecs sans la mise en œuvre), `routes/communities/addition-budget-19812.test.ts` (+1, deux attendus passés en communautés distinctes). Suites communautés + conversations : 120 suites, 1 362 verts. `tsc --noEmit` passerelle : 0 erreur.
+- Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant).
+- Suivi ouvert : #20663 (rattacher une conversation, ajouter à un salon, levée de bannissement : hors budget).
+- Prochain lot recommandé : #20663, puis #19813.
