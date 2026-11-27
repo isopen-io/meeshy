@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:game": {
+      "resDir": "feature/game/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "game.referral.title",
+          "androidName": "game_referral_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.photo.referral.qr_label",
+          "androidName": "game_photo_referral_qr_label",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.referral.share_text",
+          "androidName": "game_referral_share_text",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.referral.link_toggle",
+          "androidName": "game_referral_link_toggle",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

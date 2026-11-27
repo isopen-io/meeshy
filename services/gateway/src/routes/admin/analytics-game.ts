@@ -15,6 +15,8 @@ import { countAliveLongFlames, summarizeDailyGameCounters, summarizeRollingReten
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CACHE_TTL_SECONDS = 600;
 const ROW_CAP = 50_000;
+/** Un document par jour : la fenêtre (≤ 30 jours) plus une marge. */
+const SPARKS_DAY_CAP = GAME_BASELINE_MAX_WINDOW_DAYS + 2;
 /**
  * Une Flamme vivante a reçu son dernier geste il y a au plus dix jours : un jour à risque, deux Veilleuses
  * (`FLAME_FREEZE_MAX`) et une veille de sept jours au plus. Quatorze couvrent les fuseaux avec de la marge.
@@ -39,8 +41,9 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
   const cohortStart = new Date(now.getTime() - GAME_BASELINE_COHORT_WEEKS * 7 * DAY_MS);
   const windowStart = new Date(now.getTime() - params.days * DAY_MS);
   const flameSince = new Date(now.getTime() - LONG_FLAME_LOOKBACK_DAYS * DAY_MS);
+  const firstDay = new Date(now.getTime() - (params.days - 1) * DAY_MS).toISOString().slice(0, 10);
 
-  const [signups, flames, offerings, ledger, gameHidden, notificationsOff] = await Promise.all([
+  const [signups, flames, offerings, ledger, gameHidden, notificationsOff, sparksDays] = await Promise.all([
     prisma.user.findMany({
       where: { createdAt: { gte: cohortStart } },
       select: { createdAt: true, lastActiveAt: true },
@@ -66,6 +69,11 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
     prisma.userPreferences.aggregateRaw({
       pipeline: [{ $match: { 'notification.gameEnabled': false } }, { $count: 'total' }],
     }),
+    prisma.gameSparksDay.findMany({
+      where: { day: { gte: firstDay } },
+      select: { day: true, sparks: true, earners: true },
+      take: SPARKS_DAY_CAP,
+    }),
   ]);
 
   return {
@@ -79,6 +87,7 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
     daily: summarizeDailyGameCounters({
       offeringsOpenedAt: offerings.flatMap((row) => (row.chestClaimedAt ? [row.chestClaimedAt] : [])),
       ledger,
+      sparksDays,
       days: params.days,
       now,
     }),
@@ -93,8 +102,8 @@ async function readGameBaseline(fastify: FastifyInstance, params: { readonly day
 /**
  * GET /api/v1/admin/analytics/game?days=14
  * Le point de départ du Jeu (#17363, #20617) : retour glissant à 1, 7 et 30 jours par semaine d'inscription,
- * Offrandes et Meeshes par jour, Flammes de sept jours et plus, comptes en « Jeu masqué » et sans notifications de
- * jeu. Des agrégats : aucune ligne par compte ne quitte la passerelle. Fenêtre ≤ 30 jours, cache 10 min.
+ * Offrandes, Meeshes et étincelles gagnées par jour (#20619), Flammes de sept jours et plus, comptes en « Jeu masqué »
+ * et sans notifications de jeu. Des agrégats : aucune ligne par compte ne quitte la passerelle. Fenêtre ≤ 30 jours, cache 10 min.
  */
 export function registerGameBaselineRoute(fastify: FastifyInstance, guard: onRequestHookHandler): void {
   fastify.get('/game', {
@@ -102,7 +111,7 @@ export function registerGameBaselineRoute(fastify: FastifyInstance, guard: onReq
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const days = windowDaysOf((request.query as { days?: string }).days);
-      const cacheKey = `admin:analytics:game:v1:${days}`;
+      const cacheKey = `admin:analytics:game:v2:${days}`;
       const cached = await getCacheStore().get(cacheKey);
       if (cached) {
         return sendSuccess(reply, JSON.parse(cached));

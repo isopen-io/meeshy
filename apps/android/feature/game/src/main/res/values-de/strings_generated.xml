@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Fotografieren</string>
     <string name="game_photo_offer_title">Halten wir es fest?</string>
     <string name="game_photo_preview">Vorschau: %1$s</string>
+    <string name="game_photo_referral_qr_label">QR-Code deines Einladungslinks</string>
     <string name="game_photo_save">Sichern</string>
     <string name="game_photo_scene_a11y">Kameravorschau – zweimal tippen nimmt auf, ohne in Fotos zu sichern</string>
     <string name="game_photo_selfie">Selfie mit uns</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Brückenbauer</string>
     <string name="game_rank_polyglotte">Polyglott</string>
     <string name="game_rank_voix">Stimme</string>
+    <string name="game_referral_link_toggle">Mein Einladungslink auf der Karte</string>
+    <string name="game_referral_share_text">Komm zu mir auf Meeshy: %1$s</string>
+    <string name="game_referral_title">Komm zu mir auf Meeshy</string>
     <string name="game_rules_1_title">Jede Aktion lässt Funken sprühen</string>
     <string name="game_rules_2_title">Die Funken bilden dein Licht</string>
     <string name="game_rules_3_title">Man prägt Meeshes</string>

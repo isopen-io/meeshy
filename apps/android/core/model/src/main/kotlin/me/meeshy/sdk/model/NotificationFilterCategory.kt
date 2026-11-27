@@ -120,7 +120,7 @@ public enum class NotificationFilterCategory(public val accentHex: String) {
             ENGAGEMENT to setOf(
                 "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "level_up", "badge_earned",
                 "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step",
-                "game_mission_window",
+                "game_mission_window", "game_flame_evening",
             ),
             CONTACTS to setOf(
                 "friend_request", "contact_request", "FRIEND_REQUEST",

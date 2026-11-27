@@ -71,6 +71,7 @@ public object GameNavigationMap {
         "game_duo_invited", "game_duo_accepted", "game_league_result" -> GameRoute.Page(GamePage.League)
         "game_season_step" -> GameRoute.Page(GamePage.Season)
         "game_mission_window" -> GameRoute.Concept(ProgressionConcept.Missions, ConceptSection.Act)
+        "game_flame_evening" -> GameRoute.Concept(ProgressionConcept.Flame, ConceptSection.Act)
         "level_up" -> GameRoute.Concept(ProgressionConcept.Level)
         "streak_milestone" -> GameRoute.Concept(ProgressionConcept.Flame)
         "badge_earned" -> GameRoute.Concept(ProgressionConcept.Badges)

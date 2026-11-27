@@ -269,6 +269,8 @@ export type FakeGameDb = {
   readonly leagueGroupWeek: Model;
   readonly leagueMembership: Model;
   readonly gameWeekPoints: Model;
+  /** Le seau quotidien des étincelles (#20619) : un document par jour UTC, aucun compte. */
+  readonly gameSparksDay: Model;
   readonly gameDuo: Model;
   readonly gameDuoSlot: Model;
   readonly gameSeason: Model;
@@ -314,6 +316,7 @@ export function fakeGameDb(): FakeGameDb {
     new Model({ uniques: [['userId', 'weekKey']], optional: ['finalRank', 'finalPoints', 'zone', 'cup', 'settledAt'] }),
   );
   const gameWeekPoints = flattenCompound(new Model({ uniques: [['userId', 'weekKey', 'dayKey']], defaults: () => ({ points: 0 }) }));
+  const gameSparksDay = flattenCompound(new Model({ uniques: [['day']], defaults: () => ({ sparks: 0, earners: 0 }) }));
   const gameDuo = flattenCompound(
     new Model({
       defaults: () => ({ inviterProgress: 0, inviteeProgress: 0 }),
@@ -365,6 +368,7 @@ export function fakeGameDb(): FakeGameDb {
     leagueGroupWeek,
     leagueMembership,
     gameWeekPoints,
+    gameSparksDay,
     gameDuo,
     gameDuoSlot,
     gameSeason,

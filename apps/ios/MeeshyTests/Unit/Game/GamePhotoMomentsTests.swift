@@ -110,4 +110,29 @@ final class GamePhotoMomentsTests: XCTestCase {
         XCTAssertEqual(moment?.id, "tier:lueur:1")
         XCTAssertEqual(moment?.title.hasSuffix("×2"), true)
     }
+    // MARK: - La célébration d'un palier propose la carte (#20641, #17392)
+
+    func test_ofReveal_aFlameOfThirtyDays_proposesTheFlameMomentOfTheNotebook() {
+        let moment = GamePhotoMoments.ofReveal(.streak(days: 30), title: "Ignoré", rarity: nil)
+        XCTAssertEqual(moment, GamePhotoMoments.flame(days: 30))
+        XCTAssertEqual(moment?.id, "flame:30")
+    }
+
+    func test_ofReveal_theFlamesOfSevenAndAHundredDays_proposeTheirCard() {
+        XCTAssertEqual(GamePhotoMoments.ofReveal(.streak(days: 7), title: "", rarity: nil)?.id, "flame:7")
+        XCTAssertEqual(GamePhotoMoments.ofReveal(.streak(days: 100), title: "", rarity: nil)?.id, "flame:100")
+    }
+
+    func test_ofReveal_aFlameThatIsNotAStepOfTheNotebook_proposesNothing() {
+        [3, 14, 60].forEach { days in
+            XCTAssertNil(GamePhotoMoments.ofReveal(.streak(days: days), title: "", rarity: nil), "\(days) jours")
+        }
+    }
+
+    func test_ofReveal_anAchievement_keepsItsCard_aBadgeOrALevelProposeNothing() {
+        let moment = GamePhotoMoments.ofReveal(.achievement(.firstVoice), title: "Première voix", rarity: .epic)
+        XCTAssertEqual(moment, GamePhotoMoments.achievement(id: "achievement:achievement.first_voice", title: "Première voix", rarity: .epic))
+        XCTAssertNil(GamePhotoMoments.ofReveal(.badge(axis: "content.text_message", threshold: 100), title: "", rarity: nil))
+        XCTAssertNil(GamePhotoMoments.ofReveal(.level(2), title: "", rarity: nil))
+    }
 }

@@ -33,6 +33,7 @@ type Fixture = {
   readonly ledger?: readonly { reason: string; delta: number; createdAt: Date }[];
   readonly hidden?: number;
   readonly notificationsOff?: readonly unknown[];
+  readonly sparksDays?: readonly { day: string; sparks: number; earners: number }[];
 };
 
 async function appWith(fixture: Fixture): Promise<{ app: FastifyInstance; prisma: Record<string, Record<string, jest.Mock<any>>> }> {
@@ -46,6 +47,7 @@ async function appWith(fixture: Fixture): Promise<{ app: FastifyInstance; prisma
     meeshLedger: { findMany: jest.fn<any>().mockResolvedValue(fixture.ledger ?? []) },
     gameProfile: { count: jest.fn<any>().mockResolvedValue(fixture.hidden ?? 0) },
     userPreferences: { aggregateRaw: jest.fn<any>().mockResolvedValue(fixture.notificationsOff ?? []) },
+    gameSparksDay: { findMany: jest.fn<any>().mockResolvedValue(fixture.sparksDays ?? []) },
   };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
   app.decorate('authenticate', async (req: any) => {
@@ -108,7 +110,7 @@ describe('GET /game — le point de départ du Jeu (#20617)', () => {
 
     expect(data.windowDays).toBe(30);
     expect(data.daily).toHaveLength(30);
-    for (const call of [prisma.user.findMany, prisma.gameDay.findMany, prisma.meeshLedger.findMany]) {
+    for (const call of [prisma.user.findMany, prisma.gameDay.findMany, prisma.meeshLedger.findMany, prisma.gameSparksDay.findMany]) {
       for (const [args] of call.mock.calls) {
         expect((args as { take?: number }).take).toEqual(expect.any(Number));
       }
@@ -137,6 +139,20 @@ describe('GET /game — le point de départ du Jeu (#20617)', () => {
     const body = (await app.inject({ method: 'GET', url: '/game' })).body;
 
     expect(body).not.toContain(SECRET_ID);
+  });
+
+  it('sert les étincelles gagnées par jour et les joueurs qui en ont gagné, depuis le seau quotidien (#20619)', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const { app, prisma } = await appWith({ role: 'ADMIN', sparksDays: [{ day: today, sparks: 120, earners: 3 }] });
+
+    const data = (await app.inject({ method: 'GET', url: '/game?days=2' })).json().data;
+
+    expect(data.daily[1]).toMatchObject({ day: today, sparksEarned: 120, sparkEarners: 3 });
+    expect(data.daily[0]).toMatchObject({ sparksEarned: 0, sparkEarners: 0 });
+    const [args] = prisma.gameSparksDay.findMany.mock.calls[0] as [{ where: { day: { gte: string } }; take: number; select: Record<string, boolean> }];
+    expect(args.where.day.gte).toBe(data.daily[0].day);
+    expect(args.take).toEqual(expect.any(Number));
+    expect(args.select).toEqual({ day: true, sparks: true, earners: true });
   });
 
   it('refuse un compte sans accès à l’administration', async () => {

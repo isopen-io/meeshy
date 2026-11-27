@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Fotografa</string>
     <string name="game_photo_offer_title">Lo immortaliamo?</string>
     <string name="game_photo_preview">Anteprima: %1$s</string>
+    <string name="game_photo_referral_qr_label">Codice QR del tuo link d’invito</string>
     <string name="game_photo_save">Salva</string>
     <string name="game_photo_scene_a11y">Anteprima della fotocamera: tocca due volte per scattare senza salvare in Foto</string>
     <string name="game_photo_selfie">Selfie con noi</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Traghettatore</string>
     <string name="game_rank_polyglotte">Poliglotta</string>
     <string name="game_rank_voix">Voce</string>
+    <string name="game_referral_link_toggle">Il mio link d\'invito sulla carta</string>
+    <string name="game_referral_share_text">Unisciti a me su Meeshy: %1$s</string>
+    <string name="game_referral_title">Unisciti a me su Meeshy</string>
     <string name="game_rules_1_title">Ogni gesto fa scaturire scintille</string>
     <string name="game_rules_2_title">Le scintille formano la tua luce</string>
     <string name="game_rules_3_title">Si coniano Meesh</string>

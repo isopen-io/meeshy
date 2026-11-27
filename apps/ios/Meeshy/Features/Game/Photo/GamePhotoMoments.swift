@@ -67,6 +67,22 @@ enum GamePhotoMoments {
         )
     }
 
+    /// LA CARTE QUE PROPOSE UNE CÉLÉBRATION DE PALIER (#7742, #20641) : un succès propose sa coupe, une Flamme
+    /// qui est une étape du carnet (7, 30, 100 jours) propose la sienne, sous la même identité que Progression —
+    /// le carnet ne la proposera donc pas une seconde fois. Un badge, un niveau ou une Flamme de 3, 14 ou 60
+    /// jours ne se photographient pas. La passerelle retient le push photo d'une Flamme déjà célébrée : c'est
+    /// ici que la carte se propose.
+    static func ofReveal(_ reveal: EngagementReveal, title: String, rarity: GameGlory.AchievementRarity?) -> PhotoMoment? {
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return achievement(id: reveal.id, title: title, rarity: rarity)
+        case .streak(let days):
+            return flameThresholds.contains(days) ? flame(days: days) : nil
+        case .badge, .level:
+            return nil
+        }
+    }
+
     /// Une mission personnelle accomplie (#10816) : une identité par mission, jamais deux photos proposées pour la même.
     static func mission(id: String, templateKey: String, target: Int) -> PhotoMoment {
         PhotoMoment(
