@@ -165,6 +165,50 @@ Sans le délégué, il aurait passé pour un échec de la règle d'identifiant.
 > présence, pour que le prochain lecteur sache que le retirer ferme la porte au
 > lieu de l'ouvrir.
 
+## Les 30 suites, et la doctrine de harnais que ce lot a rendue fausse
+
+Poser la garde a fait rougir **30 suites** (relevé d'abord à 41, dont 3 étaient
+des victimes de la contention mémoire du relevé lui-même et 8 étrangères au
+lot). Toutes pour la même cause, et aucune ne la nommait : leur double Prisma
+n'a pas de délégué `user`, la lecture lève, et la garde FERMÉE sur l'échec
+refuse l'accès.
+
+Plusieurs de ces doubles portent une doctrine écrite, et
+`postThreadAccess.test.ts` l'énonce :
+
+> Un délégué manquant fait échouer le test par `TypeError` plutôt que de rendre
+> un verdict par défaut — c'est voulu : une garde qui interroge silencieusement
+> la mauvaise table doit se voir.
+
+**Ce lot l'a rendue fausse pour cette lecture-là.** Fermée sur l'échec, elle
+rend précisément le verdict par défaut que la doctrine voulait rendre visible —
+et le symptôme est un `404`, une audience vide, un `recorded: 0` : un refus
+plausible, qui se lit comme une règle produit. La doctrine du fichier reste à
+arbitrer ; l'exception est consignée à côté du délégué ajouté.
+
+> **Un lot qui ajoute une lecture fail-closed dans une fonction largement
+> appelée ne peut pas être prouvé par les suites de son périmètre** : par
+> construction, celles qui cassent sont celles qui ne parlent pas de son sujet.
+> C'est exactement l'erreur de ce lot — « 204/204 vertes » sur un périmètre
+> qu'il avait choisi lui-même. Un périmètre de preuve choisi par le lot mesure
+> le lot, pas le dépôt.
+
+Détail : `tasks/lessons/2026-11-27-une-garde-fermee-sur-l-echec-annule-la-doctrine-du-double-qui-leve.md`.
+
+**Un seul des 30 mondes portait un blocage RÉEL** — `teamAudiences.test.ts`,
+dont le témoin compare le verdict unitaire au verdict de LOT sur tous les
+lecteurs. Un délégué « aucun blocage » y ferait diverger les deux et ferait
+tomber le témoin, pour la bonne raison : il a reçu un `findFirst` FIDÈLE à son
+monde. Les 29 autres n'ont aucun blocage, et « aucun blocage » y est la réponse
+juste.
+
+**Deux dettes de harnais trouvées en passant**, et laissées telles quelles :
+un témoin d'`interactions.views.test.ts` monte son Fastify À LA MAIN dans un
+fichier qui a un harnais (il échappe donc à tout correctif du harnais), et
+`MessagingService.storyReplyAdmission.test.ts` porte un `findUnique: jest.fn()`
+nu, qui rend `undefined` et non une promesse — il ne « marche » que parce que
+la loi écrit `userRow?.blockedUserIds ?? []`.
+
 ## Preuve
 
 19 témoins neufs ; `tsc --noEmit` passerelle : 0.
