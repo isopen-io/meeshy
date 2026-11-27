@@ -509,6 +509,9 @@ const NOTIFICATION_TOGGLES = [
   /* « Recevoir des Bring » (#16588) — l'interrupteur GLOBAL que la passerelle lit
      avant de faire sonner ; le blocage par personne reste sur la fiche d'un lien. */
   { key: 'bringEnabled', label: 'settings.notif.bring', caption: 'settings.notif.bring.info', icon: { set: 'socle', name: 'phone' }, tint: 'var(--color-error)' },
+  /* « Recevoir les invitations « ensemble » » (#17990) — l'interrupteur GLOBAL que la passerelle
+     lit avant d'inviter à regarder ou écouter ensemble ; la coupure par personne reste sur la fiche. */
+  { key: 'togetherEnabled', label: 'settings.notif.together', caption: 'settings.notif.together.info', icon: { set: 'socle', name: 'users' }, tint: 'var(--color-ios-brand)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {
