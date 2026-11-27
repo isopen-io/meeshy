@@ -55,4 +55,6 @@
     <string name="circles_sheet_settings_title">Settings for this person</string>
     <string name="circles_sheet_settings_unavailable">Coming soon</string>
     <string name="contacts_tab_circles">Circles</string>
+    <string name="circles_settings_block_together">Mute their “together” invitations</string>
+    <string name="circles_settings_block_together_detail">They will no longer be able to invite you to watch or listen together. A session in progress continues. They are not notified.</string>
 </resources>

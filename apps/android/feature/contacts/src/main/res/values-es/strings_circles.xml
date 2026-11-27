@@ -55,4 +55,6 @@
     <string name="circles_sheet_settings_title">Ajustes para esta persona</string>
     <string name="circles_sheet_settings_unavailable">Próximamente</string>
     <string name="contacts_tab_circles">Círculos</string>
+    <string name="circles_settings_block_together">Silenciar sus invitaciones «juntos»</string>
+    <string name="circles_settings_block_together_detail">Esta persona ya no podrá invitarte a ver o escuchar juntos. Una sesión en curso continúa. No recibe ningún aviso.</string>
 </resources>

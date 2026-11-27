@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "androidName": "circles_settings_block_together",
+          "status": "android-only"
+        },
+        {
+          "androidName": "circles_settings_block_together_detail",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
