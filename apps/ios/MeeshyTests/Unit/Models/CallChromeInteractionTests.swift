@@ -77,6 +77,8 @@ final class CallChromeInteractionTests: XCTestCase {
         let modifier = source[start.lowerBound..<end.lowerBound]
         XCTAssertFalse(modifier.contains("Date()"))
         XCTAssertFalse(modifier.contains("Date?"))
+        XCTAssertFalse(modifier.contains("Date.now"))
+        XCTAssertFalse(modifier.contains("timeIntervalSince"))
         XCTAssertTrue(modifier.contains("CallMonotonicClock.seconds()"))
     }
 
