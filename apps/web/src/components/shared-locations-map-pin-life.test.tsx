@@ -174,3 +174,24 @@ describe('l’épingle d’une personne porte ce qu’elle vit, tel que servi (#
     expect(labelOf(bob)).toBe('Bob · position exacte · jusqu’à 11:30');
   });
 });
+
+describe('la liste dit la même chose que l’épingle (#20658)', () => {
+  const rowOf = (container: HTMLElement, userId: string): string => container.querySelector(`[data-shared-location-row="${userId}"]`)?.textContent ?? '';
+
+  test('la ligne d’une personne dit ce qu’elle vit, comme le nom de son épingle', () => {
+    const client = freshClient();
+    receivePhoneCallState(client, { userId: ADA, since: minutesAgo(12), expiresAt: minutesAhead(60) }, Date.now());
+    listeningStore.getState().receive({ userId: ADA, category: 'music', title: 'Clair de lune', updatedAt: new Date().toISOString(), expiresAt: minutesAhead(1) });
+    const map = mapOf({ client });
+    expect(rowOf(map, ADA)).toBe(labelOf(pinOf(map, ADA)));
+    expect(rowOf(map, ADA)).toContain('Clair de lune');
+  });
+
+  test('une personne hors de l’emprise garde sa vie dans la liste, et une autre n’en reçoit rien', () => {
+    const client = freshClient();
+    receivePhoneCallState(client, { userId: ADA, since: minutesAgo(12), expiresAt: minutesAhead(60) }, Date.now());
+    const map = mapOf({ client, locations: [location(ADA, { latitude: -33.9, longitude: 151.2 }), location(BOB, { latitude: 48.9, longitude: 2.4 })] });
+    expect(rowOf(map, ADA)).toContain('12 min');
+    expect(rowOf(map, BOB)).toBe('Bob · position exacte · jusqu’à 11:30');
+  });
+});
