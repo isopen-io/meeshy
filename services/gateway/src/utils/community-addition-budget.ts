@@ -34,10 +34,22 @@
  * Redis en panne : `consume` rend `null` et le geste PASSE (fail-open), le même
  * choix que `middleware()` et `contact-identifier-budget.ts` — un débit est une
  * borne d'abus, pas une garde d'autorisation, et les refus d'accès restent en
- * amont. Ce que le module ne compte PAS, et qui est suivi ailleurs : l'entrée
- * des participants d'un salon créé dans une communauté (`planCommunityAdmission`,
- * jusqu'à 250 personnes par requête) et le cycle ajout/retrait qui remplit le
- * seau d'une cible — #20464.
+ * amont.
+ *
+ * #20464 — deux autres portes font entrer quelqu'un sans son accord, et
+ * débitent les MÊMES seaux : créer un salon dans une communauté
+ * (`POST /conversations` avec `communityId`, jusqu'à 250 participants par
+ * requête) et rattacher une conversation à une communauté privée
+ * (`POST /communities/:id/conversations/:conversationId`). Un lot coûte à
+ * l'acteur autant d'unités qu'il fait ENTRER de personnes (les membres actifs
+ * ne coûtent rien) et une unité au seau de chacune. Un lot refusé n'écrit rien,
+ * ne coûte à l'acteur qu'UNE tentative (sans quoi une requête trop grosse le
+ * fermerait pour la journée) et rend ce qu'il avait pris aux cibles.
+ *
+ * Le seau d'une cible compte des PAIRES (communauté, personne) distinctes dans
+ * la journée : être ajouté, retiré puis rajouté à la même communauté ne compte
+ * qu'une fois. Sans quoi un administrateur qui ajoute et retire dix fois la même
+ * personne épuisait son quota, et ses vrais proches recevaient 429 pendant 24 h.
  *
  * Le refus est un 429 dans l'enveloppe `sendError`, `code`
  * `COMMUNITY_ADDITION_BUDGET_EXCEEDED`, avec `Retry-After`. Le même code sert
@@ -64,6 +76,8 @@ type Seaux = {
   readonly acteurHeure: RateLimiter;
   readonly acteurJour: RateLimiter;
   readonly cibleJour: RateLimiter;
+  /** Une paire (communauté, cible) déjà comptée aujourd'hui : plafond 1, il ne sert qu'à SE SOUVENIR. */
+  readonly paireJour: RateLimiter;
 };
 
 /**
@@ -90,6 +104,10 @@ function seaux(fastify: FastifyInstance): Seaux {
       { max: COMMUNITY_ADDITION_BUDGET.targetPerDay, windowMs: JOUR_MS, keyPrefix: 'communities:additions:target:d' },
       redis
     ),
+    paireJour: createCustomRateLimiter(
+      { max: 1, windowMs: JOUR_MS, keyPrefix: 'communities:additions:pair:d' },
+      redis
+    ),
   };
   SEAUX.set(fastify.server, crees);
   return crees;
@@ -104,31 +122,101 @@ function verdictOf(infos: ReadonlyArray<RateLimitInfo | null>): CommunityAdditio
   return { allowed: false, retryAfter: Math.max(...depasses) };
 }
 
+const canonique = (id: string): string => id.trim().toLowerCase();
+
 /**
- * Débite UNE tentative d'ajout sur les deux fenêtres de l'ACTEUR. Les deux sont
- * débitées même quand l'une refuse : une tentative refusée a été REÇUE.
+ * Débite `cost` tentatives d'ajout (une par défaut) sur les deux fenêtres de
+ * l'ACTEUR. Les deux sont débitées même quand l'une refuse : une tentative
+ * refusée a été REÇUE.
  */
 export async function spendCommunityAdditionByActor(
   fastify: FastifyInstance,
-  actorId: string
+  actorId: string,
+  cost = 1
 ): Promise<CommunityAdditionVerdict> {
   const { acteurHeure, acteurJour } = seaux(fastify);
   const cle = `user:${actorId}`;
-  return verdictOf(await Promise.all([acteurHeure.consume(cle, 1), acteurJour.consume(cle, 1)]));
+  return verdictOf(await Promise.all([acteurHeure.consume(cle, cost), acteurJour.consume(cle, cost)]));
+}
+
+async function releaseByActor(fastify: FastifyInstance, actorId: string, cost: number): Promise<void> {
+  const { acteurHeure, acteurJour } = seaux(fastify);
+  const cle = `user:${actorId}`;
+  await Promise.all([acteurHeure.release(cle, cost), acteurJour.release(cle, cost)]);
+}
+
+/** Ce qu'une cible a coûté, pour le rendre si le lot qui la porte est refusé. */
+type TargetSpend = { readonly verdict: CommunityAdditionVerdict; readonly undo: () => Promise<void> };
+
+const NOTHING_TO_UNDO = async (): Promise<void> => undefined;
+
+async function spendOneTarget(fastify: FastifyInstance, communityId: string, targetId: string): Promise<TargetSpend> {
+  const { cibleJour, paireJour } = seaux(fastify);
+  const clePaire = `${canonique(communityId)}:${canonique(targetId)}`;
+  const cleCible = `user:${canonique(targetId)}`;
+  const paire = await paireJour.consume(clePaire, 1);
+  if (paire?.retryAfter !== undefined) {
+    return { verdict: { allowed: true, retryAfter: 0 }, undo: NOTHING_TO_UNDO };
+  }
+  const undoPaire = async () => { if (paire) await paireJour.release(clePaire, 1); };
+  const cible = await cibleJour.consume(cleCible, 1);
+  const verdict = verdictOf([cible]);
+  if (!verdict.allowed) {
+    await undoPaire();
+    return { verdict, undo: NOTHING_TO_UNDO };
+  }
+  return {
+    verdict,
+    undo: async () => {
+      await undoPaire();
+      if (cible) await cibleJour.release(cleCible, 1);
+    },
+  };
 }
 
 /**
  * Débite UN ajout qui va écrire sur le seau de la personne AJOUTÉE, tous acteurs
- * confondus. La clé est l'ObjectId CANONIQUE (minuscules) : la base décode
- * l'hexadécimal sans tenir compte de la casse, et une clé brute laissait chaque
- * variante de casse ouvrir un seau neuf pour la même personne.
+ * confondus, une fois par paire (communauté, personne) et par jour (#20464). Les
+ * clés sont les ObjectId CANONIQUES (minuscules) : la base décode l'hexadécimal
+ * sans tenir compte de la casse, et une clé brute laissait chaque variante de
+ * casse ouvrir un seau neuf pour la même personne.
  */
 export async function spendCommunityAdditionOfTarget(
   fastify: FastifyInstance,
+  communityId: string,
   targetId: string
 ): Promise<CommunityAdditionVerdict> {
-  const { cibleJour } = seaux(fastify);
-  return verdictOf([await cibleJour.consume(`user:${targetId.trim().toLowerCase()}`, 1)]);
+  return (await spendOneTarget(fastify, communityId, targetId)).verdict;
+}
+
+/**
+ * Débite un LOT d'entrées sans accord (#20464) : `targetIds` sont les personnes
+ * qui vont ENTRER (pas les membres actifs, pas l'acteur lui-même). Tout ou rien :
+ * un refus rend ce que le lot a pris aux cibles et ne laisse à l'acteur qu'une
+ * tentative.
+ */
+export async function spendCommunityAdditionBatch(
+  fastify: FastifyInstance,
+  batch: { readonly actorId: string; readonly communityId: string; readonly targetIds: readonly string[] }
+): Promise<CommunityAdditionVerdict> {
+  const targets = [...new Set(batch.targetIds.map(canonique))];
+  if (targets.length === 0) return { allowed: true, retryAfter: 0 };
+  const byActor = await spendCommunityAdditionByActor(fastify, batch.actorId, targets.length);
+  if (!byActor.allowed) {
+    await releaseByActor(fastify, batch.actorId, targets.length - 1);
+    return byActor;
+  }
+  const spent: TargetSpend[] = [];
+  for (const targetId of targets) {
+    const spend = await spendOneTarget(fastify, batch.communityId, targetId);
+    if (!spend.verdict.allowed) {
+      await Promise.all(spent.map((s) => s.undo()));
+      await releaseByActor(fastify, batch.actorId, targets.length - 1);
+      return spend.verdict;
+    }
+    spent.push(spend);
+  }
+  return { allowed: true, retryAfter: 0 };
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {
