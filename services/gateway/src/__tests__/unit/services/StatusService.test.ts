@@ -174,6 +174,45 @@ describe('StatusService', () => {
 
   // ── updateAnonymousLastSeen ──────────────────────────────────────────────
 
+  // ── jours d'activité des trente premiers jours (#20620) ─────────────────
+
+  describe('jours d’activité depuis l’inscription', () => {
+    const youngAccount = (activeDays: number[]) => {
+      const prisma = makePrisma() as unknown as { user: { update: jest.Mock<any>; updateMany: jest.Mock<any> } };
+      prisma.user.update.mockResolvedValue({ createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 - 60_000), signupActiveDays: activeDays });
+      prisma.user.updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+      return prisma;
+    };
+    const settle = async () => {
+      for (let i = 0; i < 6; i++) await Promise.resolve();
+    };
+
+    it.each([
+      ['une activité', (sut: StatusService) => sut.updateUserLastSeen('user-1')],
+      ['une connexion', (sut: StatusService) => sut.updateUserLastActive('user-1')],
+      ['un battement de socket', (sut: StatusService) => sut.forceUpdateLastSeen('user-1', false)],
+    ])('%s garde le jour d’activité d’un compte jeune', async (_label, act) => {
+      const prisma = youngAccount([0, 1]);
+      const sut = makeSut(prisma as unknown as PrismaClient);
+
+      await act(sut);
+      await settle();
+
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ select: { createdAt: true, signupActiveDays: true } }));
+      expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { signupActiveDays: { push: 3 } } });
+    });
+
+    it('n’écrit rien de plus quand le jour est déjà gardé', async () => {
+      const prisma = youngAccount([0, 3]);
+      const sut = makeSut(prisma as unknown as PrismaClient);
+
+      await sut.updateUserLastSeen('user-1');
+      await settle();
+
+      expect(prisma.user.updateMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateAnonymousLastSeen', () => {
     it('calls prisma.participant.update on first call', async () => {
       const prisma = makePrisma();

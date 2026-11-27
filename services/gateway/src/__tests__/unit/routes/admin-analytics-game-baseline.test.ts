@@ -27,7 +27,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 type Fixture = {
   readonly role: string;
-  readonly signups?: readonly { createdAt: Date; lastActiveAt: Date | null }[];
+  readonly signups?: readonly { createdAt: Date; lastActiveAt: Date | null; signupActiveDays?: number[] }[];
   readonly flames?: readonly Record<string, unknown>[];
   readonly offerings?: readonly { chestClaimedAt: Date | null }[];
   readonly ledger?: readonly { reason: string; delta: number; createdAt: Date }[];
@@ -153,6 +153,28 @@ describe('GET /game — le point de départ du Jeu (#20617)', () => {
     expect(args.where.day.gte).toBe(data.daily[0].day);
     expect(args.take).toEqual(expect.any(Number));
     expect(args.select).toEqual({ day: true, sparks: true, earners: true });
+  });
+
+  it('sert aussi le retour classique au jour N, lu des jours d’activité gardés (#20620)', async () => {
+    const signedUp = new Date(Date.now() - 40 * DAY);
+    const { app, prisma } = await appWith({
+      role: 'ADMIN',
+      signups: [
+        { createdAt: signedUp, lastActiveAt: new Date(signedUp.getTime() + 31 * DAY), signupActiveDays: [0, 1, 30] },
+        { createdAt: signedUp, lastActiveAt: new Date(signedUp.getTime() + 31 * DAY), signupActiveDays: [0, 9] },
+      ],
+    });
+
+    const [cohort] = (await app.inject({ method: 'GET', url: '/game' })).json().data.retention;
+
+    expect(cohort.day30).toEqual({ eligible: 2, returned: 2, rate: 100 });
+    expect(cohort.classic).toEqual({
+      day1: { eligible: 2, returned: 1, rate: 50 },
+      day7: { eligible: 2, returned: 0, rate: 0 },
+      day30: { eligible: 2, returned: 1, rate: 50 },
+    });
+    const [args] = prisma.user.findMany.mock.calls.find(([call]) => !('currentStreakDays' in (call as { where: object }).where)) as [{ select: Record<string, boolean> }];
+    expect(args.select).toEqual({ createdAt: true, lastActiveAt: true, signupActiveDays: true });
   });
 
   it('refuse un compte sans accès à l’administration', async () => {
