@@ -148,6 +148,28 @@ describe('#19946 — le repli de panne et le clair gardé ont chacun leur budget
     expect(await queue.size('u')).toBe(0);
   });
 
+  it("Redis en panne au drain : un même `new` posé dans les deux usages ne se rejoue qu'une fois", async () => {
+    const seals = { count: 0 };
+    const flakySealer: DeliveryQueueSealer = {
+      seal: async (queued) => {
+        seals.count += 1;
+        if (seals.count > 1) throw new Error('mongo down');
+        return { ...queued, sealedPayload: 'scelle' } as QueuedMessagePayload;
+      },
+      open: async (sealed) => ({ ...sealed, sealedPayload: undefined }),
+    };
+    const queue = new RedisDeliveryQueue(failingRedis(), flakySealer, {
+      soleInstance: { isSoleInstance: () => true },
+      unsealedBudget: { maxEntries: 100, maxBytes: 1024 * 1024 },
+    });
+    await queue.enqueue('u', entry('double'), { sealAtRest: true });
+    await queue.enqueue('u', { ...entry('double'), enqueuedAt: new Date().toISOString() }, { sealAtRest: true });
+
+    const drained = await queue.drain('u');
+
+    expect(drained.map((replayed) => replayed.messageId)).toEqual(['double']);
+  });
+
   it('la purge par message et le balayage des échues traversent les deux usages', async () => {
     const queue = bothIncidents();
     await queue.enqueue('a', entry('brule'));

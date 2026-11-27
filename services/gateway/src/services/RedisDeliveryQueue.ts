@@ -771,7 +771,9 @@ export class RedisDeliveryQueue {
     // order can disagree with chronological order. Returning unsorted here would
     // replay a re-added reaction (or a later edit) BEFORE an intervening remove,
     // converging the reconnecting offline user to a state the sender never had.
-    return [...memoryEntries].sort(byEnqueuedAt);
+    // Le tas a DEUX cartes depuis #19946 : une même identité peut vivre dans
+    // chacune (scellée au repli, puis gardée en clair), d'où le même repli.
+    return collapseCrossSliceDuplicates([...memoryEntries].sort(byEnqueuedAt));
   }
 
   async size(userId: string): Promise<number> {
