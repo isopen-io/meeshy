@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">Impostazioni per questa persona</string>
     <string name="circles_sheet_settings_unavailable">Presto disponibile</string>
     <string name="contacts_tab_circles">Cerchie</string>
+    <string name="circles_settings_block_together">Silenzia i suoi inviti «insieme»</string>
 </resources>
