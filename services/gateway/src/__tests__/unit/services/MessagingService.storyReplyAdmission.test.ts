@@ -83,6 +83,7 @@ jest.mock('../../../utils/logger', () => ({
 import { MessagingService } from '../../../services/MessagingService';
 import type { PrismaClient, Message } from '@meeshy/shared/prisma/client';
 import { resetParticipantLookupCache } from '../../../utils/participant-lookup-cache';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)', () => {
   let service: MessagingService;
@@ -179,7 +180,11 @@ describe('MessagingService.handleMessage — admission de storyReplyToId (#7882)
       },
       trackingLink: { updateMany: jest.fn() },
       messageAttachment: { findMany: jest.fn().mockResolvedValue([]) },
-      user: { findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) }
+      // L'admission d'une réponse à story passe par la porte de consommation,
+      // qui lit la séparation par blocage (#20717) : son `findFirst` manquait,
+      // et son absence refusait la réponse au lieu de lever. Les deux lectures
+      // déjà déclarées restent — aucune n'est bloquante ici.
+      user: { ...noBlockUserDelegate(), findUnique: jest.fn(), findMany: jest.fn().mockResolvedValue([]) }
     };
 
     service = new MessagingService(

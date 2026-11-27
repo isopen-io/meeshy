@@ -13,6 +13,7 @@
 import { describe, it, expect } from '@jest/globals';
 import { admitStoryReply } from '../../../services/messaging/storyReplyAdmission';
 import type { StoryReplyPrisma } from '../../../services/messaging/storyReplyAdmission';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 const CONVERSATION = '507f1f77bcf86cd799439a01';
 const STORY = '507f1f77bcf86cd799439b01';
@@ -68,6 +69,10 @@ const fauxPrisma = (post: PostRow, auteurMembre: ParticipantRow, monde: Monde = 
     postMention: { findUnique: async () => null },
     communityMember: { findMany: async () => [], findFirst: async () => null },
     postComment: { findFirst: async () => null },
+    // Le droit de VOIR la story citée passe par la porte de consommation, qui
+    // lit aussi la séparation par blocage (#20717) : ce monde dit l'amitié et
+    // l'appartenance, pas le blocage — personne n'y est bloqué.
+    user: noBlockUserDelegate(),
   };
   return { prisma: prisma as unknown as StoryReplyPrisma, calls };
 };
