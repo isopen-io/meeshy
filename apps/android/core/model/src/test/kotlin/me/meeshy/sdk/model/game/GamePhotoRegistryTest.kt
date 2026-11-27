@@ -30,7 +30,7 @@ class GamePhotoRegistryTest {
             """"treasuryPeakTier":$treasuryPeakTier,"moments":$moments}"""
 
     private fun game(photo: String?): GameBlock =
-        GameBlockParser.parse(block(overrides = mapOf("photo" to photo?.let(Json::parseToJsonElement))))!!
+        GameBlockParser.parse(block(overrides = mapOf("photo" to photo?.let { Json.parseToJsonElement(it) })))!!
 
     private fun registry(photo: String): GamePhotoBlock = game(photo).photo!!
 
