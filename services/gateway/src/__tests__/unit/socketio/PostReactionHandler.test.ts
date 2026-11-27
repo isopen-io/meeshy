@@ -130,6 +130,15 @@ function createMockPrisma() {
       findFirst: jest.fn(),
     },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    /* #20717 — le verdict de CONSOMMATION lit la séparation par blocage. Le
+       double la sert « aucun blocage », le cas NOMINAL de ces témoins ; sans
+       ce délégué la lecture lève et la garde refuse (fermée sur l'échec), ce
+       qui est le bon comportement et un mauvais harnais. */
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+    },
     friendRequest: {
       findFirst: jest.fn(),
     },
@@ -928,6 +937,69 @@ describe('PostReactionHandler', () => {
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    /**
+     * #20717 — LA SALLE D'UNE PUBLICATION `PUBLIC` NE S'OUVRE PLUS À QUI UN
+     * BLOCAGE SÉPARE DE SON AUTEUR.
+     *
+     * Le rang `PUBLIC` est le SEUL où ce témoin peut tomber : sur `FRIENDS` ou
+     * `ONLY`, l'amitié rompue ou la liste refuseraient déjà le lecteur, et
+     * l'assertion passerait sans rien dire de la séparation (leçon 261 — un
+     * témoin de rang s'écrit sur un rang autre que celui où la règle est
+     * redondante).
+     *
+     * Le refus est INDISTINCT (« Post not found ») : il ne révèle pas le
+     * blocage, exactement comme l'absence et la suppression.
+     */
+    it('test_handleJoinPost_publicPost_readerSeparatedByBlock_forbidden', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: ANOTHER_USER_ID });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    /**
+     * La MÊME porte garde la synchronisation des réactions : sans elle il
+     * suffisait de demander l'état au lieu de s'abonner.
+     */
+    it('test_handleRequestSync_publicPost_readerSeparatedByBlock_forbidden', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findFirst.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        isQuote: false,
+        repostOfId: null,
+        originalRepostOfId: null,
+      });
+      mockPrisma.user.findFirst.mockResolvedValue({ id: ANOTHER_USER_ID });
+
+      await handler.handleRequestSync(socket as any, data, callback);
+
+      expect(mockReactionService.getPostReactions).not.toHaveBeenCalled();
       expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
     });
 

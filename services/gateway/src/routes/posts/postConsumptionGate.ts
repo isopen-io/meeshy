@@ -1,6 +1,7 @@
 import { canUserConsumePost, loadPostAcl, type PostAclPrisma, type PostVisibilityRecord } from '../../services/posts/postVisibility';
 import { NOT_DELETED } from '../../services/posts/postIncludes';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
+import { getBlockedUserIdsAmong } from '../../utils/blocking';
 
 /**
  * La porte d'audience des points d'entrée qui TOUCHENT un post sans le rendre :
@@ -119,9 +120,28 @@ export async function consumablePostAuthors(
     select: POST_ACL_SLICE,
   });
 
+  // #20717 — la séparation par blocage est une question par LECTEUR, pas par
+  // publication : elle se lit UNE fois pour tous les auteurs distincts du lot
+  // (`getBlockedUserIdsAmong`, deux requêtes bornées), jamais une fois par
+  // post. Sans cette passe, le verdict la lirait lui-même cinquante fois sur
+  // un chemin appelé à chaque défilement — et la propriété que l'en-tête de
+  // cette fonction promet (« un post PUBLIC ou dont on est l'auteur ne coûte
+  // aucune requête de plus ») serait perdue.
+  //
+  // FERMÉ sur l'échec, et le lot ENTIER : une lecture de séparation qui ne
+  // conclut pas ne permet de servir AUCUN id, puisqu'on ne sait plus lesquels
+  // sont séparés. Un id ainsi écarté sort de l'ensemble par la même porte qu'un
+  // id inconnu, supprimé ou refusé — la propriété que ce module garantit.
+  let separatedAuthorIds: ReadonlySet<string>;
+  try {
+    separatedAuthorIds = await getBlockedUserIdsAmong(prisma, userId, posts.map((post: PostVisibilityRecord) => post.authorId));
+  } catch {
+    return new Map<string, string>();
+  }
+
   const verdicts = await Promise.all(
     posts.map(async (post: PostVisibilityRecord): Promise<readonly [PostVisibilityRecord, boolean]> =>
-      [post, await canUserConsumePost(prisma, post, userId)] as const),
+      [post, await canUserConsumePost(prisma, post, userId, { separatedAuthorIds })] as const),
   );
 
   return new Map(verdicts.filter(([, allowed]) => allowed).map(([post]) => [post.id, post.authorId] as const));
