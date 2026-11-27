@@ -6,6 +6,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
 import type { CommunityMemberAnnounce } from '../community-member-broadcast';
 import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
+import type { CommunityAdditionVerdict } from '../../utils/community-addition-budget';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
@@ -55,15 +56,43 @@ export async function admitSalonOccupants(
   request: SalonAdoptionRequest,
   announce: CommunityMemberAnnounce,
 ): Promise<readonly string[]> {
+  const admission = await admitSalonOccupantsUnderBudget(prisma, request, announce, async () => ALLOWED);
+  return admission.kind === 'admitted' ? admission.outsiders : [];
+}
+
+/** Ce que la bascule fait de ses occupants : ils entrent (et les autres sortiront), ou le budget refuse tout. */
+export type SalonOccupantAdmission =
+  | { readonly kind: 'admitted'; readonly outsiders: readonly string[] }
+  /** `outsiders` : tous ceux que la bascule ne fait pas entrer — après une bascule déjà écrite, ils sortent. */
+  | { readonly kind: 'refused'; readonly verdict: CommunityAdditionVerdict; readonly outsiders: readonly string[] };
+
+/** Débite les personnes que la bascule va faire entrer, AVANT toute écriture. */
+export type SalonOccupantBudget = (entrants: readonly string[]) => Promise<CommunityAdditionVerdict>;
+
+const ALLOWED: CommunityAdditionVerdict = { allowed: true, retryAfter: 0 };
+
+/**
+ * `admitSalonOccupants` sous le budget des ajouts sans accord (#20694) : faire
+ * entrer les occupants des salons, c'est les ajouter à la communauté. Le budget
+ * se paie au nombre d'ENTRANTS (un ancien membre ne revient pas, un compte non
+ * ajoutable sort : ni l'un ni l'autre n'est ajouté) ; refusé, rien n'est écrit
+ * et la bascule ne se fait pas.
+ */
+export async function admitSalonOccupantsUnderBudget(
+  prisma: SalonAdoptionPrisma,
+  request: SalonAdoptionRequest,
+  announce: CommunityMemberAnnounce,
+  spend: SalonOccupantBudget,
+): Promise<SalonOccupantAdmission> {
   const salons = await prisma.conversation.findMany({
     where: { communityId: request.communityId },
     select: { id: true },
   });
-  if (salons.length === 0) return [];
+  if (salons.length === 0) return { kind: 'admitted', outsiders: [] };
 
   const occupants = (await readSalonOccupants(prisma, salons.map((salon) => salon.id)))
     .filter((userId) => userId !== request.createdBy);
-  if (occupants.length === 0) return [];
+  if (occupants.length === 0) return { kind: 'admitted', outsiders: [] };
 
   const rows = await prisma.communityMember.findMany({
     where: { communityId: request.communityId, userId: { in: occupants } },
@@ -74,10 +103,12 @@ export async function admitSalonOccupants(
   );
   const former = occupants.filter((userId) => rowOf.has(userId) && rowOf.get(userId)?.isActive !== true);
   const strangers = occupants.filter((userId) => !rowOf.has(userId));
-  if (strangers.length === 0) return former;
+  if (strangers.length === 0) return { kind: 'admitted', outsiders: former };
 
   const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
   const admitted = strangers.filter((userId) => addable.has(userId));
+  const verdict = admitted.length > 0 ? await spend(admitted) : ALLOWED;
+  if (!verdict.allowed) return { kind: 'refused', verdict, outsiders: [...former, ...strangers] };
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
     reactivations: [],
@@ -85,7 +116,7 @@ export async function admitSalonOccupants(
   }, announce);
   // #18052 — qui entre l'apprend, au nom du créateur dont l'autorité l'a fait entrer.
   scheduleCommunityAddedAnnouncement(prisma, { communityId: request.communityId, actorId: request.createdBy, recipientIds: admitted });
-  return [...former, ...strangers.filter((userId) => !addable.has(userId))];
+  return { kind: 'admitted', outsiders: [...former, ...strangers.filter((userId) => !addable.has(userId))] };
 }
 
 /** La taille d'une page d'occupants (#16740) : une grande communauté ne se charge jamais d'un bloc. */
@@ -152,15 +183,27 @@ async function addableUnderCreator(
  * dans un salon entre la première passe et l'écriture (la communauté était
  * encore publique) ; puis tous ceux qui ne peuvent pas entrer sortent. Ne
  * rejette jamais.
+ *
+ * La seconde passe paie le MÊME budget que la première (#20694) : sans quoi des
+ * ajouts au salon lancés pendant la bascule entraient en masse sans débit. La
+ * bascule étant écrite, un retardataire que le budget refuse SORT des salons —
+ * il ne peut pas entrer sans payer. Sans `spend` (la bascule de l'équipe,
+ * dispensée), la passe n'est pas bornée.
  */
 export async function closeSalonsAfterSwitch(
   deps: SalonExitDeps & { readonly prisma: SalonAdoptionPrisma; readonly announce: CommunityMemberAnnounce },
-  request: SalonAdoptionRequest & { readonly outsiders: readonly string[]; readonly now: Date },
+  request: SalonAdoptionRequest & {
+    readonly outsiders: readonly string[];
+    readonly now: Date;
+    readonly spend?: SalonOccupantBudget;
+  },
 ): Promise<void> {
-  const late = await admitSalonOccupants(deps.prisma, request, deps.announce).catch((error: unknown) => {
-    logger.error('Late salon admission failed', { communityId: request.communityId, error });
-    return [] as readonly string[];
-  });
+  const late = await admitSalonOccupantsUnderBudget(deps.prisma, request, deps.announce, request.spend ?? (async () => ALLOWED))
+    .then((admission) => admission.outsiders)
+    .catch((error: unknown) => {
+      logger.error('Late salon admission failed', { communityId: request.communityId, error });
+      return [] as readonly string[];
+    });
   const userIds = [...new Set([...request.outsiders, ...late])];
   if (userIds.length === 0) return;
   await exitSalonOutsiders(deps, { communityId: request.communityId, userIds, now: request.now });

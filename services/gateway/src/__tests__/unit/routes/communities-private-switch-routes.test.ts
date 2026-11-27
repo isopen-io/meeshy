@@ -33,6 +33,12 @@ jest.mock('../../../services/conversations/communitySalonAdoption', () => {
   return {
     ...actual,
     admitSalonOccupants: (...args: unknown[]) => admitSalonOccupants(...args),
+    // #20694 — le créateur passe par la variante sous budget ; son budget a ses propres témoins
+    // (`communities/private-switch-addition-budget-20694.test.ts`), celui-ci garde l'ORDRE.
+    admitSalonOccupantsUnderBudget: async (...args: unknown[]) => ({
+      kind: 'admitted',
+      outsiders: await admitSalonOccupants(...args.slice(0, 3)),
+    }),
     closeSalonsAfterSwitch: (...args: unknown[]) => closeSalonsAfterSwitch(...args),
   };
 });

@@ -7,6 +7,7 @@
  * magasin mémoire (aucun Redis) : c'est le quota réel qui parle.
  */
 import { jest } from '@jest/globals';
+import { notificationRawStore, type StoredNotification } from './notification-raw-store';
 import Fastify from 'fastify';
 import { relationStore, type RelationStore } from './user-relation-store';
 import { AUTRE, MOI, NOW, TIERS, lien } from './relation-app';
@@ -28,6 +29,8 @@ export type Personne = {
 };
 
 export type BringAppOptions = {
+  /** Les lignes `Notification` déjà en base (#20542). */
+  readonly notifications?: readonly StoredNotification[];
   readonly liens?: ReadonlyArray<Record<string, unknown>>;
   readonly demandes?: ReadonlyArray<Record<string, unknown>>;
   readonly personnes?: Readonly<Record<string, Personne>>;
@@ -35,6 +38,8 @@ export type BringAppOptions = {
 };
 
 export type BringTestApp = {
+  /** Les lignes `Notification` restées en base après les appels (#20542). */
+  readonly notifications: () => readonly StoredNotification[];
   readonly store: RelationStore;
   readonly emissions: Emission[];
   readonly reglages: Map<string, Record<string, unknown>>;
@@ -86,7 +91,9 @@ export async function buildBringApp(
     }),
   );
 
+  const notes = notificationRawStore(options.notifications ?? []);
   const prisma = {
+    notification: notes.prisma.notification,
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
       // Honore `blockedUserIds: { has }` (qui m'a bloqué ?) : sans lui, tous les candidats se lisaient bloqués.
@@ -171,7 +178,7 @@ export async function buildBringApp(
   await app.ready();
 
   return {
-    store, emissions, reglages, users, prisma,
+    store, emissions, reglages, users, prisma, notifications: notes.rows,
     call: async (method, url, body, as) => {
       acting = as ?? MOI;
       const res = await app.inject({
