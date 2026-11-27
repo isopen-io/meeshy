@@ -301,7 +301,7 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 330,
+      "total": 352,
       "firstScreen": 61
     },
     "settings-appareils-chiffres": {
@@ -640,15 +640,15 @@
     },
     "settings": {
       "de": {
-        "total": 307,
-        "firstScreen": 61
-      },
-      "a": {
         "total": 330,
         "firstScreen": 61
       },
-      "motif": "La rangée « Recevoir les invitations « ensemble » » (#17990) — l'interrupteur global des invitations à regarder ou écouter ensemble, rangé sous « Recevoir des Bring » — porte sa légende visible, même convention que ses voisines « Un de mes Sangs tout près » et « Recevoir des Bring »",
-      "issue": 17990
+      "a": {
+        "total": 352,
+        "firstScreen": 61
+      },
+      "motif": "La rangée « Recevoir le talkie » (#20700) — l'interrupteur global du talkie, rangé sous « Recevoir les invitations « ensemble » » — porte sa légende visible, même convention que ses voisines « Recevoir des Bring » et « Recevoir les invitations « ensemble » »",
+      "issue": 20700
     }
   }
 }
