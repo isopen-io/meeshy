@@ -32,6 +32,12 @@ describe('scanSource — ce que le gate attrape', () => {
     expect(kinds('const q = window.matchMedia(\n  "(prefers-color-scheme: dark)",\n);')).toEqual(['system-query']);
   });
 
+  test('une requête du schéma rangée dans une constante ou appelée en chaînage optionnel', () => {
+    expect(kinds("const DARK_QUERY = '(prefers-color-scheme: dark)';\nmatchMedia(DARK_QUERY);")).toEqual(['system-query']);
+    expect(kinds("const q = window.matchMedia?.('(prefers-color-scheme: dark)');")).toEqual(['system-query']);
+    expect(kinds("const q = window['matchMedia']('(prefers-color-scheme: light)');")).toEqual(['system-query']);
+  });
+
   test('une classe de schéma posée, retirée ou basculée', () => {
     expect(kinds("document.documentElement.classList.add('dark');")).toEqual(['scheme-class']);
     expect(kinds('root.classList.toggle("light", on);')).toEqual(['scheme-class']);

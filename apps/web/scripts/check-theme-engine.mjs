@@ -16,7 +16,9 @@
  *
  * CE QU'IL REFUSE, dans le CODE (les commentaires sont blanchis d'abord) :
  *
- *   system-query     matchMedia('(prefers-color-scheme: …)')
+ *   system-query     toute requête `prefers-color-scheme` du CODE — en argument
+ *                    de matchMedia, rangée dans une constante, appelée par
+ *                    `matchMedia?.(…)` — hors d'un attribut `media=`
  *   scheme-class     classList.add|remove|toggle|replace('dark' | 'light', …)
  *   theme-attribute  setAttribute('data-theme', …), dataset.theme = …
  *
@@ -80,7 +82,10 @@ const withoutComments = (text) => {
 
 const QUOTE = '[\'"`]';
 const PATTERNS = [
-  { kind: 'system-query', pattern: new RegExp(`matchMedia\\s*\\(\\s*${QUOTE}[^'"\`]*prefers-color-scheme`, 'g') },
+  {
+    kind: 'system-query',
+    pattern: new RegExp(`(?<!media\\s*=\\s*\\{?\\s*${QUOTE}\\s*\\(?\\s*)prefers-color-scheme`, 'g'),
+  },
   {
     kind: 'scheme-class',
     pattern: new RegExp(`classList\\s*\\.\\s*(?:add|remove|toggle|replace)\\s*\\(\\s*${QUOTE}(?:dark|light)${QUOTE}`, 'g'),
