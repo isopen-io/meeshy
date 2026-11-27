@@ -87,9 +87,9 @@ describe('summarizeDailyGameCounters', () => {
     const daily = summarizeDailyGameCounters({ offeringsOpenedAt: [], ledger: [], days: 3, now });
 
     expect(daily).toEqual([
-      { day: '2026-11-24', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
-      { day: '2026-11-25', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
-      { day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 },
+      { day: '2026-11-24', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0, sparksEarned: 0, sparkEarners: 0 },
+      { day: '2026-11-25', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0, sparksEarned: 0, sparkEarners: 0 },
+      { day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0, sparksEarned: 0, sparkEarners: 0 },
     ]);
   });
 
@@ -107,8 +107,8 @@ describe('summarizeDailyGameCounters', () => {
     });
 
     expect(daily).toEqual([
-      { day: '2026-11-25', offeringsOpened: 1, meeshesMinted: 3, meeshesSpent: 0 },
-      { day: '2026-11-26', offeringsOpened: 2, meeshesMinted: 0, meeshesSpent: 3 },
+      { day: '2026-11-25', offeringsOpened: 1, meeshesMinted: 3, meeshesSpent: 0, sparksEarned: 0, sparkEarners: 0 },
+      { day: '2026-11-26', offeringsOpened: 2, meeshesMinted: 0, meeshesSpent: 3, sparksEarned: 0, sparkEarners: 0 },
     ]);
   });
 
@@ -120,7 +120,25 @@ describe('summarizeDailyGameCounters', () => {
       now,
     });
 
-    expect(daily).toEqual([{ day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0 }]);
+    expect(daily).toEqual([{ day: '2026-11-26', offeringsOpened: 0, meeshesMinted: 0, meeshesSpent: 0, sparksEarned: 0, sparkEarners: 0 }]);
+  });
+
+  it('sert les étincelles gagnées et les joueurs qui en ont gagné, par jour UTC, zéro sans seau (#20619)', () => {
+    const daily = summarizeDailyGameCounters({
+      offeringsOpenedAt: [],
+      ledger: [],
+      sparksDays: [
+        { day: '2026-11-26', sparks: 340, earners: 4 },
+        { day: '2026-11-20', sparks: 99, earners: 9 },
+      ],
+      days: 2,
+      now,
+    });
+
+    expect(daily.map(({ day, sparksEarned, sparkEarners }) => ({ day, sparksEarned, sparkEarners }))).toEqual([
+      { day: '2026-11-25', sparksEarned: 0, sparkEarners: 0 },
+      { day: '2026-11-26', sparksEarned: 340, sparkEarners: 4 },
+    ]);
   });
 });
 

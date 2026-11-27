@@ -27,6 +27,13 @@ export type SignupActivityRow = {
   readonly lastActiveAt: Date;
 };
 
+/** Un document du seau quotidien des étincelles (#20619) : jour UTC, somme des gains, joueurs qui en ont gagné. */
+export type SparksDayRow = {
+  readonly day: string;
+  readonly sparks: number;
+  readonly earners: number;
+};
+
 export type MeeshLedgerRow = {
   readonly reason: string;
   readonly delta: number;
@@ -79,6 +86,8 @@ export function summarizeRollingRetention(params: { readonly rows: readonly Sign
     }));
 }
 
+const countOf = (value: number | undefined): number => (typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0);
+
 const sumOf = (rows: readonly MeeshLedgerRow[] | undefined, reason: string): number =>
   (rows ?? []).filter((row) => row.reason === reason).reduce((total, row) => total + Math.abs(row.delta), 0);
 
@@ -86,11 +95,13 @@ const sumOf = (rows: readonly MeeshLedgerRow[] | undefined, reason: string): num
 export function summarizeDailyGameCounters(params: {
   readonly offeringsOpenedAt: readonly Date[];
   readonly ledger: readonly MeeshLedgerRow[];
+  readonly sparksDays?: readonly SparksDayRow[];
   readonly days: number;
   readonly now: Date;
 }): GameDailyCounters[] {
   const offeringsByDay = groupBy(params.offeringsOpenedAt.filter(isReadableDate), utcDay);
   const ledgerByDay = groupBy(params.ledger.filter((row) => isReadableDate(row.createdAt)), (row) => utcDay(row.createdAt));
+  const sparksByDay = new Map((params.sparksDays ?? []).map((row) => [row.day, row] as const));
 
   return Array.from({ length: Math.max(0, params.days) }, (_, index) => {
     const day = utcDay(new Date(params.now.getTime() - (params.days - 1 - index) * DAY_MS));
@@ -100,6 +111,8 @@ export function summarizeDailyGameCounters(params: {
       offeringsOpened: offeringsByDay.get(day)?.length ?? 0,
       meeshesMinted: sumOf(ledger, 'mint'),
       meeshesSpent: sumOf(ledger, 'spend'),
+      sparksEarned: countOf(sparksByDay.get(day)?.sparks),
+      sparkEarners: countOf(sparksByDay.get(day)?.earners),
     };
   });
 }
