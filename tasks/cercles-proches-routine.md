@@ -2020,3 +2020,19 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : #20542 (une alerte « un Sang s'approche » ne laisse pas de copie)
+
+- Reprise : aucune PR de la routine ouverte ; #20417 et #20463 fusionnées le 23, #20249 et #19884 fermées. Les lots
+  iOS de la position (#20416 point 2, #20308, #20054, #20056) CÈDENT : la PR #20514 (brouillon d'une autre session)
+  découpe `SharedLocationSharingCenter.swift` et ses voisins, les mêmes fichiers.
+- Lot : #20542, constat C3 de l'audit de #20540, passerelle seule (aucun client ne garde ces lignes à part).
+  `bloodProximityNoticeRetention.ts` : les alertes échues partent (balayage horaire, armé par `BLOOD_LOCATION_ENABLED`,
+  éteint en production : aucune purge de production sans décision) ; l'effacement de l'historique efface les alertes
+  qui nomment la personne chez tous ses Sangs et celles qu'elle a reçues (une purge en échec fait échouer
+  l'effacement) ; retirer `proximityShared`, ou tomber sous le Sang (baisse, rupture, course du rituel, blocage),
+  efface chez l'autre les alertes qu'il tenait de ce sens. Retraits silencieux. Choix : purge ciblée plutôt qu'index
+  TTL, pour ne pas poser de migration ni toucher aux autres types de notification.
+- Témoins jugés sur des documents (`helpers/notification-raw-store.ts`), ROUGE prouvé par mutation sur chaque chemin.
+- Prochain lot : les lots iOS de la position quand #20514 est fusionnée ou abandonnée ; sinon #19888 (web, carte des
+  cercles) ou #20130 (témoin de latence du talkie sans marge).
