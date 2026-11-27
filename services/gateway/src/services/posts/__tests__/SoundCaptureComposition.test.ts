@@ -2,6 +2,14 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { PostService } from '../../PostService';
 import type { SoundCaptureService, CaptureContext } from '../SoundCaptureService';
 
+// #13422 — ces bouchons ne modélisent pas l'existence des PostMedia : la garde
+// des médias disparus a ses propres témoins (unpublishableMedia.test.ts,
+// PostService.vanishedMedia.test.ts) et passe ici les ids tels quels.
+jest.mock('../unpublishableMedia', () => ({
+  ...(jest.requireActual('../unpublishableMedia') as object),
+  requirePublishableMedia: async (_prisma: unknown, ids: unknown) => ids,
+}));
+
 /**
  * La COMPOSITION `PostService` → `SoundCaptureService`, exécutée pour de vrai.
  *

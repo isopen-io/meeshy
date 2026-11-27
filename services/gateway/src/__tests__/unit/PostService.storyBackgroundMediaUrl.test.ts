@@ -12,6 +12,14 @@ import { MediaService } from '../../services/MediaService';
 import { PostType } from '@meeshy/shared/prisma/client';
 import { createMockPrisma, makePost, createMockPostReactionService } from './post-service-mocks';
 
+// #13422 — ces bouchons ne modélisent pas l'existence des PostMedia : la garde
+// des médias disparus a ses propres témoins (unpublishableMedia.test.ts,
+// PostService.vanishedMedia.test.ts) et passe ici les ids tels quels.
+jest.mock('../../services/posts/unpublishableMedia', () => ({
+  ...(jest.requireActual('../../services/posts/unpublishableMedia') as object),
+  requirePublishableMedia: async (_prisma: unknown, ids: unknown) => ids,
+}));
+
 jest.mock('../../services/posts/PostAudioService', () => ({
   PostAudioService: {
     shared: { processPostAudio: jest.fn().mockReturnValue(Promise.resolve()) },

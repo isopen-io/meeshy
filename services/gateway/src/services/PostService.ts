@@ -11,6 +11,7 @@ import { postWebUrl } from './posts/postWebUrl';
 import { STORY_VIEW_RESET } from './posts/postCounters';
 import { readPostViews, readViewerInteractions, type ViewerListRequest } from './posts/viewerEngagement';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
+import { requirePublishableMedia } from './posts/unpublishableMedia';
 import { claimPublicationMedia, publishableMedia } from './posts/siblingPublicationMedia';
 import { borrowedSoundReelEntries } from './posts/storyReelCompanion';
 import { applyMediaOrder } from './posts/mediaOrder';
@@ -299,8 +300,8 @@ export class PostService {
     // `post.create`, avec la MÊME garde de propriété que le rattachement plus
     // bas, pour classifier exactement ce qui sera réellement attaché.
     // Médias que seul le canvas référence (#8012) — posts/canvasMediaClaims.ts.
-    // Jamais sur une republication : son canvas désigne les médias de la SOURCE.
-    if (!repostOfId) data = { ...data, mediaIds: withCanvasMedia(data.mediaIds, data.storyEffects) };
+    // Jamais sur une republication : son canvas désigne les médias de la SOURCE. Un média disparu refuse (#13422).
+    if (!repostOfId) data = { ...data, mediaIds: await requirePublishableMedia(this.prisma, withCanvasMedia(data.mediaIds, data.storyEffects), userId) };
     let effectiveType = data.type;
     if (data.type === PostType.REEL) {
       const claimableMedia = await publishableMedia(this.prisma, data.mediaIds ?? [], userId);

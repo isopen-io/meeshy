@@ -21,6 +21,14 @@ import { MediaService } from '../../services/MediaService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 
+// #13422 — ces bouchons ne modélisent pas l'existence des PostMedia : la garde
+// des médias disparus a ses propres témoins (unpublishableMedia.test.ts,
+// PostService.vanishedMedia.test.ts) et passe ici les ids tels quels.
+jest.mock('../../services/posts/unpublishableMedia', () => ({
+  ...(jest.requireActual('../../services/posts/unpublishableMedia') as object),
+  requirePublishableMedia: async (_prisma: unknown, ids: unknown) => ids,
+}));
+
 // PostAudioService uses a singleton that requires initialization — mock it
 // entirely so these tests don't depend on ZMQ / SocialEventsHandler setup.
 jest.mock('../../services/posts/PostAudioService', () => ({

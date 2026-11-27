@@ -97,6 +97,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';
 import { unclaimedCanvasMediaIds } from '../../../../services/posts/storyEffectsV3';
+import { MediaNotClaimedError } from '../../../../services/posts/unpublishableMedia';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 const POST_ID = '507f1f77bcf86cd799439022';
@@ -310,6 +311,30 @@ describe('claim des stickers posés (O8) — sous CANVAS_V3_WRITE_STRICT', () =>
 
     expect(res.statusCode).toBe(201);
     expect(mockCreatePost).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+});
+
+describe('un média demandé qui a disparu (#13422) — refus dit, jamais une publication amputée', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    delete process.env.CANVAS_V3_WRITE_STRICT;
+  });
+
+  it('createPost refuse ⇒ 400 MEDIA_NOT_CLAIMED qui nomme les médias à renvoyer', async () => {
+    mockCreatePost.mockRejectedValue(new MediaNotClaimedError([CARRIER_MEDIA_ID]));
+    const app = await buildApp();
+
+    const res = await app.inject({
+      method: 'POST', url: '/posts',
+      payload: { type: 'STORY', mediaIds: [CARRIER_MEDIA_ID] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.success).toBe(false);
+    expect(body.code).toBe('MEDIA_NOT_CLAIMED');
+    expect(body.mediaIds).toEqual([CARRIER_MEDIA_ID]);
     await app.close();
   });
 });

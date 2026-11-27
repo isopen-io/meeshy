@@ -70,6 +70,7 @@ import { announceCitedPostWithdrawal } from '../../socketio/announceCitedPostWit
 import { logError, logWarn } from '../../utils/logger.js';
 import { isBlockedWithAny } from '../../utils/blocking';
 import { mayPublishInCommunity } from '../../services/posts/communityFeed';
+import { MEDIA_NOT_CLAIMED, MediaNotClaimedError } from '../../services/posts/unpublishableMedia';
 import { OnlyUnlinkedBudgetRefused, refuseOnlyUnlinkedBudget, releaseOnlyUnlinkedBudget, spendOnlyUnlinkedBudget } from './onlyUnlinkedBudget';
 import { spendOnlyUnlinkedBudgetOnEdit } from './onlyUnlinkedBudgetOnEdit';
 
@@ -610,6 +611,9 @@ export function registerCoreRoutes(
         return sendError(reply, 422, 'The composition does not qualify as a reel', { code: REEL_NOT_QUALIFIED });
       }
       if (error instanceof OnlyUnlinkedBudgetRefused) return refuseOnlyUnlinkedBudget(reply, error.verdict);
+      if (error instanceof MediaNotClaimedError) {
+        return sendBadRequest(reply, 'A requested media is gone - upload it again', { code: MEDIA_NOT_CLAIMED, details: { mediaIds: error.mediaIds } });
+      }
       // Le cmid a bien été appliqué, mais son résultat n'est plus relisible
       // (contenu supprimé, expiré, ou hors de la tranche ACL du lecteur) et
       // l'op DIVERGE — la rejouer recréerait une ligne que l'auteur a fait
