@@ -11,6 +11,8 @@ public nonisolated enum StickerAccessibilityID {
     public static func tab(_ id: String) -> String { "sticker.sheet.\(id)" }
     public static func mee(_ id: String) -> String { "sticker.mee.\(id)" }
     public static func instant(_ id: String) -> String { "sticker.instant.\(id)" }
+    /// Le champ Météo des Instants (#9113).
+    public static let instantWeatherField = "sticker.instant.weather.field"
     public static func pack(_ pack: String, item: String) -> String { "sticker.pack.\(pack).\(item)" }
     public static func emoji(_ emoji: String) -> String { "sticker.emoji.\(emoji)" }
     public static func library(_ id: String) -> String { "sticker.library.\(id)" }

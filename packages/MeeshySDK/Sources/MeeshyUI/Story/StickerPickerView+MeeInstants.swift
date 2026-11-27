@@ -5,11 +5,8 @@ import MeeshySDK
 
 extension StickerPickerView {
 
-    /// **Mee et Meo qui écrivent tes mots, ton lieu, l'heure ou la météo**
-    /// Ils lisent ce que l'onglet sait déjà :
-    /// les mots tapés dans son champ, le lieu choisi, l'heure de l'ouverture ;
-    /// la météo garde la valeur de chaque sticker. Les vignettes montrent ce
-    /// qui partira.
+    /// **Mee et Meo écrivent tes mots, ton lieu, l'heure et la météo écrite
+    /// sous son titre (#9113)** ; les vignettes montrent ce qui partira.
     ///
     /// Chaque ligne est un enfant DIRECT de la pile paresseuse de la feuille —
     /// une pile imbriquée ne créait pas ses rangées au-delà de la première
@@ -35,6 +32,9 @@ extension StickerPickerView {
                         .font(MeeshyFont.relative(13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
                         .padding(.top, Self.instantTitlePull)
+                    if kind == .meteo {
+                        MeeInstantWeatherField(text: $typedInstantWeather).padding(.top, Self.instantRowPull)
+                    }
                 case .instants(let instants):
                     instantRow(instants, typed: typed, pick: meeInstantPick)
                         .padding(.top, Self.instantRowPull)
@@ -49,11 +49,10 @@ extension StickerPickerView {
 
     /// Ce que l'onglet sait déjà, rangé par emplacement.
     var meeInstantTypedSlots: [MeeSlot: String] {
-        var typed: [MeeSlot: String] = [:]
-        typed[.message] = typedStickerTextTrimmed
-        typed[.place] = currentPlace?.name
-        typed[.time] = StickerSlotFiller.timeSlots(at: openedAt)[StickerSlotFiller.timeSlot]
-        return typed
+        MeeInstantTyping.slots(message: typedStickerTextTrimmed,
+                               place: currentPlace?.name,
+                               time: StickerSlotFiller.timeSlots(at: openedAt)[StickerSlotFiller.timeSlot],
+                               weather: typedInstantWeather)
     }
 
     private func instantRow(_ instants: [MeeInstant], typed: [MeeSlot: String],

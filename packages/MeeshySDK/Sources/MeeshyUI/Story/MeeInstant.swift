@@ -20,6 +20,20 @@ nonisolated public enum MeeSlot: String, CaseIterable, Hashable, Sendable {
     }
 }
 
+/// **Ce que l'auteur a saisi pour les Instants, rangé par emplacement** —
+/// les quatre champs du web (`composer-mee-stickers.tsx`, `FIELDS`) : les mots,
+/// le lieu, l'heure et la météo (#9113). Une valeur vide ne s'écrit pas : la
+/// vignette garde alors la valeur par défaut de chaque sticker.
+nonisolated enum MeeInstantTyping {
+    static func slots(message: String?, place: String?, time: String?, weather: String?) -> [MeeSlot: String] {
+        let pairs: [(MeeSlot, String?)] = [(.message, message), (.place, place), (.time, time), (.weather, weather)]
+        return Dictionary(uniqueKeysWithValues: pairs.compactMap { slot, value in
+            guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+            return (slot, value)
+        })
+    }
+}
+
 /// **Un Instant** : un Mee ou un Meo qui écrit, au moment de l'envoi, un
 /// message, l'heure, le lieu ou la météo.
 ///

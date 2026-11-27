@@ -89,6 +89,26 @@ final class MeeInstantCatalogTests: XCTestCase {
         XCTAssertNil(plage.shown(.message, in: [:]))
     }
 
+    /// **La météo se SAISIT sur iOS, comme sur le web** (#9113) : ce que
+    /// l'auteur écrit dans le champ Météo part dans `slots.weather` d'un
+    /// Instant météo et se montre dans sa vignette avant l'envoi.
+    func test_typedWeather_reachesTheWeatherInstant_andItsThumbnail() throws {
+        let soleil = try instant("instant-soleil")
+        let typed = MeeInstantTyping.slots(message: "", place: "Biarritz", time: "10:00", weather: "  Brume légère ")
+        XCTAssertEqual(soleil.sentSlots(typed), [.weather: "Brume légère", .place: "Biarritz"])
+        XCTAssertEqual(soleil.shown(.weather, in: typed), "Brume légère")
+        XCTAssertEqual(soleil.messageSticker(slots: typed).slots["weather"], "Brume légère")
+    }
+
+    /// Sans saisie, chaque Instant météo garde sa valeur à lui : rien ne part
+    /// pour la météo, et la vignette montre « Grand soleil ».
+    func test_blankWeather_keepsTheStickerDefault() throws {
+        let soleil = try instant("instant-soleil")
+        let typed = MeeInstantTyping.slots(message: nil, place: nil, time: nil, weather: "   ")
+        XCTAssertNil(soleil.sentSlots(typed)[.weather])
+        XCTAssertEqual(soleil.shown(.weather, in: typed), "Grand soleil")
+    }
+
     /// Les emplacements relus d'un message reçu : les clés inconnues tombent.
     func test_slotsOfAMessage_dropUnknownKeys() {
         XCTAssertEqual(MeeSlot.slots(of: ["place": "Biarritz", "date": "1er octobre"]), [.place: "Biarritz"])

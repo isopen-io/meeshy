@@ -100,9 +100,10 @@ public struct StickerPickerView: View {
     /// L'instant lu à l'OUVERTURE. Une seule lecture, figée ensuite : relire
     /// l'horloge à chaque rendu ferait bouger les vignettes sous le doigt.
     @State var openedAt: Date = .distantPast
-    /// Les mots que l'auteur tape dans l'onglet Texte (#4822) — les vignettes
-    /// se redessinent à la frappe (loi 7), et la pose les fige.
+    /// Les mots tapés dans l'onglet Texte (#4822) et la météo des Instants
+    /// (#9113) : les vignettes se redessinent à la frappe (loi 7), la pose les fige.
     @State var typedStickerText: String = ""
+    @State var typedInstantWeather: String = ""
 
     public init(onStickerSelected: @escaping (String) -> Void,
                 onLibraryStickerSelected: @escaping (StoryStickerLibraryItem) -> Void,
