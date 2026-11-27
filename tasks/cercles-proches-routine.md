@@ -2049,6 +2049,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
 - Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.
 
+## 2026-11-27 — réveil de 14 h : une alerte de proximité entre Sangs ne survit pas (#20542)
+
+- Reprise : #20417 (iOS de #20249) fusionnée le 23/11, #20463 (Android de #19883) aussi. Aucune PR de la routine
+  ouverte. Les lots iOS de position (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift` et `SharedLocationRosterStore.swift`, que la PR brouillon #20514 (découpage par
+  responsabilité, autre session) a déjà écrits : ce réveil cède et prend un lot serveur.
+- Lot : #20542. L'effacement de l'historique retire toute alerte `blood_proximity` qui nomme le titulaire (chez tous ses
+  Sangs) et celles de sa cloche ; retirer `location.proximity` à un Sang retire chez lui les alertes qui nomment le
+  titulaire. Lignes supprimées puis annoncées (`notification:deleted`, révocation push). Index TTL PARTIEL sur
+  `Notification.expiresAt` au seul type `blood_proximity` (`2026-11-27-notification-blood-proximity-ttl.mongodb.js`) :
+  à jouer sur le staging ; en production, feu vert du porteur et sauvegarde vérifiée d'abord.
+- PR : #20698 (vers `dev`). Suivis de l'audit : #20697.
+- Prochain lot : #20514 fusionnée ou abandonnée ⇒ iOS de #20416 / #20308, #20054, #20056 ; sinon un lot web/serveur
+  du jalon 2 (#20540 suites, #19888).
+
 ## 2026-11-27 — réveil de 13 h : #20542 (une alerte « un Sang s'approche » ne laisse pas de copie)
 
 - Reprise : aucune PR de la routine ouverte ; #20417 et #20463 fusionnées le 23, #20249 et #19884 fermées. Les lots
@@ -2067,5 +2082,13 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   Suivis ouverts : #20688 (départ d'un compte), #20689 (alerte en vol après un retrait).
 - Une session parallèle a fusionné le web de #19888 (épingles vivantes, #20693) pendant ce lot : les deux entrées du
   27 coexistent, `dev` gardée telle quelle à la fusion.
+- Collision sur #20542 même : #20698 (autre session) a fusionné à 13 h 34 un retrait jumeau
+  (`bloodProximityRetraction.ts`, index TTL partiel, lignes supprimées PUIS annoncées). Sa session a cédé et proposé
+  de converger ici. Site UNIQUE désormais `bloodProximityRetraction.ts` : sa primitive (`findRaw` + `deleteMany` +
+  annonce `notification:deleted` / révocation push, qui retire aussi la copie de l'écran du lecteur) sert les quatre
+  gestes ; ce lot y ajoute la chute sous le Sang (avant l'écriture) et la purge horaire, garde du TTL tant que sa
+  migration n'est pas jouée ; `bloodProximityNoticeRetention.ts` est retiré. Le silence cède à l'annonce : la ligne
+  disparaît de toute façon de la liste du lecteur, et l'annonce efface en plus la bannière. Le retrait du réglage
+  devient strict (une panne répond en erreur, le rejeu le solde) au lieu d'être avalé.
 - Prochain lot : le reste de #19888 (feuilles rangeables, talkie à l'appui long) ou #20130 ; iOS de la position dès que
   #20514 est fusionnée ou abandonnée.

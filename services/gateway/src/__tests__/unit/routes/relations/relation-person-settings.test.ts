@@ -42,6 +42,16 @@ jest.mock('../../../../services/PushNotificationService', () => ({
   }),
 }));
 
+const retraits: Array<Record<string, unknown>> = [];
+const retraitEnPanne = { active: false };
+jest.mock('../../../../services/bloodLocation/bloodProximityRetraction', () => ({
+  bloodProximityRetractorOf: () => async (scope: Record<string, unknown>) => {
+    if (retraitEnPanne.active) throw new Error('mongo injoignable');
+    retraits.push(scope);
+    return 0;
+  },
+}));
+
 import { relationsRoutes } from '../../../../routes/relations';
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
 import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
@@ -57,7 +67,7 @@ const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): 
 const regler = (app: BringTestApp, body: unknown) => app.call('PUT', `/api/v1/relations/${MOI}/settings`, body, AUTRE);
 const lire = (app: BringTestApp) => app.call('GET', `/api/v1/relations/${MOI}/settings`, undefined, AUTRE);
 
-beforeEach(() => { cache.clear(); pushes.length = 0; freezeClock(NOW); });
+beforeEach(() => { cache.clear(); pushes.length = 0; retraits.length = 0; retraitEnPanne.active = false; freezeClock(NOW); });
 afterEach(() => thawClock());
 
 describe('#13935 — talkieBlocked', () => {
@@ -362,31 +372,59 @@ describe('#20502 — un réglage écrit sur une paire bloquée répond EXACTEMEN
   );
 });
 
-describe('#20542 — retirer la proximité efface chez l’autre les alertes « un Sang s’approche » qu’il tenait de moi', () => {
-  const alerte = (id: string, userId: string, actorId: string) => ({ id, userId, type: 'blood_proximity', actor: { id: actorId }, expiresAt: new Date(NOW.getTime() + 3_600_000) });
-
-  it('mon retrait efface ses alertes qui me nomment, et laisse les miennes qui le nomment', async () => {
-    const app = await buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, {
-      liens: [lien('BLOOD', 'BLOOD')],
-      reglages: [{ ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, locationShared: true, locationHistoryShared: true, proximityShared: true }],
-      notifications: [alerte('moi-chez-autre', AUTRE, MOI), alerte('autre-chez-moi', MOI, AUTRE)],
-    });
-    const res = await app.call('PUT', `/api/v1/relations/${AUTRE}/settings`, { proximityShared: false }, MOI);
+describe('#20542 — retirer la proximité efface chez l\'autre les alertes qui me nomment', () => {
+  it('le retrait de proximityShared retire les alertes « tout près » qui me nomment chez lui, et seulement chez lui', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    const res = await regler(app, { proximityShared: false });
     await app.close();
 
-    expect(res.status).toBe(200);
-    expect(app.notifications().map((n) => n.id)).toEqual(['autre-chez-moi']);
+    expect(res.body.data).toMatchObject({ proximityShared: false });
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
   });
 
-  it('un autre retrait (la position continue) n’efface aucune alerte', async () => {
-    const app = await buildBringApp(async (a) => { await a.register(relationsRoutes, { prefix: '/api/v1/relations' }); }, {
-      liens: [lien('BLOOD', 'BLOOD')],
-      reglages: [{ ownerId: MOI, otherId: AUTRE, bringBlockedAt: null, locationShared: true, locationHistoryShared: true, proximityShared: true }],
-      notifications: [alerte('moi-chez-autre', AUTRE, MOI)],
-    });
-    await app.call('PUT', `/api/v1/relations/${AUTRE}/settings`, { locationShared: false }, MOI);
+  it('un autre retrait (position, historique) ou un blocage ne touche pas aux alertes', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    await regler(app, { locationShared: false, locationHistoryShared: false });
+    await regler(app, { bringBlocked: true });
     await app.close();
 
-    expect(app.notifications().map((n) => n.id)).toEqual(['moi-chez-autre']);
+    expect(retraits).toEqual([]);
+  });
+
+  it('le retrait part dès l\'écriture, même quand la réponse dit 404 (blocage demandé sans lien)', async () => {
+    const app = await appli({ liens: [] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    await regler(app, { proximityShared: false, bringBlocked: true });
+    await app.close();
+
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ proximityShared: false });
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
+  });
+
+  it('un retrait en panne répond en erreur, et le rejeu, qui redemande le retrait, le solde', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    retraitEnPanne.active = true;
+    const enPanne = await regler(app, { proximityShared: false });
+    retraitEnPanne.active = false;
+    const rejeu = await regler(app, { proximityShared: false });
+    await app.close();
+
+    expect(enPanne.status).toBeGreaterThanOrEqual(500);
+    expect(rejeu.status).toBe(200);
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
+  });
+
+  it('entre Sangs verrouillés, le 409 ne retire rien', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    app.reglages.set(`${MOI}:${AUTRE}`, { ownerId: MOI, otherId: AUTRE, locationShared: true, locationHistoryShared: true, proximityShared: true, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    const res = await regler(app, { proximityShared: false });
+    await app.close();
+
+    expect(res.body.code).toBe(RELATION_BLOOD_LOCKED_CODE);
+    expect(retraits).toEqual([]);
   });
 });

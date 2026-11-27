@@ -28,7 +28,7 @@ import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
 import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
 import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
 import { bloodLocationSwitchedOn } from '../services/bloodLocation/bloodLocationFlag';
-import { purgeExpiredBloodProximityNotices } from '../services/bloodLocation/bloodProximityNoticeRetention';
+import { purgeExpiredBloodProximityNotices } from '../services/bloodLocation/bloodProximityRetraction';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';

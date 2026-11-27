@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 import type { PairAccessDb } from '../relations/pairAccess';
+import type { BloodProximityRetraction } from './bloodProximityRetraction';
 
 export type BloodLocationDb = PairAccessDb &
   Pick<PrismaClient, 'bloodLocationPoint' | 'bloodLocationConsultation' | 'relationFeatureSetting'>;
@@ -39,11 +40,11 @@ export type BloodLocationDeps = {
    */
   readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
   /**
-   * Efface les alertes `blood_proximity` qui nomment `userId`, chez tous les destinataires, et celles
-   * qu'il a reçues (#20542) : l'effacement de l'historique n'en laisse aucune copie. REQUISE — une
-   * dépendance absente laisserait l'effacement répondre « fait » sur une copie restée en base.
+   * Retire les notifications `blood_proximity` d'une portée (#20542) : l'effacement de l'historique
+   * les emporte avec les points. REQUISE et stricte — une dépendance absente laisserait l'effacement
+   * répondre « fait » sur une copie restée en base, et une panne LÈVE : l'effacement échoue.
    */
-  readonly eraseProximityNotices: (userId: string) => Promise<void>;
+  readonly retractProximityNotices: (scope: BloodProximityRetraction) => Promise<number>;
   /** Journalise un échec sans charge ; jamais d'effet sur le geste. */
   readonly report?: (error: unknown) => void;
 };

@@ -93,7 +93,7 @@ export async function buildBringApp(
 
   const notes = notificationRawStore(options.notifications ?? []);
   const prisma = {
-    $runCommandRaw: notes.prisma.$runCommandRaw,
+    notification: notes.prisma.notification,
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
       // Honore `blockedUserIds: { has }` (qui m'a bloqué ?) : sans lui, tous les candidats se lisaient bloqués.

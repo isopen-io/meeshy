@@ -1,8 +1,8 @@
 /**
  * Une collection `Notification` en mémoire qui répond aux deux formes que la passerelle lui adresse
- * pour retirer des lignes : la commande brute `{ delete: 'Notification', deletes: [{ q, limit: 0 }] }`
- * (chemin JSON `actor.id`, que Prisma ne filtre pas sur MongoDB) et `notification.deleteMany` (jugé
- * par `matchesMongoWhere`, la sémantique mesurée contre mongo:8).
+ * pour retirer des lignes : la lecture brute `notification.findRaw({ filter })` (chemin JSON
+ * `actor.id`, que Prisma ne filtre pas sur MongoDB) et `notification.deleteMany` (jugé par
+ * `matchesMongoWhere`, la sémantique mesurée contre mongo:8).
  *
  * Le filtre brut est JUGÉ sur les documents, pas comparé à une copie de lui-même : égalité de champ
  * (chemin pointé compris), `{ $oid }`, `$or`, `$and`. Toute autre forme LÈVE — un témoin ne passe
@@ -17,6 +17,7 @@ export type StoredNotification = {
   readonly type: string;
   readonly actor?: { readonly id: string } | null;
   readonly expiresAt?: Date | null;
+  readonly delivery?: { readonly pushSent?: boolean } | null;
 };
 
 const valueAt = (row: MongoDocument, path: string): unknown =>
@@ -41,7 +42,7 @@ function matchesRaw(row: MongoDocument, filter: MongoDocument): boolean {
 
 export function notificationRawStore(initial: readonly StoredNotification[] = []) {
   let rows: StoredNotification[] = [...initial];
-  const commands: MongoDocument[] = [];
+  const filters: MongoDocument[] = [];
   const keep = (predicate: (row: MongoDocument) => boolean): number => {
     const before = rows.length;
     rows = rows.filter((row) => !predicate(row as unknown as MongoDocument));
@@ -49,19 +50,16 @@ export function notificationRawStore(initial: readonly StoredNotification[] = []
   };
   return {
     rows: () => rows,
-    commands,
+    /** Chaque filtre brut reçu, dans l'ordre. */
+    filters,
     prisma: {
-      $runCommandRaw: async (command: MongoDocument) => {
-        commands.push(command);
-        if (command.delete !== 'Notification') throw new Error('notification-raw-store: commande non jugée');
-        const deletes = command.deletes as ReadonlyArray<{ q: MongoDocument; limit: number }>;
-        const n = deletes.reduce((total, entry) => {
-          if (entry.limit !== 0) throw new Error('notification-raw-store: limit attendu à 0');
-          return total + keep((row) => matchesRaw(row, entry.q));
-        }, 0);
-        return { n, ok: 1 };
-      },
       notification: {
+        findRaw: async (args: { filter: MongoDocument }) => {
+          filters.push(args.filter);
+          return rows
+            .filter((row) => matchesRaw(row as unknown as MongoDocument, args.filter))
+            .map((row) => ({ _id: { $oid: row.id }, userId: { $oid: row.userId }, type: row.type, context: {}, delivery: row.delivery ?? { pushSent: false } }));
+        },
         deleteMany: async (args: { where: MongoDocument }) => ({ count: keep((row) => matchesMongoWhere(row, args.where)) }),
       },
     },

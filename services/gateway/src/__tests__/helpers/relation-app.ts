@@ -113,7 +113,7 @@ export async function buildRelationApp(
   );
   const notes = notificationRawStore(options.notifications ?? []);
   const prisma = {
-    $runCommandRaw: notes.prisma.$runCommandRaw,
+    notification: notes.prisma.notification,
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
       findMany: jest.fn(async () => []),

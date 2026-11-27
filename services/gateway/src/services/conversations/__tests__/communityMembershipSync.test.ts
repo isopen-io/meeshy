@@ -112,12 +112,12 @@ describe('planCommunityAdmission — qui entre dans la communauté', () => {
 
   it('refuse un compte qui n\'est pas vivant (désactivé, supprimé, en attente)', async () => {
     const prisma = prismaDouble([MOI_ACTIF], { vivants: [MOI] });
-    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable' });
+    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable', attempted: 1 });
   });
 
   it('refuse un participant bloqué, dans un sens ou dans l\'autre', async () => {
     const prisma = prismaDouble([MOI_ACTIF], { bloques: ['u1'] });
-    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable' });
+    expect(await plan(prisma, { participantIds: ['u1'] })).toEqual({ kind: 'refused', reason: 'not-addable', attempted: 1 });
   });
 
   it('ne regarde ni le droit ni le compte d\'un participant déjà membre actif', async () => {

@@ -16,7 +16,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { relationLevelIfAtLeast, type RelationLevel } from '@meeshy/shared/types/relation';
 import { niveauEffectif, type RelationLevelDb } from '../friendship';
-import { retractBloodProximityNotices, type BloodProximityPair } from '../bloodLocation/bloodProximityNoticeRetention';
+import { bloodProximityRetractorOf } from '../bloodLocation/bloodProximityRetraction';
 import {
   RELATION_RITUAL_SHARES,
   RELATION_RITUAL_SHARE_WITHDRAWN_AT,
@@ -69,7 +69,7 @@ async function writeOwnerWithdrawal(prisma: Pick<PrismaClient, 'relationFeatureS
   await prisma.relationFeatureSetting.updateMany({ where: { ownerId: withdrawal.ownerId, otherId: withdrawal.otherId }, data: withdrawal.data });
 }
 
-export type RitualSharesWithdrawalDb = Pick<PrismaClient, 'relationFeatureSetting' | '$runCommandRaw'>;
+export type RitualSharesWithdrawalDb = Pick<PrismaClient, 'relationFeatureSetting' | 'notification'>;
 
 /**
  * Le lien est tombé sous le Sang par le geste de `actorId` : les partages du rituel
@@ -88,10 +88,10 @@ export async function withdrawRitualSharesBetween(
     ownerWithdrawal(prisma, { ownerId: params.actorId, otherId: params.otherId, at: params.at }),
     ownerWithdrawal(prisma, { ownerId: params.otherId, otherId: params.actorId, at: null }),
   ]);
-  const pairs: BloodProximityPair[] = withdrawals
-    .filter((withdrawal) => withdrawal.cutsProximity)
-    .map((withdrawal) => ({ emitterId: withdrawal.ownerId, readerId: withdrawal.otherId }));
-  await retractBloodProximityNotices(prisma, pairs);
+  const retract = bloodProximityRetractorOf(prisma);
+  for (const withdrawal of withdrawals.filter((candidate) => candidate.cutsProximity)) {
+    await retract({ kind: 'at', ownerId: withdrawal.ownerId, readerId: withdrawal.otherId });
+  }
   await Promise.all(withdrawals.map((withdrawal) => writeOwnerWithdrawal(prisma, withdrawal)));
 }
 

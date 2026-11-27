@@ -87,7 +87,7 @@ async function rompreLeSang(
   const reglages = ritualSharesStore(niveau.partages);
   const alertes = notificationRawStore(ALERTES);
   const prisma = {
-    $runCommandRaw: alertes.prisma.$runCommandRaw,
+    notification: alertes.prisma.notification,
     user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })), findFirst: jest.fn(async () => null) },
     friendRequest: links.prisma.friendRequest,
     userRelation: links.prisma.userRelation,
@@ -134,7 +134,7 @@ async function bloquerLAutre(times = 1, pannes = 0) {
     updateMany: enPanne(reglages.relationFeatureSetting.updateMany),
   };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', { ...store.prisma, relationFeatureSetting, $runCommandRaw: alertes.prisma.$runCommandRaw } as never);
+  app.decorate('prisma', { ...store.prisma, relationFeatureSetting, notification: alertes.prisma.notification } as never);
   app.decorate('authenticate', authenticate);
   await app.register(directoryBlocksRoutes, { prefix: PREFIXE });
   await app.ready();

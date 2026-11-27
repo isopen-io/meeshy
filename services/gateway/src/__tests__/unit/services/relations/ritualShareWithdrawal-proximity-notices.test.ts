@@ -30,9 +30,12 @@ function monde(options: { readonly effacementEnPanne: boolean }) {
         return { count: 1 };
       },
     },
-    $runCommandRaw: async (command: Record<string, unknown>) => {
-      if (enPanne) throw new Error('mongo injoignable');
-      return notes.prisma.$runCommandRaw(command);
+    notification: {
+      ...notes.prisma.notification,
+      findRaw: async (args: { filter: Record<string, unknown> }) => {
+        if (enPanne) throw new Error('mongo injoignable');
+        return notes.prisma.notification.findRaw(args);
+      },
     },
   };
   return { prisma, lignes, notes, reparer: () => { enPanne = false; } };

@@ -2,16 +2,15 @@
  * UNE ALERTE « UN SANG S'APPROCHE » NE SURVIT NI À SON ÉCHÉANCE NI À L'EFFACEMENT (#20542).
  *
  * Jugé sur des DOCUMENTS : chaque témoin pose les lignes qu'une vraie collection porterait, joue le
- * geste, et lit ce qui reste. Un témoin par chemin d'effacement, et pour chacun ce qu'il ne touche pas.
+ * geste, et lit ce qui reste. Un témoin par portée, et pour chacune ce qu'elle ne touche pas.
  *
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
 import {
-  eraseBloodProximityNoticesOf,
   purgeExpiredBloodProximityNotices,
   retractBloodProximityNotices,
-} from '../../../../services/bloodLocation/bloodProximityNoticeRetention';
+} from '../../../../services/bloodLocation/bloodProximityRetraction';
 import { notificationRawStore, type StoredNotification } from '../../../helpers/notification-raw-store';
 
 const LINA = '64c000000000000000000001';
@@ -52,16 +51,8 @@ describe('effacer son historique efface ce que les alertes disent de soi, chez t
       autre('batterie-de-lina', MOI, LINA),
     ]);
 
-    await eraseBloodProximityNoticesOf(store.prisma as never, LINA);
-
+    await expect(retractBloodProximityNotices(store.prisma as never, null, { kind: 'everywhere', ownerId: LINA })).resolves.toBe(3);
     expect(ids(store.rows())).toEqual(['batterie-de-lina', 'entre-deux-autres']);
-  });
-
-  it('un identifiant qui n’est pas un ObjectId n’envoie aucune commande', async () => {
-    const store = notificationRawStore([alerte('chez-moi', MOI, LINA)]);
-    await eraseBloodProximityNoticesOf(store.prisma as never, 'pas-un-id');
-    expect(store.commands).toEqual([]);
-    expect(store.rows()).toHaveLength(1);
   });
 });
 
@@ -74,23 +65,8 @@ describe('retirer la proximité efface chez le lecteur ce que l’émetteur lui 
       alerte('tiers-chez-moi', MOI, TIERS),
     ]);
 
-    await retractBloodProximityNotices(store.prisma as never, [{ emitterId: LINA, readerId: MOI }]);
+    await retractBloodProximityNotices(store.prisma as never, null, { kind: 'at', ownerId: LINA, readerId: MOI });
 
     expect(ids(store.rows())).toEqual(['lina-chez-tiers', 'moi-chez-lina', 'tiers-chez-moi']);
-  });
-
-  it('les deux sens d’une baisse sous le Sang partent ensemble, en une commande', async () => {
-    const store = notificationRawStore([alerte('lina-chez-moi', MOI, LINA), alerte('moi-chez-lina', LINA, MOI), alerte('lina-chez-tiers', TIERS, LINA)]);
-
-    await retractBloodProximityNotices(store.prisma as never, [{ emitterId: LINA, readerId: MOI }, { emitterId: MOI, readerId: LINA }]);
-
-    expect(ids(store.rows())).toEqual(['lina-chez-tiers']);
-    expect(store.commands).toHaveLength(1);
-  });
-
-  it('sans paire valable, aucune commande ne part — un `$or` vide n’effacerait pas « rien », il serait refusé', async () => {
-    const store = notificationRawStore([alerte('lina-chez-moi', MOI, LINA)]);
-    await retractBloodProximityNotices(store.prisma as never, [{ emitterId: 'x', readerId: MOI }]);
-    expect(store.commands).toEqual([]);
   });
 });

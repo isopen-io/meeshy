@@ -10,7 +10,7 @@ import { matchesMongoWhere, type MongoDocument } from './mongo-where';
 import { ADULT_BIRTH, messagingWorld, type CircleLink, type Row } from './messaging-circle-world';
 import type { BloodLocationDeps } from '../../services/bloodLocation/bloodLocationService';
 import { sealPoint, type SealedPoint } from '../../services/bloodLocation/bloodLocationSeal';
-import { eraseBloodProximityNoticesOf } from '../../services/bloodLocation/bloodProximityNoticeRetention';
+import { retractBloodProximityNotices } from '../../services/bloodLocation/bloodProximityRetraction';
 import { notificationRawStore, type StoredNotification } from './notification-raw-store';
 
 export const T0 = Date.parse('2026-11-09T12:00:00.000Z');
@@ -169,7 +169,7 @@ export function bloodLocationWorld(seed: BloodLocationWorldSeed = {}) {
       cooldowns.set(key, now + ttlSeconds * 1000);
       return true;
     },
-    eraseProximityNotices: (userId) => eraseBloodProximityNoticesOf(notifications.prisma as never, userId),
+    retractProximityNotices: (scope) => retractBloodProximityNotices(notifications.prisma as never, null, scope),
     countProximityEvaluations: async (key, by, ttlSeconds) => {
       if (seed.counterDown) throw new Error('redis injoignable');
       const current = counters.get(key);

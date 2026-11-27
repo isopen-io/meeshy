@@ -287,7 +287,7 @@ describe('effacer — chacun efface le sien', () => {
 
   it('une purge des alertes qui échoue fait échouer l’effacement : il ne répond jamais « fait » sur une copie restée', async () => {
     const w = bloodWorldAvecConsentements();
-    const deps = { ...w.deps, eraseProximityNotices: async () => { throw new Error('mongo injoignable'); } };
+    const deps = { ...w.deps, retractProximityNotices: async () => { throw new Error('mongo injoignable'); } };
 
     await expect(eraseBloodLocationHistory(deps, MOI)).rejects.toThrow('mongo injoignable');
   });

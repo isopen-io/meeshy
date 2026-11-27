@@ -8,7 +8,6 @@ import {
 } from '@meeshy/shared/types/relation-person-settings';
 import { appVersionFloorPreHandler } from '../../middleware/app-version-floor';
 import { ritualShareWithdrawalOf } from '../../services/relations/ritualShareWithdrawal';
-import { retractBloodProximityNotices } from '../../services/bloodLocation/bloodProximityNoticeRetention';
 import { teamMayGrantShares } from '../../services/relations/teamShareGrant';
 import { stopBringsOnBlock } from '../../services/bring/bringService';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
@@ -27,6 +26,7 @@ import { bloodLockStateBetween, type BloodLockState } from '../../services/relat
 import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
 import { bloodLockResponseProperties, sendBloodLocked } from './blood-lock';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
+import { bloodProximityRetractorOf } from '../../services/bloodLocation/bloodProximityRetraction';
 
 /**
  * BLOQUER le Bring, le talkie ou les invitations « ensemble » ne s'écrit que pour une personne qui EXISTE et avec qui un lien
@@ -284,8 +284,12 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       } else if (Object.keys(data).length > 0) {
         await fastify.prisma.relationFeatureSetting.updateMany({ where: { ownerId, otherId: userId }, data });
       }
-      // #20542 — retirer la proximité efface chez l'autre les alertes « un Sang s'approche » qu'il tenait de moi.
-      if (withdrawn.includes('proximityShared')) await retractBloodProximityNotices(fastify.prisma, [{ emitterId: ownerId, readerId: userId }]);
+      // #20542 — retirer la proximité à quelqu'un efface chez lui les alertes « tout près » qui me nomment —
+      // dès l'écriture, même si la réponse dit ensuite 404 (blocage sans lien). Strict : une panne répond
+      // en erreur, et le rejeu (qui redemande le retrait) efface ce qui restait.
+      if (requested.proximityShared === false) {
+        await bloodProximityRetractorOf(fastify.prisma)({ kind: 'at', ownerId, readerId: userId });
+      }
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
