@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">Settings for this person</string>
     <string name="circles_sheet_settings_unavailable">Coming soon</string>
     <string name="contacts_tab_circles">Circles</string>
+    <string name="circles_settings_block_together">Mute their “together” invitations</string>
 </resources>

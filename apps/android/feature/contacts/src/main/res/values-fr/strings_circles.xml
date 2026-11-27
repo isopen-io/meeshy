@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">Réglages pour cette personne</string>
     <string name="circles_sheet_settings_unavailable">Bientôt disponible</string>
     <string name="contacts_tab_circles">Cercles</string>
+    <string name="circles_settings_block_together">Couper ses invitations « ensemble »</string>
 </resources>

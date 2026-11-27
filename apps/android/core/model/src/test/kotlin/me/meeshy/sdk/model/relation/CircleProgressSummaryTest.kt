@@ -102,7 +102,12 @@ class CircleProgressSummaryTest {
         assertThat(CirclePersonSetting.offered(RelationLevel.ACQUAINTANCE)).isEmpty()
         assertThat(CirclePersonSetting.offered(RelationLevel.FRIEND)).containsExactly(CirclePersonSetting.BLOCK_BRING)
         assertThat(CirclePersonSetting.offered(RelationLevel.CLOSE))
-            .containsExactly(CirclePersonSetting.BLOCK_BRING, CirclePersonSetting.TALKIE, CirclePersonSetting.LISTENING).inOrder()
+            .containsExactly(
+                CirclePersonSetting.BLOCK_BRING,
+                CirclePersonSetting.TALKIE,
+                CirclePersonSetting.TOGETHER,
+                CirclePersonSetting.LISTENING,
+            ).inOrder()
         assertThat(CirclePersonSetting.offered(RelationLevel.BLOOD)).containsExactlyElementsIn(CirclePersonSetting.entries)
     }
 }
