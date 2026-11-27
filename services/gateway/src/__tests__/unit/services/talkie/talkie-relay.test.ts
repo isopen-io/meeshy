@@ -123,20 +123,38 @@ describe('#13935 — le son se lit dès sa réception', () => {
     expect(chunks[0].payload).toMatchObject({ talkieId, fromUserId: FROM, capturedAt: 1, relayedAt: t.now() });
   });
 
-  it('le relais d’un fragment ne prend que le temps d’une lecture de cache : p95 sous 5 ms sur 300 fragments', async () => {
-    const t = relayWith();
+  // #20130 — la propriété se compte en TRAVAIL, jamais en horloge murale : une p95 sous 5 ms mesurait
+  // autant le runner que le relais, et rougissait sans régression. Un rouge ici nomme l'accès en trop.
+  it('le relais d’un fragment ne fait qu’une lecture de cache : ni porte, ni compteur, ni attente de plus, sur 300 fragments', async () => {
+    const calls = { judge: 0, withinStartRate: 0, cutAt: 0 };
+    const t = relayWith({
+      judge: async () => { calls.judge += 1; return { ok: true }; },
+      withinStartRate: async () => { calls.withinStartRate += 1; return true; },
+      cutAt: async () => { calls.cutAt += 1; return null; },
+    });
     const talkieId = await open(t);
-    const durations: number[] = [];
-    for (let seq = 0; seq < 300; seq += 1) {
-      const before = performance.now();
-      await t.relay.chunk(SOCKET, FROM, { talkieId, seq, data: frame(1000) });
-      durations.push(performance.now() - before);
-    }
-    t.relay.dispose();
+    const opened = { ...calls };
+    const pending: Array<() => void> = [];
+    const hold = { reads: false };
+    const gated = relayWith({ cutAt: () => (hold.reads ? new Promise<number | null>((resolve) => { pending.push(() => resolve(null)); }) : Promise.resolve(null)) });
+    const gatedId = await open(gated);
+    hold.reads = true;
 
-    const sorted = [...durations].sort((a, b) => a - b);
+    for (let seq = 0; seq < 300; seq += 1) {
+      await t.relay.chunk(SOCKET, FROM, { talkieId, seq, data: frame(1000) });
+    }
+    const relayed = gated.relay.chunk(SOCKET, FROM, { talkieId: gatedId, seq: 0, data: frame(1000) });
+    await Promise.resolve();
+    const beforeRead = of(gated, 'talkie:chunk').length;
+    pending.splice(0).forEach((release) => release());
+    await relayed;
+    t.relay.dispose();
+    gated.relay.dispose();
+
     expect(of(t, 'talkie:chunk')).toHaveLength(300);
-    expect(sorted[Math.floor(sorted.length * 0.95)]).toBeLessThan(5);
+    expect({ judge: calls.judge - opened.judge, withinStartRate: calls.withinStartRate - opened.withinStartRate, cutAt: calls.cutAt - opened.cutAt })
+      .toEqual({ judge: 0, withinStartRate: 0, cutAt: 300 });
+    expect([beforeRead, of(gated, 'talkie:chunk').length]).toEqual([0, 1]);
   });
 
   it('un ArrayBuffer est relayé en octets', async () => {
