@@ -321,6 +321,15 @@ export class LocationHandler {
    */
   private readonly now: () => Date;
   private readonly unknownSessionVerdicts: BoundedTtlCache<string, UnknownSessionVerdict>;
+  /**
+   * Les pairs coupés par `cutPair` depuis moins d'un pas (#16794), par compte.
+   * Une lecture de blocage PARTIE avant l'écriture du blocage et rendue après la
+   * coupure (départ, rafraîchissement, verdict d'une session inconnue) rendrait
+   * l'ensemble d'avant ; `_blockRelatedOf` y ajoute donc ces pairs. Passé le pas,
+   * toute lecture voit le blocage écrit, et un déblocage reste exclu au plus ce
+   * pas — l'audience ne s'élargit jamais sur un doute.
+   */
+  private readonly recentCuts: BoundedTtlCache<string, ReadonlySet<string>>;
 
   constructor(deps: LocationHandlerDependencies) {
     this.io = deps.io;
@@ -331,6 +340,11 @@ export class LocationHandler {
     this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
     this.now = deps.now ?? (() => new Date());
     this.unknownSessionVerdicts = new BoundedTtlCache({
+      maxSize: UNKNOWN_SESSION_VERDICT_MAX,
+      ttlMs: BLOCK_SET_REFRESH_MS,
+      now: () => this.now().getTime(),
+    });
+    this.recentCuts = new BoundedTtlCache({
       maxSize: UNKNOWN_SESSION_VERDICT_MAX,
       ttlMs: BLOCK_SET_REFRESH_MS,
       now: () => this.now().getTime(),
@@ -801,6 +815,10 @@ export class LocationHandler {
       if (id === pair.userA.toLowerCase()) return pair.userB;
       return id === pair.userB.toLowerCase() ? pair.userA : null;
     };
+    [[pair.userA, pair.userB], [pair.userB, pair.userA]].forEach(([userId, peer]) => {
+      const key = userId.toLowerCase();
+      this.recentCuts.set(key, new Set([...(this.recentCuts.get(key) ?? []), peer]));
+    });
     [...this.unknownSessionVerdicts.keys()]
       .filter(key => peerOf(userOfSessionKey(key)) !== null)
       .forEach(key => this.unknownSessionVerdicts.delete(key));
@@ -941,7 +959,9 @@ export class LocationHandler {
   ): Promise<ReadonlySet<string> | null> {
     if (context.isAnonymous) return new Set();
     try {
-      return await getBlockRelatedUserIds(this.prisma, context.userId);
+      const related = await getBlockRelatedUserIds(this.prisma, context.userId);
+      const cut = this.recentCuts.get(context.userId.toLowerCase());
+      return cut ? new Set([...related, ...cut]) : related;
     } catch (error: unknown) {
       logger.error('live location block lookup failed', { error, userId: context.userId });
       return null;

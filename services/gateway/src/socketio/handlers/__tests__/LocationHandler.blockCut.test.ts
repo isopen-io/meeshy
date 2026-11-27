@@ -55,6 +55,7 @@ function makeWorld() {
   const roomsBySocket = new Map<string, { userId: string; rooms: Set<string> }>();
   let blockReadsBroken = false;
   let pendingRead: Promise<void> | null = null;
+  let staleReads = false;
   let clock = new Date('2026-11-08T10:00:00.000Z');
 
   const record = (target: string, except: readonly string[]): any => ({
@@ -76,16 +77,20 @@ function makeWorld() {
   } as any;
 
   const findMany = jest.fn<any>().mockImplementation(async ({ where }: any) => {
+    const snapshot = Object.keys(blocks)
+      .filter(id => (blocks[id] ?? []).includes(where.blockedUserIds.has))
+      .map(id => ({ id }));
     if (pendingRead) await pendingRead;
     if (blockReadsBroken) throw new Error('replica set election in progress');
-    return Object.keys(blocks)
+    return staleReads ? snapshot : Object.keys(blocks)
       .filter(id => (blocks[id] ?? []).includes(where.blockedUserIds.has))
       .map(id => ({ id }));
   });
   const findUnique = jest.fn<any>().mockImplementation(async ({ where }: any) => {
+    const snapshot = { blockedUserIds: blocks[where.id] ?? [] };
     if (pendingRead) await pendingRead;
     if (blockReadsBroken) throw new Error('replica set election in progress');
-    return { blockedUserIds: blocks[where.id] ?? [] };
+    return staleReads ? snapshot : { blockedUserIds: blocks[where.id] ?? [] };
   });
 
   const prisma = {
@@ -131,6 +136,7 @@ function makeWorld() {
       return () => { pendingRead = null; release(); };
     },
     advance: (ms: number) => { clock = new Date(clock.getTime() + ms); },
+    readsAnswerFromTheirStart: () => { staleReads = true; },
   };
 }
 
@@ -292,5 +298,61 @@ describe('LocationHandler.cutPair — un blocage coupe le partage en cours, sans
 
     expect(stopped(world.emissions)).toEqual([]);
     expect(updated(world.emissions)[0].except).toEqual([]);
+  });
+
+  it('une lecture de rafraîchissement PARTIE avant le blocage et rendue après la coupure ne rouvre pas le pair', async () => {
+    const world = makeWorld();
+    const alice = world.connect('s-alice', ALICE);
+    await share(world, alice);
+
+    world.advance(61_000);
+    world.readsAnswerFromTheirStart();
+    const release = world.holdBlockReads();
+    const inFlight = move(world, alice);
+    await new Promise(resolve => setImmediate(resolve));
+    world.block(BOB, ALICE);
+    await world.handler.cutPair({ userA: BOB, userB: ALICE });
+    release();
+    await inFlight;
+    world.advance(1_000);
+    await move(world, alice);
+
+    expect(updated(world.emissions).map(e => e.except)).toEqual([[ROOMS.user(BOB)], [ROOMS.user(BOB)]]);
+  });
+
+  it('un départ dont la lecture de blocage est EN VOL quand la coupure tombe n\'ouvre pas sa session au pair', async () => {
+    const world = makeWorld();
+    const alice = world.connect('s-alice', ALICE);
+    world.readsAnswerFromTheirStart();
+    const release = world.holdBlockReads();
+    const starting = share(world, alice);
+    await new Promise(resolve => setImmediate(resolve));
+    world.block(BOB, ALICE);
+    await world.handler.cutPair({ userA: BOB, userB: ALICE });
+    release();
+    await starting;
+    world.advance(1_000);
+    await move(world, alice);
+
+    expect(updated(world.emissions)[0].except).toContain(ROOMS.user(BOB));
+  });
+
+  it('une session INCONNUE dont le verdict est EN VOL quand la coupure tombe ne retient pas le verdict d\'avant', async () => {
+    const world = makeWorld();
+    const alice = world.connect('s-alice', ALICE);
+    world.readsAnswerFromTheirStart();
+    const release = world.holdBlockReads();
+    const inFlight = move(world, alice);
+    await new Promise(resolve => setImmediate(resolve));
+    world.block(BOB, ALICE);
+    await world.handler.cutPair({ userA: BOB, userB: ALICE });
+    release();
+    await inFlight;
+    world.advance(1_000);
+    await move(world, alice);
+
+    const excepts = updated(world.emissions).map(e => e.except);
+    expect(excepts[excepts.length - 1]).toContain(ROOMS.user(BOB));
+    expect(excepts.every(e => e.includes(ROOMS.user(BOB)))).toBe(true);
   });
 });
