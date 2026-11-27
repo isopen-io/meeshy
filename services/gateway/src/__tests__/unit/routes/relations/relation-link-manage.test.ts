@@ -201,6 +201,35 @@ const reglagesDuSang = () => [
 const ligneDe = (app: { reglages: () => Record<string, unknown>[] }, ownerId: string) =>
   app.reglages().find((r) => r.ownerId === ownerId)!;
 
+describe('#20542 — une baisse sous le Sang efface les alertes « un Sang s’approche » des deux côtés', () => {
+  const alerte = (id: string, userId: string, actorId: string) => ({ id, userId, type: 'blood_proximity', actor: { id: actorId }, expiresAt: new Date(NOW.getTime() + 3_600_000) });
+
+  it('Sang → Proche : chacun perd les alertes qui nomment l’autre ; celles d’un tiers restent', async () => {
+    const app = await appli({
+      liens: [lien('BLOOD', 'BLOOD')],
+      reglages: reglagesDuSang(),
+      notifications: [alerte('moi-chez-autre', AUTRE, MOI), alerte('autre-chez-moi', MOI, AUTRE), alerte('tiers-chez-moi', MOI, '507f1f77bcf86cd799439033')],
+    });
+    const res = await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'CLOSE' });
+    await app.close();
+
+    expect(res.status).toBe(200);
+    expect(app.notifications().map((n) => n.id)).toEqual(['tiers-chez-moi']);
+  });
+
+  it('un sens dont la proximité était déjà retirée ne relance aucun effacement', async () => {
+    const app = await appli({
+      liens: [lien('BLOOD', 'BLOOD')],
+      reglages: [{ ownerId: MOI, otherId: AUTRE, ...PARTAGES_ALLUMES, proximityShared: false }],
+      notifications: [alerte('moi-chez-autre', AUTRE, MOI)],
+    });
+    await app.call('POST', `${PREFIXE}/${AUTRE}/level`, { level: 'CLOSE' });
+    await app.close();
+
+    expect(app.notifications().map((n) => n.id)).toEqual(['moi-chez-autre']);
+  });
+});
+
 describe('#14910 — une baisse sous le Sang retire les partages du rituel, des deux côtés', () => {
   it.each(['CLOSE', 'FRIEND', 'ACQUAINTANCE', 'PUBLIC'])('Sang → %s : plus aucun partage allumé ; daté chez moi, SANS date chez l’autre (RG-07)', async (level) => {
     const app = await appli({ liens: [lien('BLOOD', 'BLOOD')], reglages: reglagesDuSang() });

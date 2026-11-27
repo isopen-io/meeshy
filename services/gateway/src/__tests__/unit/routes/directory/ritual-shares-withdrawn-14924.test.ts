@@ -39,6 +39,7 @@ import { directoryBlocksRoutes } from '../../../../routes/directory/blocks';
 import { relationStore } from '../../../helpers/user-relation-store';
 import { pairInteractionStore } from '../../../helpers/pair-interaction-store';
 import { ritualSharesStore, SHARES_OFF, SHARES_ON } from '../../../helpers/ritual-shares-store';
+import { notificationRawStore, type StoredNotification } from '../../../helpers/notification-raw-store';
 
 const PREFIXE = '/api/v1/directory';
 const MOI = '507f1f77bcf86cd799439011';
@@ -50,6 +51,13 @@ const PARTAGES = [
   { ownerId: MOI, otherId: AUTRE, ...SHARES_ON, bringBlockedAt: null },
   { ownerId: AUTRE, otherId: MOI, ...SHARES_ON, bringBlockedAt: null },
 ];
+
+const ALERTES: StoredNotification[] = [
+  { id: 'autre-chez-moi', userId: MOI, type: 'blood_proximity', actor: { id: AUTRE } },
+  { id: 'moi-chez-autre', userId: AUTRE, type: 'blood_proximity', actor: { id: MOI } },
+  { id: 'batterie', userId: MOI, type: 'battery_low', actor: { id: AUTRE } },
+];
+const restantes = (rows: readonly StoredNotification[]) => rows.map((row) => row.id).sort();
 
 const settle = async () => {
   for (let i = 0; i < 10; i += 1) await new Promise((resolve) => setImmediate(resolve));
@@ -77,7 +85,9 @@ async function rompreLeSang(
     relations: [niveau.relation],
   });
   const reglages = ritualSharesStore(niveau.partages);
+  const alertes = notificationRawStore(ALERTES);
   const prisma = {
+    notification: alertes.prisma.notification,
     user: { findUnique: jest.fn(async () => ({ id: MOI, blockedUserIds: [], deactivatedAt: null })), findFirst: jest.fn(async () => null) },
     friendRequest: links.prisma.friendRequest,
     userRelation: links.prisma.userRelation,
@@ -100,7 +110,7 @@ async function rompreLeSang(
     headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action: 'dismiss' }),
   });
   await app.close();
-  return { status: res.statusCode, partages: reglages.rows(), liens: links.relations() };
+  return { status: res.statusCode, partages: reglages.rows(), liens: links.relations(), alertes: alertes.rows() };
 }
 
 async function bloquerLAutre(times = 1, pannes = 0) {
@@ -112,6 +122,7 @@ async function bloquerLAutre(times = 1, pannes = 0) {
     relations: [SANG] as never,
   });
   const reglages = ritualSharesStore(PARTAGES);
+  const alertes = notificationRawStore(ALERTES);
   const panne = { active: false };
   const enPanne = <A extends unknown[], R>(fn: (...args: A) => Promise<R>) => async (...args: A): Promise<R> => {
     if (panne.active) throw new Error('mongo down');
@@ -123,7 +134,7 @@ async function bloquerLAutre(times = 1, pannes = 0) {
     updateMany: enPanne(reglages.relationFeatureSetting.updateMany),
   };
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
-  app.decorate('prisma', { ...store.prisma, relationFeatureSetting } as never);
+  app.decorate('prisma', { ...store.prisma, relationFeatureSetting, notification: alertes.prisma.notification } as never);
   app.decorate('authenticate', authenticate);
   await app.register(directoryBlocksRoutes, { prefix: PREFIXE });
   await app.ready();
@@ -137,7 +148,7 @@ async function bloquerLAutre(times = 1, pannes = 0) {
     apresChaqueAppel.push(reglages.rows());
   }
   await app.close();
-  return { statuses, partages: reglages.rows(), apresChaqueAppel };
+  return { statuses, partages: reglages.rows(), apresChaqueAppel, alertes: alertes.rows() };
 }
 
 const partage = (rows: Array<Record<string, unknown>>, ownerId: string) => rows.find((row) => row.ownerId === ownerId);
@@ -150,6 +161,12 @@ describe('#14924 — la rupture d’une demande de Sang acceptée éteint les pa
     expect(partage(partages, MOI)).toMatchObject({ ...SHARES_OFF, listeningTitleWithdrawnAt: expect.any(Date) });
     expect(partage(partages, AUTRE)).toMatchObject(SHARES_OFF);
     expect(partage(partages, AUTRE)).not.toHaveProperty('listeningTitleWithdrawnAt');
+  });
+
+  it('#20542 — les alertes « un Sang s’approche » des deux sens partent avec la proximité ; les autres types restent', async () => {
+    const { alertes } = await rompreLeSang();
+
+    expect(restantes(alertes)).toEqual(['batterie']);
   });
 
   it('un retrait des partages en panne ne rend pas 500 sur une rupture déjà écrite : le lien est baissé et la réponse réussit', async () => {
@@ -194,6 +211,12 @@ describe('#14924 — le blocage éteint les partages du rituel', () => {
     expect(statuses).toEqual([200]);
     expect(partage(partages, MOI)).toMatchObject(SHARES_OFF);
     expect(partage(partages, AUTRE)).toMatchObject(SHARES_OFF);
+  });
+
+  it('#20542 — bloquer un Sang efface ses alertes « un Sang s’approche », dans les deux sens', async () => {
+    const { alertes } = await bloquerLAutre();
+
+    expect(restantes(alertes)).toEqual(['batterie']);
   });
 
   it('rejoué sur un blocage déjà posé, le retrait converge : un blocage dont le retrait a échoué se solde au rejeu', async () => {

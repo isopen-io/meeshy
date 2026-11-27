@@ -34,6 +34,8 @@ import type { CommunityEngagementOptions } from './types';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
+import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -699,6 +701,7 @@ const community = await fastify.prisma.community.findFirst({
         401: { description: 'User not authenticated', ...errorResponseSchema },
         403: { description: 'Insufficient permissions', ...errorResponseSchema },
         404: { description: 'Community or conversation not found', ...errorResponseSchema },
+        429: { description: 'Too many people added to communities without their consent', ...errorResponseSchema },
         500: { description: 'Internal server error', ...errorResponseSchema }
       }
     }
@@ -854,10 +857,14 @@ const community = await fastify.prisma.community.findFirst({
             admitActor: false,
           })
         : null;
+      if (admission?.kind === 'refused' && admission.reason === 'invite-forbidden') {
+        return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+      }
+      // #20694 — faire entrer les participants, c'est inviter : le budget de #19812 se paie avant toute écriture.
+      const budget = admission ? await spendCommunitySalonAdmission(fastify, userId, admission) : null;
+      if (budget && !budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
       if (admission?.kind === 'refused') {
-        return admission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
+        return sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
       }
 
       // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est

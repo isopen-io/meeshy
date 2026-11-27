@@ -11,8 +11,13 @@
  */
 export type BloodLocationEnv = Readonly<Record<string, string | undefined>>;
 
+/** Le drapeau est-il allumé pour l'environnement, liste blanche mise à part ? C'est ce qui arme les tâches de fond du Sang. */
+export function bloodLocationSwitchedOn(env: BloodLocationEnv = process.env): boolean {
+  return env['BLOOD_LOCATION_ENABLED']?.trim().toLowerCase() === 'true';
+}
+
 export function bloodLocationEnabledFor(userId: string, env: BloodLocationEnv = process.env): boolean {
-  if (!userId || env['BLOOD_LOCATION_ENABLED']?.trim().toLowerCase() !== 'true') return false;
+  if (!userId || !bloodLocationSwitchedOn(env)) return false;
   const allowed = (env['BLOOD_LOCATION_ALLOWLIST'] ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
   return allowed.includes('*') || allowed.includes(userId);
 }
