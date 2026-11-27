@@ -54,7 +54,7 @@ final class AudioForegroundChipIdleTests: XCTestCase {
     /// laisserait la puce figée après le premier réveil — un défaut PIRE que
     /// celui qu'on corrige, parce qu'il se voit alors que l'écran est vivant.
     func test_lesDEUXBascules_annoncentLeRégime() throws {
-        let lecture = try source("Story/Canvas/StoryCanvasUIView+Playback.swift")
+        let lecture = try source("Story/Canvas/StoryCanvasUIView+EditClock.swift")
         XCTAssertTrue(lecture.contains("onEditClockThrottleChanged?(true)"),
                       "l'endormissement doit s'annoncer")
         XCTAssertTrue(lecture.contains("onEditClockThrottleChanged?(false)"),
