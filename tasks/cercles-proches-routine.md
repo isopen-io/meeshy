@@ -2100,3 +2100,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   relèvement motivé de `settings` (330 → 352, même convention que #17990).
 - Reste : iOS et Android du même interrupteur = #20707.
 - Prochain lot : #17988 / #17989 / #20707 quand la CI des PR est rouverte, ou un lot web/serveur du jalon 2.
+
+## 2026-11-27 — réveil de 14 h 36 : web de #19888, l'appui long sur un Proche ou un Sang lui parle par talkie
+
+- Reprise : #20698 (#20542) fusionnée. Le suivi #20697 (retrait des alertes de proximité sur les autres chemins) est
+  cédé : la PR brouillon #20691, d'une autre session, écrit `bloodRitual.ts` et `ritualShareWithdrawal.ts`.
+- Lot : la part « talkie à l'appui long » de #19888, iso `TalkieLongHoldModifier` (iOS #19885). Un toucher sur
+  l'épingle choisit toujours la personne ; tenu 350 ms, l'appui ouvre la voix, qui part tant que le doigt (ou Espace)
+  reste posé, et le relâcher ne choisit personne. Proposé seulement sur le cercle SERVI Proche ou Sang ; un
+  `TALKIE_NOT_ALLOWED` retire la personne ; téléphone injoignable ⇒ message vocal (#20241). Un émetteur pour toute la
+  carte (`useSharedLocationsMapTalkie`), le geste dans `createLongHold` (`lib/talkie/talkie-long-hold.ts`). Rien de
+  nouveau ne part du serveur : le talkie existant, rejugé à chaque appui.
+- Audit adversarial : non requis (aucun nouveau chemin de données ; la passerelle juge le talkie comme avant).
+- Reste de #19888 : commandes dans la zone sûre, feuilles « Autour de toi » et fiche rangeables, chrome sur fond clair.
+- Prochain lot : le reste de #19888 ; iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ou abandonnée ;
+  #20697 si #20691 est abandonnée.
