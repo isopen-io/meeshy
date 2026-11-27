@@ -18,6 +18,7 @@ import type { MessageReadStatusService } from '../../services/MessageReadStatusS
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { bridgeComputed } from '../unreadBridgeField.js';
 import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
+import { lacksIdentityRoom } from './join-user-conversations';
 
 const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
@@ -211,6 +212,17 @@ export class ConversationHandler {
           });
           return;
         }
+      }
+
+      // #16796 — sans sa room d'identité, la socket serait inexcluable des
+      // signaux de salon d'un compte qui a bloqué son titulaire (#16800).
+      if (lacksIdentityRoom(socket)) {
+        socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
+          conversationId: validated.conversationId,
+          reason: 'server_error',
+          message: 'Erreur serveur lors du join',
+        });
+        return;
       }
 
       const room = ROOMS.conversation(normalizedId);

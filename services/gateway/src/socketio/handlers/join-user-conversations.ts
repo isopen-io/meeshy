@@ -17,7 +17,26 @@ const logger = enhancedLogger.child({ module: 'JoinUserConversations' });
  */
 const JOIN_RETRY_ATTEMPTS = 2;
 
+const IDENTITY_ROOM_MISSING = 'identityRoomMissing';
+
+/**
+ * Vrai quand CETTE socket a épuisé ses réessais sur sa room d'identité (#16796).
+ * Toute porte qui ferait entrer une socket dans une room de conversation le lit
+ * d'abord : `conversation:join`, l'admission de mi-session, l'authentification.
+ */
+export function lacksIdentityRoom(socket: Pick<Socket, 'data'>): boolean {
+  const bag = socket.data as Record<string, unknown> | undefined;
+  return bag?.[IDENTITY_ROOM_MISSING] === true;
+}
+
+function noteIdentityRoom(socket: Socket, missing: boolean): void {
+  const bag = (socket.data ?? {}) as Record<string, unknown>;
+  bag[IDENTITY_ROOM_MISSING] = missing;
+  socket.data = bag;
+}
+
 export async function joinConversationRoomsWithRetry(socket: Socket, conversationIds: string[]): Promise<string[]> {
+  if (lacksIdentityRoom(socket)) return [...conversationIds];
   const maxAttempts = 1 + JOIN_RETRY_ATTEMPTS;
   let pending = conversationIds;
   for (let attempt = 1; attempt <= maxAttempts && pending.length > 0; attempt++) {
@@ -39,8 +58,12 @@ export async function joinIdentityRoomWithRetry(socket: Socket, identityId: stri
   const maxAttempts = 1 + JOIN_RETRY_ATTEMPTS;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     const [result] = await Promise.allSettled([socket.join(ROOMS.user(identityId))]);
-    if (result.status === 'fulfilled') return true;
+    if (result.status === 'fulfilled') {
+      noteIdentityRoom(socket, false);
+      return true;
+    }
   }
+  noteIdentityRoom(socket, true);
   logger.error('identity room join failed after retries — socket joins no conversation room (cannot be excluded)', { identityId });
   return false;
 }
