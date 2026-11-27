@@ -2147,3 +2147,58 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste de #19888 : rien côté web. Android : #19889.
 - Prochain lot : iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ; #20697 si #20691 est abandonnée ;
   sinon un lot web/serveur du jalon 2.
+
+## 2026-11-27 — réveil de 13 h : iOS de #20416 (point 2) et de #20308
+
+- Reprise : le run du 2026-11-25 (volet iOS de #20540, « un Sang s'approche » ouvre la carte des deux) a été poussé
+  sur `dev` (e19d5dc93) sans entrée de journal ; #20540 reste ouverte pour la seule recette à deux téléphones. #20417
+  (iOS de #20249) est fusionnée : les lots iOS de la position sont libres. Aucune branche vivante sur ces chemins.
+- Lot : iOS de #20416 point 2 et de #20308, iso #20431 (web) et #20441 (Android).
+  - Un refus certain (`invalid`, `fixedPoint`, `startedElsewhere`, rendus avant toute écriture) ne fait plus oublier
+    `publishedStart` ; un refus douteux l'oublie encore (`SharedLocationSharingCenter.nothingWritten`).
+  - Une réponse à « Montrer ta position réelle ? » prend la position AVANT de relire le partage servi : un point relancé
+    ailleurs pendant le GPS se voit à la relecture, la question se repose et rien ne part.
+  - Un nom vide ou blanc ne se nomme plus dans la question (`SharedLocationPointReplacement.audience`).
+- Gates locaux : `check_house_rules` (42 règles), `check_cohesion_budget`, `check_test_registration`, garde des couleurs
+  d'accent verts. iOS ne se compile pas en conteneur : la CI iOS de la PR fait foi.
+- Prochain lot : #20054, #20056 ; puis #13934 (écoute + titre défilant) selon la spec.
+
+## 2026-11-27 — réveil de 13 h (troisième run, même heure) : la pastille « en ligne » s'éteint après une baisse ou une rupture (#19539)
+
+- Reprise : aucune PR de la routine ouverte depuis le 2026-11-23 (#20463 fusionnée). Les lots iOS de la position
+  (#20416 point 2, #20308, #20054, #20056) touchent `apps/ios/Meeshy/Features/SharedLocation/`, que #20514 (autre
+  session, ouverte, non fusionnée) découpe fichier par fichier : ce réveil cède ces chemins.
+- Lot : #19539, passerelle. Après une baisse sous Ami ou une rupture d'amitié, l'audience de `user:status` excluait
+  déjà l'ancien Ami, donc plus aucune transition ne lui parvenait et il gardait la pastille verte jusqu'à sa propre
+  reconnexion (de même, un Proche baissé à Ami gardait une dernière connexion figée). `presenceAfterDrop.ts`
+  (`services/relations/`) lit la visibilité de chaque sens AVANT l'écriture, la relit APRÈS, et pousse au lecteur
+  dont la présence SERVIE change exactement ce que la loi lui sert désormais : un `user:status` hors ligne sans
+  dernière connexion (ou « en ligne » binaire de Proche à Ami). Branché sur `POST /relations/:userId/level` et sur
+  la rupture d'une demande acceptée. Une baisse qui ne change rien de visible reste muette (RG-07), un tiers ne
+  reçoit rien.
+- `presence:snapshot` : son cache (60 s) garde des données brutes et rejuge la visibilité à l'émission, sans cache
+  d'amis : il ne ressert pas l'ancienne présence. Lu, pas témoigné par un nouveau test.
+- Clients : la charge est celle qu'un Ami reçoit déjà (`lastActiveAt` nul) ; le web l'éteint (témoin ajouté
+  dans `presence-live.test.ts`), iOS (`PresenceManager`) remplace l'entrée telle quelle. Témoins iOS et Android en
+  suivi.
+- Gates : passerelle `relations` + `directory` 606/606, nouveau témoin 8/8 (6 rouges avant le branchement), gardes
+  de présence et de porte d'émission vertes, `tsc` 0 ; web `presence-live` 18/18.
+- Audit adversarial : non bloquant. Corrigé dans le lot : la présence servie se lit sur les sockets au premier plan
+  (`isPresenceOnline` du gestionnaire), plus sur la colonne `User.isOnline` qui retarde ; le rôle passe par
+  `lawRoleOf`. Laissé au porteur : une charge émise À L'INSTANT de la baisse est un signal temporel (RG-07).
+- Prochain lot : après la fusion de #20514, iOS de #20416 / #20308, #20054, #20056 ; sinon #19538 ou #19540
+  (présence et cercles côté passerelle).
+
+## 2026-11-27 — réveil de 13 h (seconde session) : #19571 (un compte suspendu ou supprimé quitte « Mes cercles »)
+
+- Reprise : le journal s'arrêtait au 2026-11-23 ; #20417 et #20463 sont fusionnées, #20249 et #19884 fermées. Aucune PR
+  de la routine ouverte. Les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift`, que la PR #20514 (autre session, découpage par responsabilité) réécrit : ce
+  réveil les lui cède et prend un lot serveur du jalon 1/2.
+- Lot : #19571. `GET /relations` ne liste plus un lien vers un compte inactif, désactivé ou supprimé en attente de purge
+  (`USABLE_ACCOUNT_WHERE`, une lecture de plus, bornée aux candidats) ; `GET /relations/:userId` le sert comme un inconnu
+  (vue vide, `canRaise` faux, `accessLevel` PUBLIC) par les MÊMES lectures inconditionnelles ; `POST /relations/:userId/level`
+  écrit la baisse et ses effets sur le niveau réel, mais rend et diffuse à mes appareils la vue fermée. Le résumé suit la
+  liste. Le lien n'est ni effacé ni baissé : la réactivation rend le niveau d'avant.
+- Prochain lot : les lots iOS de la position quand #20514 aura fusionné ; sinon un autre lot serveur du jalon (#19539,
+  #19538, #19450).

@@ -243,7 +243,9 @@ struct SharedLocationPointReplacement: Equatable, Sendable {
     /// Ceux que la question nomme : au plus `limit`, dans l'ordre des noms connus ; les autres, inconnus d'ici compris
     /// (ajoutés depuis un autre appareil), se comptent.
     func audience(knownNames: [(userId: String, name: String)], limit: Int = 3) -> (named: [String], others: Int) {
-        let known = knownNames.filter { recipientIds.contains($0.userId.lowercased()) }
+        let known = knownNames.filter {
+            recipientIds.contains($0.userId.lowercased()) && !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
         let unique = known.reduce(into: [(String, String)]()) { kept, pair in
             guard !kept.contains(where: { $0.0 == pair.userId.lowercased() }) else { return }
             kept.append((pair.userId.lowercased(), pair.name))

@@ -263,6 +263,7 @@ final class SharedLocationSharingCenter: ObservableObject {
         replacing asked: SharedLocationPointReplacement? = nil
     ) async -> SharedLocationShareProblem? {
         await locked {
+            let answered = await self.fixBeforeReading(answering: asked)
             let read = await (asked == nil ? self.readBeforeComposing() : self.readServedTruth())
             guard read else { return self.isLive ? .refused(.offline) : .refused(.failed) }
             guard self.isLive else { return .refused(.failed) }
@@ -273,7 +274,7 @@ final class SharedLocationSharingCenter: ObservableObject {
                 guard let asked, current.isCovered(by: asked) else { return .replacesChosenPoint(current) }
             }
             let fix: SharedLocationFix
-            switch await self.fixes.currentFix() {
+            switch await self.fixResult(answered) {
             case .fix(let current): fix = current
             case .denied: return .locationDenied
             case .unavailable: return .locationUnavailable
@@ -286,6 +287,18 @@ final class SharedLocationSharingCenter: ObservableObject {
             guard self.rereadsAfter(problem) else { return problem }
             return await self.askAgainAfter(problem, expected: expected)
         }
+    }
+
+    /// Une réponse à « Montrer ta position réelle ? » prend la position AVANT de relire (#20308, iso web et Android) :
+    /// un point relancé ailleurs pendant les secondes du GPS se voit à la relecture, et rien ne part.
+    private func fixBeforeReading(answering asked: SharedLocationPointReplacement?) async -> SharedLocationFixResult? {
+        guard asked != nil else { return nil }
+        return await fixes.currentFix()
+    }
+
+    private func fixResult(_ answered: SharedLocationFixResult?) async -> SharedLocationFixResult {
+        if let answered { return answered }
+        return await fixes.currentFix()
     }
 
     /// La réponse nomme le partage montré, tel que servi (#20249) : la passerelle refuse si un autre a démarré depuis.
@@ -672,15 +685,17 @@ final class SharedLocationSharingCenter: ObservableObject {
             forgetPublishedStart(ifSent: fix)
             engage(previous.union(next), fix: fix)
             return .refused(.unconfirmed)
-        case .refused(.fixedPoint):
-            return .refused(.fixedPoint)
-        case .refused(.startedElsewhere):
-            return .refused(.startedElsewhere)
+        case .refused(let outcome) where Self.nothingWritten.contains(outcome):
+            return .refused(outcome)
         case .refused(let outcome):
             forgetPublishedStart(ifSent: fix)
             return .refused(outcome)
         }
     }
+
+    /// Les refus que la passerelle rend AVANT toute écriture (#20416, iso web et Android) : charge illisible, point
+    /// choisi, partage nommé qui n'est plus servi. Le démarrage publié d'ici tient.
+    private static let nothingWritten: Set<SharedLocationSendOutcome> = [.invalid, .fixedPoint, .startedElsewhere]
 
     /// La passerelle a PU appliquer un démarrage avec position qu'elle refuse ensuite (accusé perdu, panne après la
     /// prise, session remplacée) : dans le doute, inconnu — deux appareils publient plutôt qu'aucun (#18580).

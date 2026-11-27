@@ -952,9 +952,12 @@ final class FakeSharedLocationFixSource: SharedLocationFixProviding {
 
     /// Combien de fois on a demandé un relevé à l'appareil (et donc, la permission).
     private(set) var asks = 0
+    /// Ce qui se passe ailleurs pendant que l'appareil cherche sa position (plusieurs secondes de GPS).
+    var onAsk: (() -> Void)?
 
     func currentFix() async -> SharedLocationFixResult {
         asks += 1
+        onAsk?()
         return result
     }
 
