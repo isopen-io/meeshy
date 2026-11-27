@@ -4,7 +4,8 @@
  * `catalog-fr-quote.ts`) : chaque langue RÉPAND la sienne dans son catalogue.
  * La discrétion de la recherche par identifiant, l'annonce de mon retour sur
  * Meeshy (réglage de l'ÉMETTEUR) et sa réception (préférence du DESTINATAIRE),
- * et ce qu'un proche peut déclencher chez moi : « Recevoir des Bring » (#16588).
+ * et ce qu'un proche peut déclencher chez moi : « Recevoir des Bring » (#16588),
+ * « Recevoir les invitations « ensemble » » (#17990).
  */
 const frContactDiscovery = {
   'settings.privacy.hide_from_search': 'Masquer mon numéro et mon e-mail',
@@ -20,6 +21,9 @@ const frContactDiscovery = {
   'settings.notif.bring': 'Recevoir des Bring',
   'settings.notif.bring.info':
     'Un Proche peut faire sonner votre téléphone pour une urgence extrême, même en silencieux. Coupé, personne ne peut plus vous faire sonner.',
+  'settings.notif.together': 'Recevoir les invitations « ensemble »',
+  'settings.notif.together.info':
+    'Un Proche peut vous inviter à regarder ou écouter ensemble une vidéo ou un audio. Coupé, aucune invitation ne vous arrive.',
 } as const;
 
 export type ContactDiscoveryCatalogSlice = Readonly<Record<keyof typeof frContactDiscovery, string>>;

@@ -15,6 +15,9 @@ const arContactDiscovery = {
   'settings.notif.bring': 'تلقي Bring',
   'settings.notif.bring.info':
     'يمكن لأحد المقرّبين أن يجعل هاتفك يرنّ في حالة طوارئ قصوى، حتى في الوضع الصامت. عند الإيقاف، لا يمكن لأحد أن يجعل هاتفك يرنّ.',
+  'settings.notif.together': 'تلقّي دعوات «معًا»',
+  'settings.notif.together.info':
+    'يمكن لأحد المقرّبين أن يدعوك لمشاهدة فيديو أو الاستماع إلى مقطع صوتي معًا. عند الإيقاف، لا تصلك أي دعوة.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default arContactDiscovery;

@@ -27,6 +27,7 @@ const cached: AppPreferences = {
   notifyContactsOnReturn: true,
   contactActivityEnabled: true,
   bringEnabled: true,
+  togetherEnabled: true,
   bloodProximityEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
@@ -90,6 +91,18 @@ describe('performPreferenceEdit', () => {
       answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
     });
     expect(await performPreferenceEdit({ patch: { showReadReceipts: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(read()).toEqual(cached);
+  });
+
+  /* #17990 — « Recevoir les invitations ensemble » : la seule clé part, et un refus rend l'interrupteur tel qu'il était. */
+  test('« Recevoir les invitations ensemble » : la seule clé part, un refus rend l’instantané', async () => {
+    const { deps, calls, read } = depsWith({
+      online: true,
+      seed: cached,
+      answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
+    });
+    expect(await performPreferenceEdit({ patch: { togetherEnabled: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(calls[0]?.body).toEqual({ notification: { togetherEnabled: false } });
     expect(read()).toEqual(cached);
   });
 

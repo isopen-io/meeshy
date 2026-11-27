@@ -56,6 +56,7 @@ const expected: AppPreferences = {
   soundEnabled: true,
   contactActivityEnabled: false,
   bringEnabled: true,
+  togetherEnabled: true,
   bloodProximityEnabled: true,
   gameEnabled: false,
   gamePhotoEnabled: false,
@@ -299,6 +300,42 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
     expect(calls).toHaveLength(0);
     expect(written.ok && written.data.soundEnabled).toBe(false);
     expect(read.ok && read.data.soundEnabled).toBe(false);
+  });
+});
+
+/**
+ * « RECEVOIR LES INVITATIONS ENSEMBLE » (#17990) — l'interrupteur GLOBAL de
+ * `notification.togetherEnabled` (#17023), lu par `togetherReception` avant
+ * qu'une invitation « regarder ou écouter ensemble » parte. Défaut serveur :
+ * activé. Un serveur qui ne le sert pas veut dire « reçues ».
+ */
+describe('« Recevoir les invitations ensemble » — le port le lit, le rend et l’écrit (#17990)', () => {
+  test('servi coupé, il est rendu coupé', () => {
+    expect(decodeAppPreferences(wire({ notification: { togetherEnabled: false } }))?.togetherEnabled).toBe(false);
+  });
+
+  test('absent (serveur plus ancien), il vaut « reçues »', () => {
+    expect(decodeAppPreferences(wire())?.togetherEnabled).toBe(true);
+  });
+
+  test('de mauvais type, la lecture est illisible plutôt que devinée', () => {
+    expect(decodeAppPreferences(wire({ notification: { togetherEnabled: 'non' } }))).toBeNull();
+  });
+
+  test('la réponse d’une écriture le rend s’il est servi, ne l’invente pas sinon', () => {
+    const base = { pushEnabled: true, soundEnabled: true, contactActivityEnabled: true };
+    expect(decodeServedPreferences({ notification: { ...base, togetherEnabled: false } })).toEqual({ ...base, togetherEnabled: false });
+    expect(decodeServedPreferences({ notification: base })).toEqual(base);
+  });
+
+  test('il part seul sous `notification`, là où la passerelle le lit', () => {
+    expect(preferencesPatchBody({ togetherEnabled: false })).toEqual({ notification: { togetherEnabled: false } });
+  });
+
+  test('la lecture le demande avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('notification.togetherEnabled');
   });
 });
 

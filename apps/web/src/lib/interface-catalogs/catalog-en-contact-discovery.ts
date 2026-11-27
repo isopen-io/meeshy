@@ -15,6 +15,9 @@ const enContactDiscovery = {
   'settings.notif.bring': 'Receive Brings',
   'settings.notif.bring.info':
     'A close friend can ring your phone for an extreme emergency, even on silent. Off, no one can ring you.',
+  'settings.notif.together': 'Receive “together” invitations',
+  'settings.notif.together.info':
+    'A close friend can invite you to watch or listen to a video or audio together. Off, no invitation reaches you.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default enContactDiscovery;

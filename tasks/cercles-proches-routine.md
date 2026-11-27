@@ -2020,3 +2020,17 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : « Recevoir les invitations « ensemble » » sur le web (#17990)
+
+- Reprise : #20463 (Android de #19884) et #20417 (iOS de #20249) fusionnées, #20249 et #19884 fermées. Aucune PR de la
+  routine ouverte. Les lots de position iOS restants (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift`, que la PR vivante #20514 découpe en sept fichiers : ce réveil leur cède la place.
+- Lot : #17990. Dans les réglages de notification du web, « Recevoir les invitations « ensemble » » juste après
+  « Recevoir des Bring » : le port lit `notification.togetherEnabled` (absent ⇒ reçues, mauvais type ⇒ illisible),
+  l'écrit seul sous `notification`, en optimiste avec retour arrière sur refus. Sept langues. La passerelle lisait déjà
+  la clé (`togetherReception`, #17023) ; rien ne change côté serveur.
+- Audit adversarial : non requis (réglage du destinataire, aucune donnée de cercle servie, aucun chiffrement).
+- Gates : web `bun test` 35 588 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0.
+- Reste : iOS (#17988) et Android (#17989) de l'interrupteur global.
+- Prochain lot : quand #20514 est fusionnée, iOS de #20416 / #20308, puis #20054, #20056 ; sinon #17988.
