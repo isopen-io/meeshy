@@ -60,6 +60,10 @@ export type AppOptions = {
   readonly reglages?: ReadonlyArray<Record<string, unknown>>;
   /** Le document `UserPreferences.privacy` de chaque compte (#19362). */
   readonly privacy?: Readonly<Record<string, Record<string, boolean>>>;
+  /** La présence en base de chaque compte (#19539) : `isOnline` et `lastActiveAt`. */
+  readonly presences?: Readonly<Record<string, { readonly isOnline: boolean; readonly lastActiveAt: Date | null }>>;
+  /** Les comptes dont une socket est au premier plan, que le gestionnaire sert (#19539). Absent : pas de présence vivante. */
+  readonly connectes?: readonly string[];
 };
 
 export type TestApp = {
@@ -104,6 +108,7 @@ export async function buildRelationApp(
     [MOI, AUTRE, TIERS].map((id) => [id, {
       id, deactivatedAt: null, blockedUserIds: options.bloques && id === AUTRE ? [...options.bloques] : [],
       birthDate: options.naissances?.[id] ?? null, username: `u${id.slice(-2)}`, displayName: `U${id.slice(-2)}`,
+      isOnline: false, lastActiveAt: null, ...(options.presences?.[id] ?? {}),
     }]),
   );
   const prisma = {
@@ -166,7 +171,10 @@ export async function buildRelationApp(
   app.decorate('notificationService', notifier as never);
   app.decorate('socialEvents', null as never);
   app.decorate('redis', null as never);
-  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io, joinUserToConversationRoom: async () => undefined }) } as never);
+  app.decorate('socketIOHandler', { getManager: () => ({
+    getIO: () => io, joinUserToConversationRoom: async () => undefined,
+    ...(options.connectes ? { isPresenceOnline: (id: string) => options.connectes!.includes(id) } : {}),
+  }) } as never);
   let acting = options.userId ?? MOI;
   app.decorate('authenticate', async (req: object) => {
     Object.assign(req, {
