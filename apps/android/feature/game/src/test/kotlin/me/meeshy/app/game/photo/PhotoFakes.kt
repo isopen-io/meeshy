@@ -6,6 +6,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import java.io.File
+import kotlinx.coroutines.CompletableDeferred
+import me.meeshy.sdk.game.ReferralLinkProviding
 import me.meeshy.sdk.media.CaptureGallery
 import me.meeshy.sdk.model.game.photo.CameraFailure
 import me.meeshy.sdk.model.game.photo.GamePhotoMoment
@@ -41,15 +43,47 @@ internal class FakeComposer(var fails: Boolean = false) : GamePhotoComposing {
     }
 }
 
+/** Le lien de parrainage : un jeton déjà là ([existing]) ou celui que « Partager » crée ([created], `null` = refus). */
+internal class FakeReferralLinks(var existing: String? = null, var created: String? = NEW_LINK) : ReferralLinkProviding {
+    var reads = 0
+    var creations = 0
+
+    /** Retient la création tant qu'il n'est pas complété : un second toucher arrive pendant qu'elle court. */
+    var gate: CompletableDeferred<Unit>? = null
+
+    override suspend fun existingLink(): String? {
+        reads++
+        return existing
+    }
+
+    override suspend fun shareableLink(): String? {
+        creations++
+        gate?.await()
+        return existing ?: created
+    }
+
+    companion object {
+        const val NEW_LINK = "https://meeshy.me/join/new"
+    }
+}
+
+internal val fakeReferralText = PhotoReferralText(
+    title = "Rejoins-moi sur Meeshy",
+    qrLabel = "QR code de ton lien d'invitation",
+    shareText = { link -> "Rejoins-moi sur Meeshy : $link" },
+)
+
 internal fun fakeSession(
     moment: GamePhotoMoment,
     camera: FakeCamera = FakeCamera(),
     composer: FakeComposer = FakeComposer(),
     notebook: FakePhotoNotebook = FakePhotoNotebook(),
     gallery: FakeGallery = FakeGallery(),
+    referralLinks: FakeReferralLinks? = null,
 ) = GamePhotoSession(
     moment, PhotoCanvasText("kicker", "Le titre du moment", "31 oct. 2026"), camera, composer, notebook, gallery,
     strikeMillis = 0, encodeSource = { byteArrayOf(7) },
+    referralLinks = referralLinks, referralText = referralLinks?.let { fakeReferralText },
 )
 
 private fun pixel(): ImageBitmap = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888).asImageBitmap()

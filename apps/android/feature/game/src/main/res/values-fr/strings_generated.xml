@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Photographier</string>
     <string name="game_photo_offer_title">On immortalise ?</string>
     <string name="game_photo_preview">Aperçu : %1$s</string>
+    <string name="game_photo_referral_qr_label">QR code de ton lien d’invitation</string>
     <string name="game_photo_save">Enregistrer</string>
     <string name="game_photo_scene_a11y">Aperçu de la caméra : touche deux fois pour prendre sans enregistrer dans Photos</string>
     <string name="game_photo_selfie">Selfie avec nous</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Passeur</string>
     <string name="game_rank_polyglotte">Polyglotte</string>
     <string name="game_rank_voix">Voix</string>
+    <string name="game_referral_link_toggle">Mon lien d\'invitation sur la carte</string>
+    <string name="game_referral_share_text">Rejoins-moi sur Meeshy : %1$s</string>
+    <string name="game_referral_title">Rejoins-moi sur Meeshy</string>
     <string name="game_rules_1_title">Chaque geste fait jaillir des étincelles</string>
     <string name="game_rules_2_title">Les étincelles forment ta lumière</string>
     <string name="game_rules_3_title">On frappe des Meeshes</string>

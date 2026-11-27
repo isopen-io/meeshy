@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">صوّر</string>
     <string name="game_photo_offer_title">هل نخلّدها؟</string>
     <string name="game_photo_preview">معاينة: %1$s</string>
+    <string name="game_photo_referral_qr_label">رمز QR لرابط دعوتك</string>
     <string name="game_photo_save">احفظ</string>
     <string name="game_photo_scene_a11y">معاينة الكاميرا، انقر مرتين للالتقاط دون حفظ في الصور</string>
     <string name="game_photo_selfie">سيلفي معنا</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">جسّار</string>
     <string name="game_rank_polyglotte">متعدّد اللغات</string>
     <string name="game_rank_voix">صوت</string>
+    <string name="game_referral_link_toggle">رابط دعوتي على البطاقة</string>
+    <string name="game_referral_share_text">انضم إليّ على Meeshy: ⁦%1$s⁩</string>
+    <string name="game_referral_title">انضم إليّ على Meeshy</string>
     <string name="game_rules_1_title">كل إجراء يُطلق شرارات</string>
     <string name="game_rules_2_title">الشرارات تصنع نورك</string>
     <string name="game_rules_3_title">نسكّ Meesh</string>

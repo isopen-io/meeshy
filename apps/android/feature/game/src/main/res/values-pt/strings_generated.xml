@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Fotografar</string>
     <string name="game_photo_offer_title">Vamos eternizar?</string>
     <string name="game_photo_preview">Prévia: %1$s</string>
+    <string name="game_photo_referral_qr_label">Código QR do seu link de convite</string>
     <string name="game_photo_save">Salvar</string>
     <string name="game_photo_scene_a11y">Prévia da câmera: toque duas vezes para tirar sem salvar em Fotos</string>
     <string name="game_photo_selfie">Selfie com a gente</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Intérprete</string>
     <string name="game_rank_polyglotte">Poliglota</string>
     <string name="game_rank_voix">Voz</string>
+    <string name="game_referral_link_toggle">Meu link de convite no cartão</string>
+    <string name="game_referral_share_text">Junte-se a mim no Meeshy: %1$s</string>
+    <string name="game_referral_title">Junte-se a mim no Meeshy</string>
     <string name="game_rules_1_title">Cada gesto faz saltar faíscas</string>
     <string name="game_rules_2_title">As faíscas formam a sua luz</string>
     <string name="game_rules_3_title">Cunham-se Meeshes</string>

@@ -90,6 +90,8 @@ data class PhotoReferral(
     val qrLabel: String,
     val flameForm: FlameFormKey? = null,
     val flameLabel: String? = null,
+    /** L'EMPLACEMENT du carré, dans l'aperçu seulement : aucun jeton n'existe encore, « Partager » le créera. */
+    val placeholder: Boolean = false,
 )
 
 /** Ce que le cadre écrit : les deux lignes du moment et sa date, déjà dites dans la langue de l'interface. */
@@ -154,9 +156,10 @@ fun GamePhotoCanvas(
             if (banner != null && referral != null) {
                 GameReferralBannerView(
                     title = referral.title,
-                    link = referral.link,
+                    link = referral.link.takeUnless { referral.placeholder },
                     qrLabel = referral.qrLabel,
                     modifier = Modifier.place(banner),
+                    preview = referral.placeholder,
                     flameForm = referral.flameForm,
                     flameLabel = referral.flameLabel,
                     rightToLeft = rightToLeft,

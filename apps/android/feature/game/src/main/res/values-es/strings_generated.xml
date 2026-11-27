@@ -953,6 +953,7 @@
     <string name="game_photo_offer_start">Fotografiar</string>
     <string name="game_photo_offer_title">¿Lo inmortalizamos?</string>
     <string name="game_photo_preview">Vista previa: %1$s</string>
+    <string name="game_photo_referral_qr_label">Código QR de tu enlace de invitación</string>
     <string name="game_photo_save">Guardar</string>
     <string name="game_photo_scene_a11y">Vista de la cámara: toca dos veces para hacer la foto sin guardarla en Fotos</string>
     <string name="game_photo_selfie">Selfie con nosotros</string>
@@ -984,6 +985,9 @@
     <string name="game_rank_passeur">Barquero</string>
     <string name="game_rank_polyglotte">Políglota</string>
     <string name="game_rank_voix">Voz</string>
+    <string name="game_referral_link_toggle">Mi enlace de invitación en la tarjeta</string>
+    <string name="game_referral_share_text">Únete a mí en Meeshy: %1$s</string>
+    <string name="game_referral_title">Únete a mí en Meeshy</string>
     <string name="game_rules_1_title">Cada gesto hace brotar chispas</string>
     <string name="game_rules_2_title">Las chispas forman tu luz</string>
     <string name="game_rules_3_title">Se acuñan Meeshes</string>
