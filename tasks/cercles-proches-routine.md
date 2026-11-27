@@ -2020,3 +2020,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : iOS de #20416 (point 2) et de #20308
+
+- Reprise : le run du 2026-11-25 (volet iOS de #20540, « un Sang s'approche » ouvre la carte des deux) a été poussé
+  sur `dev` (e19d5dc93) sans entrée de journal ; #20540 reste ouverte pour la seule recette à deux téléphones. #20417
+  (iOS de #20249) est fusionnée : les lots iOS de la position sont libres. Aucune branche vivante sur ces chemins.
+- Lot : iOS de #20416 point 2 et de #20308, iso #20431 (web) et #20441 (Android).
+  - Un refus certain (`invalid`, `fixedPoint`, `startedElsewhere`, rendus avant toute écriture) ne fait plus oublier
+    `publishedStart` ; un refus douteux l'oublie encore (`SharedLocationSharingCenter.nothingWritten`).
+  - Une réponse à « Montrer ta position réelle ? » prend la position AVANT de relire le partage servi : un point relancé
+    ailleurs pendant le GPS se voit à la relecture, la question se repose et rien ne part.
+  - Un nom vide ou blanc ne se nomme plus dans la question (`SharedLocationPointReplacement.audience`).
+- Gates locaux : `check_house_rules` (42 règles), `check_cohesion_budget`, `check_test_registration`, garde des couleurs
+  d'accent verts. iOS ne se compile pas en conteneur : la CI iOS de la PR fait foi.
+- Prochain lot : #20054, #20056 ; puis #13934 (écoute + titre défilant) selon la spec.
