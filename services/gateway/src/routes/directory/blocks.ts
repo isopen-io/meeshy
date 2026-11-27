@@ -20,6 +20,7 @@ import { cancelAutoAcquaintanceOnBlock } from '../../services/relations/autoAcqu
 import { forgetBloodBundleBetween, withdrawRitualSharesBetween } from '../../services/relations/ritualShareWithdrawal';
 import { stopBringsAfterUserBlock } from '../bring';
 import { cutTalkiesOnBlock, talkieCutDepsOf } from '../../services/talkie/talkieCut';
+import { cutLiveLocationsOnBlock } from '../../services/liveLocation/liveLocationCut';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { sendWithETag } from '../../utils/etag';
@@ -162,6 +163,9 @@ export async function bloquer(
   // Le talkie (#13935) : une voix qui passe entre les deux est coupée, sans rien apprendre au bloqué.
   const couper = async () => cutTalkiesOnBlock(talkieCutDepsOf(), { blockerId: moi, blockedId: cibleId, scope: 'user' });
   couper().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Talkie not cut after block', error));
+  // La position en direct (#16794) : le partage en cours entre les deux s'éteint pour la paire, épingles comprises.
+  const couperPosition = async () => cutLiveLocationsOnBlock({ blockerId: moi, blockedId: cibleId });
+  couperPosition().catch((error: unknown) => logError(fastify.log, '[BLOCKS] Live location not cut after block', error));
   // L'écoute partagée (#13934) : ce que chacun voyait de l'écoute de l'autre s'efface.
   refreshNowPlayingAfter(ecoute, { userA: moi, userB: cibleId, before: ecouteAvant })
     .catch((error: unknown) => logError(fastify.log, '[BLOCKS] Now-playing not refreshed after block', error));

@@ -195,6 +195,7 @@ import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rat
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
 import { identityExclusion } from '../utils/identity-exclusion';
+import { registerProcessLiveLocationCutter, unregisterProcessLiveLocationCutter } from '../../services/liveLocation/liveLocationCut';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -266,8 +267,9 @@ interface LiveLocationSession {
  * frappe relit à CHAQUE `typing:start` ; ici ce serait 120 lectures par minute
  * et par partageur. La seule façon de fermer la fenêtre sans la payer est de
  * faire couper le partage par la ROUTE de blocage, comme `cutTalkiesOnBlock`
- * coupe le talkie — c'est #16794, et cela exige un canal inter-instances que ce
- * registre en mémoire n'a pas.
+ * coupe le talkie : c'est `cutPair` (#16794). La passerelle est mono-instance,
+ * donc cette coupure couvre tous les partages ; ce que la minute vaut encore à
+ * la deuxième instance est écrit dans `services/liveLocation/liveLocationCut.ts`.
  */
 const BLOCK_SET_REFRESH_MS = 60_000;
 
@@ -286,6 +288,10 @@ const UNKNOWN_SESSION_VERDICT_MAX = 10_000;
 // un anonyme), et aucun caractère ne peut être déclaré absent des deux.
 const sessionKey = (conversationId: string, userId: string): string =>
   `${conversationId.length}:${conversationId}:${userId}`;
+const userOfSessionKey = (key: string): string => {
+  const separator = key.indexOf(':');
+  return key.slice(separator + 1 + Number(key.slice(0, separator)) + 1);
+};
 
 export class LocationHandler {
   private io: SocketIOServer;
@@ -329,6 +335,8 @@ export class LocationHandler {
       ttlMs: BLOCK_SET_REFRESH_MS,
       now: () => this.now().getTime(),
     });
+    // La route de blocage coupe les partages de CE processus (#16794) : le registre se déclare lui-même.
+    registerProcessLiveLocationCutter(this);
   }
 
   async handleLiveLocationStart(
@@ -513,17 +521,20 @@ export class LocationHandler {
       if (session) {
         const dueForRefresh = now.getTime() - session.blockRelatedAt >= BLOCK_SET_REFRESH_MS;
         const refreshed = dueForRefresh ? await this._blockRelatedOf(context) : undefined;
-        hidden = refreshed ?? session.blockRelated;
+        // Relue APRÈS l'`await` : une coupure de blocage (`cutPair`, #16794)
+        // tombée pendant la lecture ne doit pas être écrasée par l'ensemble d'avant.
+        const current = this.sessions.get(key) ?? session;
+        hidden = refreshed ?? current.blockRelated;
 
         // La dernière position connue est ce que le rattrapage rejouera : sans
         // ce rafraîchissement, un arrivant recevrait le point de DÉPART, qui
         // peut avoir des heures.
         this.sessions.set(key, {
-          ...session,
+          ...current,
           latitude: validated.latitude,
           longitude: validated.longitude,
           blockRelated: hidden,
-          blockRelatedAt: refreshed === undefined ? session.blockRelatedAt : now.getTime(),
+          blockRelatedAt: refreshed === undefined ? current.blockRelatedAt : now.getTime(),
         });
       } else {
         // Session INCONNUE (redémarrage, ou client qui n'a jamais démarré) :
@@ -769,6 +780,61 @@ export class LocationHandler {
   }
 
   /**
+   * UN BLOCAGE ENTRE `userA` ET `userB` (#16794), appelé par la route de blocage
+   * comme `cutTalkiesOnBlock` coupe le talkie.
+   *
+   * L'exclusion du pair est posée SUR-LE-CHAMP dans chaque session de la paire,
+   * sans attendre le pas de `BLOCK_SET_REFRESH_MS` ni relire la base : le point
+   * suivant ne lui parvient plus. Le verdict retenu d'une session INCONNUE est
+   * oublié, donc relu au point suivant. Le partage continue pour les autres
+   * membres du fil.
+   *
+   * Chacun des deux reçoit ensuite le retrait de l'épingle de l'autre, sur ses
+   * seules sockets PRÉSENTES dans le fil (la room est l'autorisation, comme au
+   * rattrapage) : une socket du pair hors du fil n'apprend ni l'identifiant de
+   * la conversation ni l'existence du partage. Le retrait ne porte aucune
+   * position, et un partage déjà terminé n'en annonce pas un second.
+   */
+  async cutPair(pair: { readonly userA: string; readonly userB: string }): Promise<void> {
+    const peerOf = (userId: string): string | null => {
+      const id = userId.toLowerCase();
+      if (id === pair.userA.toLowerCase()) return pair.userB;
+      return id === pair.userB.toLowerCase() ? pair.userA : null;
+    };
+    [...this.unknownSessionVerdicts.keys()]
+      .filter(key => peerOf(userOfSessionKey(key)) !== null)
+      .forEach(key => this.unknownSessionVerdicts.delete(key));
+
+    const now = this.now();
+    const cut = [...this.sessions].flatMap(([key, session]) => {
+      const peer = peerOf(session.userId);
+      return peer === null ? [] : [{ key, session, peer }];
+    });
+    cut.forEach(({ key, session, peer }) =>
+      this.sessions.set(key, { ...session, blockRelated: new Set([...session.blockRelated, peer]) }));
+
+    const retractions = await Promise.allSettled(cut
+      .filter(({ session }) => now < session.expiresAt)
+      .map(({ session, peer }) => this._retractPinFrom(session, peer)));
+    retractions
+      .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
+      .forEach(result => logger.error('live location pin not retracted after block', { error: result.reason }));
+  }
+
+  private async _retractPinFrom(session: LiveLocationSession, peerId: string): Promise<void> {
+    const room = ROOMS.conversation(session.conversationId);
+    const eventData: LocationLiveStoppedEventData = {
+      conversationId: session.conversationId,
+      userId: session.userId,
+      stoppedAt: this.now(),
+    };
+    const sockets = await this.io.in(ROOMS.user(peerId)).fetchSockets();
+    sockets
+      .filter(peerSocket => peerSocket.rooms.has(room))
+      .forEach(peerSocket => peerSocket.emit(SERVER_EVENTS.LOCATION_LIVE_STOPPED, eventData));
+  }
+
+  /**
    * Avance le terme à MAINTENANT et diffuse le retrait — l'extinction, en un
    * seul geste et pour les deux fins qui l'exigent.
    *
@@ -799,6 +865,7 @@ export class LocationHandler {
     for (const timer of this.expiryTimers.values()) clearTimeout(timer);
     this.expiryTimers.clear();
     this.sessions.clear();
+    unregisterProcessLiveLocationCutter(this);
   }
 
   private _openSession(session: LiveLocationSession): void {
