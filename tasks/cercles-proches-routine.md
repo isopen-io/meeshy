@@ -2039,3 +2039,12 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   chrome lisible sur fond clair. La chute (#18748) n'a pas encore de glyphe d'avatar sur le web.
 - Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
   dès que #20514 est fusionnée ou abandonnée.
+
+## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
+
+- Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
+  (867e62f8b, plus complet : appel et inactivité en plus). Selon la règle « celui qui a payé le second cède », ce run
+  a repris la version de `dev` et n'a gardé que ce qu'elle ne faisait pas.
+- Lot : #20658. La ligne de la liste des positions dit la même vie que le nom de l'épingle (`usePinLife` /
+  `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
+- Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.
