@@ -22,11 +22,8 @@ internal fun RelationReceptionSetting.titleRes(): Int = when (this) {
     RelationReceptionSetting.TOGETHER -> R.string.circles_settings_block_together
 }
 
-internal fun RelationReceptionSetting.detailRes(): Int? = when (this) {
-    RelationReceptionSetting.BRING -> null
-    RelationReceptionSetting.TALKIE -> R.string.circles_settings_block_talkie_detail
-    RelationReceptionSetting.TOGETHER -> R.string.circles_settings_block_together_detail
-}
+internal fun RelationReceptionSetting.detailRes(): Int? =
+    if (this == RelationReceptionSetting.TALKIE) R.string.circles_settings_block_talkie_detail else null
 
 /**
  * Les blocages de réception d'une personne SANS lien (#16643) — un collègue de l'équipe, que la passerelle laisse sonner

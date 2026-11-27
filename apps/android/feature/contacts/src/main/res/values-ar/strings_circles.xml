@@ -56,5 +56,4 @@
     <string name="circles_sheet_settings_unavailable">قريبًا</string>
     <string name="contacts_tab_circles">الدوائر</string>
     <string name="circles_settings_block_together">كتم دعواته «معًا»</string>
-    <string name="circles_settings_block_together_detail">لن يتمكن هذا الشخص بعد الآن من دعوتك للمشاهدة أو الاستماع معًا. تستمر الجلسة الجارية. لن يتم إعلامه.</string>
 </resources>

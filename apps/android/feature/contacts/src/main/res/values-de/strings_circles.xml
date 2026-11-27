@@ -56,5 +56,4 @@
     <string name="circles_sheet_settings_unavailable">Demnächst verfügbar</string>
     <string name="contacts_tab_circles">Kreise</string>
     <string name="circles_settings_block_together">„Zusammen“-Einladungen stummschalten</string>
-    <string name="circles_settings_block_together_detail">Die Person kann dich nicht mehr einladen, gemeinsam zu schauen oder zu hören. Eine laufende Sitzung geht weiter. Die Person wird nicht benachrichtigt.</string>
 </resources>

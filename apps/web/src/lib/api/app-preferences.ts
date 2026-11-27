@@ -35,6 +35,9 @@ import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
  *    (#17990), l'interrupteur GLOBAL que `guestReceivesInvitesFrom` (#17023)
  *    lit avant qu'une invitation « regarder ensemble » parte ; absent côté
  *    serveur : reçues ;
+ *  - `notification.talkieEnabled` — « Recevoir le talkie » (#20700),
+ *    l'interrupteur GLOBAL que `talkieGate` (#14407) lit avant d'ouvrir une
+ *    prise de parole ; absent côté serveur : reçu ;
  *  - `notification.bloodProximityEnabled` — « Quand un de mes Sangs s'approche » (#20540), la porte du push
  *    `blood_proximity` (`notifications/type-preference.ts`) ; absente côté serveur : reçue ;
  *  - `privacy.showOnlineStatus` / `showLastSeen` — `PresenceVisibilityService`
@@ -62,7 +65,7 @@ import { APP_PREFERENCES_QUERY_KEY } from './me-keys';
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces dix-huit
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces dix-neuf
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -77,13 +80,14 @@ export type AppPreferencesDeps = { readonly source: DataSource; readonly transpo
 const ThemeMode = z.enum(['light', 'dark', 'auto']);
 
 const Application = z.object({ theme: ThemeMode });
-/** `gameEnabled`, `gamePhotoEnabled`, `bringEnabled`, `togetherEnabled` et `bloodProximityEnabled` sont OPTIONNELS à la lecture : un serveur qui ne les sert pas (avant #9490, #10175, #14407, #17023, #20540) veut dire « reçu ». */
+/** `gameEnabled`, `gamePhotoEnabled`, `bringEnabled`, `togetherEnabled`, `talkieEnabled` et `bloodProximityEnabled` sont OPTIONNELS à la lecture : un serveur qui ne les sert pas (avant #9490, #10175, #14407, #17023, #20540) veut dire « reçu ». */
 const Notification = z.object({
   pushEnabled: z.boolean(),
   soundEnabled: z.boolean(),
   contactActivityEnabled: z.boolean(),
   bringEnabled: z.optional(z.boolean()),
   togetherEnabled: z.optional(z.boolean()),
+  talkieEnabled: z.optional(z.boolean()),
   bloodProximityEnabled: z.optional(z.boolean()),
   gameEnabled: z.optional(z.boolean()),
   gamePhotoEnabled: z.optional(z.boolean()),
@@ -111,12 +115,13 @@ export type ThemeMode = z.infer<typeof ThemeMode>;
 
 export type AppPreferences = Readonly<
   z.infer<typeof Application> &
-    Omit<z.infer<typeof Notification>, 'gameEnabled' | 'gamePhotoEnabled' | 'bringEnabled' | 'togetherEnabled' | 'bloodProximityEnabled'> &
+    Omit<z.infer<typeof Notification>, 'gameEnabled' | 'gamePhotoEnabled' | 'bringEnabled' | 'togetherEnabled' | 'talkieEnabled' | 'bloodProximityEnabled'> &
     Omit<z.infer<typeof Privacy>, 'saveMediaToGallery'> & {
       readonly gameEnabled: boolean;
       readonly gamePhotoEnabled: boolean;
       readonly bringEnabled: boolean;
       readonly togetherEnabled: boolean;
+      readonly talkieEnabled: boolean;
       readonly bloodProximityEnabled: boolean;
       readonly saveMediaToGallery: boolean;
     }
@@ -134,6 +139,7 @@ export const APP_PREFERENCE_FIELDS = {
   contactActivityEnabled: 'notification',
   bringEnabled: 'notification',
   togetherEnabled: 'notification',
+  talkieEnabled: 'notification',
   bloodProximityEnabled: 'notification',
   gameEnabled: 'notification',
   gamePhotoEnabled: 'notification',
@@ -167,6 +173,7 @@ export function decodeAppPreferences(raw: unknown): AppPreferences | null {
     gamePhotoEnabled: parsed.data.notification.gamePhotoEnabled ?? true,
     bringEnabled: parsed.data.notification.bringEnabled ?? true,
     togetherEnabled: parsed.data.notification.togetherEnabled ?? true,
+    talkieEnabled: parsed.data.notification.talkieEnabled ?? true,
     bloodProximityEnabled: parsed.data.notification.bloodProximityEnabled ?? true,
     saveMediaToGallery: parsed.data.privacy.saveMediaToGallery ?? false,
   };
@@ -175,7 +182,7 @@ export function decodeAppPreferences(raw: unknown): AppPreferences | null {
 export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
   const parsed = Served.safeParse(raw);
   if (!parsed.success) return null;
-  const { gameEnabled, gamePhotoEnabled, bringEnabled, togetherEnabled, bloodProximityEnabled, ...notification } = parsed.data.notification ?? {};
+  const { gameEnabled, gamePhotoEnabled, bringEnabled, togetherEnabled, talkieEnabled, bloodProximityEnabled, ...notification } = parsed.data.notification ?? {};
   const { allowAnalytics, saveMediaToGallery, ...privacy } = parsed.data.privacy ?? {};
   return {
     ...parsed.data.application,
@@ -184,6 +191,7 @@ export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
     ...(gamePhotoEnabled === undefined ? {} : { gamePhotoEnabled }),
     ...(bringEnabled === undefined ? {} : { bringEnabled }),
     ...(togetherEnabled === undefined ? {} : { togetherEnabled }),
+    ...(talkieEnabled === undefined ? {} : { talkieEnabled }),
     ...(bloodProximityEnabled === undefined ? {} : { bloodProximityEnabled }),
     ...privacy,
     ...(allowAnalytics === undefined ? {} : { allowAnalytics }),

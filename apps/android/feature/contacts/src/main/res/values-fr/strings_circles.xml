@@ -56,5 +56,4 @@
     <string name="circles_sheet_settings_unavailable">Bientôt disponible</string>
     <string name="contacts_tab_circles">Cercles</string>
     <string name="circles_settings_block_together">Couper ses invitations « ensemble »</string>
-    <string name="circles_settings_block_together_detail">Cette personne ne pourra plus vous inviter à regarder ou écouter ensemble. Une séance en cours continue. Elle n’en est pas prévenue.</string>
 </resources>

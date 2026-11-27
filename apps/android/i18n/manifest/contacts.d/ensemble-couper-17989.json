@@ -7,10 +7,6 @@
         {
           "androidName": "circles_settings_block_together",
           "status": "android-only"
-        },
-        {
-          "androidName": "circles_settings_block_together_detail",
-          "status": "android-only"
         }
       ]
     }
