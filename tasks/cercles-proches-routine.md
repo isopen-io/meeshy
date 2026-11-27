@@ -2041,5 +2041,8 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   suivi.
 - Gates : passerelle `relations` + `directory` 606/606, nouveau témoin 8/8 (6 rouges avant le branchement), gardes
   de présence et de porte d'émission vertes, `tsc` 0 ; web `presence-live` 18/18.
+- Audit adversarial : non bloquant. Corrigé dans le lot : la présence servie se lit sur les sockets au premier plan
+  (`isPresenceOnline` du gestionnaire), plus sur la colonne `User.isOnline` qui retarde ; le rôle passe par
+  `lawRoleOf`. Laissé au porteur : une charge émise À L'INSTANT de la baisse est un signal temporel (RG-07).
 - Prochain lot : après la fusion de #20514, iOS de #20416 / #20308, #20054, #20056 ; sinon #19538 ou #19540
   (présence et cercles côté passerelle).

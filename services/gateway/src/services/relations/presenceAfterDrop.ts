@@ -22,12 +22,29 @@ import type { GlobalUserRoleType } from '@meeshy/shared/types/role-types';
 import { ROOMS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { PresenceVisibility } from '@meeshy/shared/utils/presence-visibility';
 import { getPresenceVisibilityService } from '../PresenceVisibilityService';
+import { ACCOUNT_STATE_SELECT, lawRoleOf, type AccountState } from './usableAccount';
 import type { ServerEmitIO } from '../../socketio/serverEmit';
 
 export type PresenceDropParams = {
   readonly prisma: PrismaClient;
   readonly io: ServerEmitIO | undefined;
   readonly report: (error: unknown) => void;
+  /**
+   * La présence VIVANTE (socket au premier plan), celle que `user:status` et
+   * `presence:snapshot` servent. La colonne `User.isOnline` est écrite sans attente et
+   * peut retarder : elle n'est qu'un repli quand la passerelle n'a pas de gestionnaire.
+   */
+  readonly isPresent?: (userId: string) => boolean;
+};
+
+type PresenceFastify = {
+  readonly socketIOHandler?: { getManager?: () => { isPresenceOnline?: (id: string) => boolean } | undefined } | null;
+};
+
+/** La présence vivante du gestionnaire de sockets de cette passerelle, quand il est monté. */
+export const livePresenceOf = (fastify: PresenceFastify): ((userId: string) => boolean) | undefined => {
+  const manager = fastify.socketIOHandler?.getManager?.();
+  return typeof manager?.isPresenceOnline === 'function' ? (id) => manager.isPresenceOnline!(id) : undefined;
 };
 
 type Pair = { readonly userA: string; readonly userB: string };
@@ -35,7 +52,7 @@ type Pair = { readonly userA: string; readonly userB: string };
 /** Ce que chaque lecteur voyait de l'autre, clé = lecteur. */
 export type PresencePairAccess = ReadonlyMap<string, PresenceVisibility>;
 
-type Person = {
+type Person = AccountState & {
   readonly id: string;
   readonly role: string | null;
   readonly username: string | null;
@@ -49,7 +66,7 @@ type Person = {
 
 const PERSON_SELECT = {
   id: true, role: true, username: true, displayName: true, firstName: true, lastName: true,
-  isOnline: true, lastActiveAt: true, deactivatedAt: true,
+  isOnline: true, lastActiveAt: true, ...ACCOUNT_STATE_SELECT,
 } as const;
 
 const readPerson = async (prisma: PrismaClient, id: string): Promise<Person | null> =>
@@ -58,7 +75,7 @@ const readPerson = async (prisma: PrismaClient, id: string): Promise<Person | nu
 const nameOf = (person: Person): string =>
   person.displayName || `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || person.username || person.id;
 
-const viewerOf = (person: Person) => ({ userId: person.id, role: (person.role ?? 'USER') as GlobalUserRoleType });
+const viewerOf = (person: Person) => ({ userId: person.id, role: (lawRoleOf(person) ?? 'USER') as GlobalUserRoleType });
 
 async function visibilities(prisma: PrismaClient, pair: Pair): Promise<{ readonly people: readonly [Person, Person] | null; readonly access: PresencePairAccess }> {
   const [a, b] = await Promise.all([readPerson(prisma, pair.userA), readPerson(prisma, pair.userB)]);
@@ -84,8 +101,8 @@ export async function capturePresenceBefore(params: PresenceDropParams, pair: Pa
 type Served = { readonly isOnline: boolean; readonly lastActiveAt: Date | null };
 
 /** Ce que la loi sert d'une personne à un lecteur dont la visibilité est `access` : la forme de `user:status`. */
-const served = (access: PresenceVisibility, subject: Person): Served => ({
-  isOnline: access.showOnline && subject.isOnline === true,
+const served = (access: PresenceVisibility, subject: Person, isPresent: PresenceDropParams['isPresent']): Served => ({
+  isOnline: access.showOnline && (isPresent ? isPresent(subject.id) : subject.isOnline === true),
   lastActiveAt: access.showLastSeenTimestamp ? subject.lastActiveAt : null,
 });
 
@@ -107,8 +124,8 @@ export async function refreshPresenceAfter(params: PresenceDropParams, pair: Pai
       const before = pair.before.get(viewer.id);
       const after = access.get(viewer.id);
       if (before === undefined || after === undefined) continue;
-      const now = served(after, subject);
-      if (sameServed(served(before, subject), now)) continue;
+      const now = served(after, subject, params.isPresent);
+      if (sameServed(served(before, subject, params.isPresent), now)) continue;
       params.io?.to(ROOMS.user(viewer.id)).emit(SERVER_EVENTS.USER_STATUS, { userId: subject.id, username: nameOf(subject), ...now });
     }
   } catch (error) {

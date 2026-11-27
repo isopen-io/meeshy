@@ -103,6 +103,29 @@ describe('#19539 — une baisse sous Ami retire la pastille chez l\'autre, dans 
     expect(statuts(app)).toEqual([]);
   });
 
+  it('la présence servie est celle des sockets, pas la colonne en base qui retarde', async () => {
+    const app = await baisser({
+      liens: [lien('CLOSE', 'CLOSE')],
+      presences: { [MOI]: { isOnline: false, lastActiveAt: VU_A }, [AUTRE]: { isOnline: true, lastActiveAt: VU_A } },
+      connectes: [MOI],
+    }, 'FRIEND');
+
+    expect(statuts(app)).toEqual(expect.arrayContaining([
+      { room: ROOMS.user(AUTRE), event: SERVER_EVENTS.USER_STATUS, payload: { userId: MOI, username: 'U11', isOnline: true, lastActiveAt: null } },
+      { room: ROOMS.user(MOI), event: SERVER_EVENTS.USER_STATUS, payload: { userId: AUTRE, username: 'U22', isOnline: false, lastActiveAt: null } },
+    ]));
+    expect(statuts(app)).toHaveLength(2);
+  });
+
+  it('Ami → Public sur une colonne en retard : la socket au premier plan décide, la pastille s\'éteint', async () => {
+    const app = await baisser({ liens: [lien('FRIEND', 'FRIEND')], connectes: [MOI, AUTRE] }, 'PUBLIC');
+
+    expect(statuts(app)).toEqual(expect.arrayContaining([
+      { room: ROOMS.user(AUTRE), event: SERVER_EVENTS.USER_STATUS, payload: { userId: MOI, username: 'U11', isOnline: false, lastActiveAt: null } },
+    ]));
+    expect(statuts(app)).toHaveLength(2);
+  });
+
   it('aucune charge ne part vers un tiers, ni ne nomme la baisse', async () => {
     const app = await baisser({ liens: [lien('FRIEND', 'FRIEND')], presences: LES_DEUX_EN_LIGNE }, 'PUBLIC');
 

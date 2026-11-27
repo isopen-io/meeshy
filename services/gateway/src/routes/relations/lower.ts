@@ -8,7 +8,7 @@ import { captureNowPlayingBefore, refreshNowPlayingAfter } from '../../services/
 import { captureBatteryBefore, refreshBatteryAfter } from '../../services/battery/batteryDeps';
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
-import { capturePresenceBefore, refreshPresenceAfter } from '../../services/relations/presenceAfterDrop';
+import { capturePresenceBefore, livePresenceOf, refreshPresenceAfter } from '../../services/relations/presenceAfterDrop';
 import { emitRelationLevelLowered, relationIoOf } from '../../socketio/relationEvents';
 import { cooldownEnd, lowerGrant } from '../../services/relations/userRelationWriter';
 import { loadRelationLink } from '../../services/relations/relationLinks';
@@ -68,7 +68,7 @@ export function registerRelationLower(fastify: FastifyInstance): void {
       const batterieAvant = await captureBatteryBefore(batterie, { userA: viewerId, userB: otherId });
       const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not refreshed after drop:', error) };
       const positionAvant = await captureSharedLocationBefore(position, { userA: viewerId, userB: otherId });
-      const presence = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Presence not withdrawn after drop:', error) };
+      const presence = { ...ecoute, isPresent: livePresenceOf(fastify), report: (error: unknown) => logError(fastify.log, 'Presence not withdrawn after drop:', error) };
       const presenceAvant = await capturePresenceBefore(presence, { userA: viewerId, userB: otherId });
       await asseoirLienHerite(fastify.prisma, viewerId, otherId, now);
       const outcome = await lowerGrant(fastify.prisma, {

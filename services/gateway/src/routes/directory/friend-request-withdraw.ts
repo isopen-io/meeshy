@@ -20,7 +20,7 @@ import { captureBatteryBefore, refreshBatteryAfter } from '../../services/batter
 import { captureSharedLocationBefore, refreshSharedLocationAfter } from '../../services/sharedLocation/sharedLocationDeps';
 import { rejudgeTogetherAfter } from '../../services/together/togetherDeps';
 import { relationIoOf } from '../../socketio/relationEvents';
-import { capturePresenceBefore, refreshPresenceAfter } from '../../services/relations/presenceAfterDrop';
+import { capturePresenceBefore, livePresenceOf, refreshPresenceAfter } from '../../services/relations/presenceAfterDrop';
 
 type DemandeRetirable = DemandeARepondre & { readonly status?: string };
 
@@ -67,7 +67,7 @@ async function rompreLien(
   const batterieAvant = await captureBatteryBefore(batterie, { userA: demande.senderId, userB: demande.receiverId });
   const position = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Shared location not cleared after link withdrawal:', error) };
   const positionAvant = await captureSharedLocationBefore(position, { userA: demande.senderId, userB: demande.receiverId });
-  const presence = { ...ecoute, report: (error: unknown) => logError(fastify.log, 'Presence not withdrawn after link withdrawal:', error) };
+  const presence = { ...ecoute, isPresent: livePresenceOf(fastify), report: (error: unknown) => logError(fastify.log, 'Presence not withdrawn after link withdrawal:', error) };
   const presenceAvant = await capturePresenceBefore(presence, { userA: demande.senderId, userB: demande.receiverId });
   await lowerPair(fastify.prisma, {
     userA: demande.senderId,
