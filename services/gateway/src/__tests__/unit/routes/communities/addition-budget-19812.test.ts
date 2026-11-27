@@ -248,6 +248,21 @@ describe('POST /communities/:id/invite et /members — budget de la CIBLE (#1981
     expect((await invite(h, victim)).statusCode).toBe(200);
   });
 
+  it('#20464 — un MÊME acteur n’entame le seau d’une cible que trois fois par jour : l’ajout/retrait ne l’épuise pas', async () => {
+    const h = await build();
+    const victim = targetId(55);
+    h.as(actorId(1));
+    const codes = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay, () => invite(h, victim));
+    expect(codes.slice(0, COMMUNITY_ADDITION_BUDGET.pairPerDay).every((c) => c === 200)).toBe(true);
+    expect(codes.slice(COMMUNITY_ADDITION_BUDGET.pairPerDay).every((c) => c === 429)).toBe(true);
+
+    const others = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay - COMMUNITY_ADDITION_BUDGET.pairPerDay, (i) => {
+      h.as(actorId(10 + i));
+      return add(h, victim);
+    });
+    expect(others.every((c) => c === 200)).toBe(true);
+  });
+
   it('un 409 « déjà membre » ne débite pas la cible', async () => {
     const h = await build();
     const victim = targetId(9);

@@ -931,3 +931,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
+
+## 2026-11-27 — réveil 13:02 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19812 fusionnée (`8861451f1`) ; le réveil du 2026-11-26 01:37 s'est interrompu sans rien pousser. Aucune branche vivante sur `core-lifecycle.ts` ni `community-addition-budget.ts`.
+- Lot : #20464 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `POST /conversations` avec `communityId` paie le budget de #19812 (`services/conversations/communitySalonAdmissionBudget.ts`) — l'acteur au nombre d'ENTRANTS invités (un membre déjà actif et l'appelant qui revient ne coûtent rien), puis chaque entrant sur son seau ; une tentative vers un compte non ajoutable se paie (`attempted` porté par le refus `not-addable` du plan) ; un refus d'autorisation (403) ne débite rien. Au-delà : 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After` avant toute écriture (ni salon, ni ligne de membre) ; 429 déclaré au schéma.
+- Sous-plafond par paire (acteur, cible) : 3/jour, débité AVANT le seau de la cible et sans le toucher quand il refuse — un ajout/retrait répété par un même administrateur n'épuise plus le quota de sa cible. Vaut pour les trois chemins.
+- Redis en panne : fail-open, comme les autres budgets (témoin `consume → null`).
+- Témoins : `__tests__/unit/routes/conversations/community-salon-addition-budget-20464.test.ts` (8 ; rouge prouvé : 5 échecs avant le branchement), `addition-budget-19812.test.ts` (+1 ; rouge prouvé sous la mutation qui retire le sous-plafond).
+- Gates locaux : `tsc --noEmit` passerelle exit 0 ; suites `routes/conversations`, `routes/communities`, `services/conversations`, `utils`, `routes/` vertes, sauf `tus-handler-heif-conversion` rouge AUSSI sur `dev` sans le lot (décodeur HEIC du conteneur).
+- Reste (suivi à ouvrir) : les chemins voisins bornés par le rôle mais pas par le débit — rattacher une conversation à une communauté privée (`routes/communities/core.ts`), ajouter un participant à un salon d'une communauté privée (`memberAdmission.ts`, `sharing-invite.ts`).

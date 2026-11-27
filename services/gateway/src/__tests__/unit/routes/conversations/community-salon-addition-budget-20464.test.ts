@@ -206,7 +206,7 @@ describe('#20464 — POST /conversations dans une communauté débite le budget 
     expect((await b.creer(moi, personnes(500, COMMUNITY_ADDITION_BUDGET.actorPerHour))).status).not.toBe(429);
   });
 
-  it('partage le seau de POST …/invite : le salon puis l’invitation ne rouvrent rien', async () => {
+  it('deux salons partagent le seau de l’acteur : le second ne rouvre rien', async () => {
     const b = banc();
     const moi = acteur(4);
     await b.creer(moi, personnes(0, COMMUNITY_ADDITION_BUDGET.actorPerHour - 1));

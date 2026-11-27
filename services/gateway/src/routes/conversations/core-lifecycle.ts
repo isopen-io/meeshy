@@ -32,6 +32,8 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateParticipantsPresence } from './participants-presence';
@@ -102,6 +104,9 @@ export function registerCreateConversationRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        // #20464 — un salon dans une communauté y fait entrer ses participants :
+        // `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After`, comme `POST …/invite`.
+        429: errorResponseSchema,
         500: errorResponseSchema,
         503: errorResponseSchema
       }
@@ -219,10 +224,20 @@ export function registerCreateConversationRoute(
             participantIds: uniqueParticipantIds,
           })
         : null;
+      if (communityAdmission?.kind === 'refused' && communityAdmission.reason === 'invite-forbidden') {
+        return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+      }
+      // #20464 — faire entrer ces personnes, c'est les ajouter : le budget de
+      // `POST …/invite` (#19812) se paie ici aussi, au nombre d'ENTRANTS, avant
+      // toute écriture. Une tentative vers un compte non ajoutable compte.
+      if (communityAdmission) {
+        const budget = await spendCommunitySalonAdmission(fastify, userId, communityAdmission);
+        if (!budget.allowed) {
+          return refuseCommunityAddition(reply, budget.retryAfter);
+        }
+      }
       if (communityAdmission?.kind === 'refused') {
-        return communityAdmission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendNotFound(reply, 'User to invite not found');
+        return sendNotFound(reply, 'User to invite not found');
       }
 
       // Block enforcement applies to DIRECT conversations only (group / community /
