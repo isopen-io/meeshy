@@ -22,7 +22,7 @@ struct GamePhotoAlertQueueTests {
                        treasuryPeakTier: nil, moments: moments)
     }
 
-    private static func pacing(now: Int = t0, sessionStartedAt: Int? = t0 - hour, surface: PhotoAlertPacing.Surface = .passive,
+    private static func pacing(now: Int = GamePhotoAlertQueueTests.t0, sessionStartedAt: Int? = GamePhotoAlertQueueTests.t0 - GamePhotoAlertQueueTests.hour, surface: PhotoAlertPacing.Surface = .passive,
                                memory: PhotoAlertMemory) -> PhotoAlertPacing {
         PhotoAlertPacing(now: now, dayKey: "2026-10-22", sessionStartedAt: sessionStartedAt, surface: surface, shown: memory.shown)
     }
@@ -33,7 +33,7 @@ struct GamePhotoAlertQueueTests {
 
     /// Une lecture passive complète : observer, puis décider si une étape neuve est trouvée.
     private static func read(_ memory: PhotoAlertMemory, _ standing: PhotoCatchUpStanding, photo: GamePhotoBlock? = nil,
-                             known: [String] = [], now: Int = t0, sessionStartedAt: Int? = t0 - hour) -> (GamePhotoAlertQueue.Decision, PhotoAlertMemory) {
+                             known: [String] = [], now: Int = GamePhotoAlertQueueTests.t0, sessionStartedAt: Int? = GamePhotoAlertQueueTests.t0 - GamePhotoAlertQueueTests.hour) -> (GamePhotoAlertQueue.Decision, PhotoAlertMemory) {
         switch GamePhotoAlertQueue.observe(memory: memory, standing: standing, photo: photo) {
         case .baseline(let next): return (.none(next), next)
         case .unchanged(let next): return (.none(next ?? memory), next ?? memory)
@@ -118,8 +118,8 @@ struct GamePhotoAlertQueueTests {
     func unchangedRewritesOnlyOnMove() {
         let (_, memory) = Self.read(.empty, Self.standing(flame: 8))
         #expect(GamePhotoAlertQueue.observe(memory: memory, standing: Self.standing(flame: 8), photo: nil) == .unchanged(nil))
-        #expect(GamePhotoAlertQueue.observe(memory: memory, standing: PhotoCatchUpStanding(levelRecord: 2, flameRecord: 8), photo: nil)
-                    == .unchanged(PhotoAlertMemory(standing: PhotoCatchUpStanding(levelRecord: 2, flameRecord: 8), shown: [], noticed: [])))
+        #expect(GamePhotoAlertQueue.observe(memory: memory, standing: Self.standing(flame: 9), photo: nil)
+                    == .unchanged(PhotoAlertMemory(standing: Self.standing(flame: 9), shown: [], noticed: [])))
     }
 
     @Test("afficher l'invitation accuse les étapes atteintes ET l'étape proposée, et règle le rythme")
