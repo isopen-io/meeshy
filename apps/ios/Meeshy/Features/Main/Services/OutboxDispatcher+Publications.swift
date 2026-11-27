@@ -173,12 +173,18 @@ extension OutboxDispatcher {
         let dejaServi = false
         #endif
         if !dejaServi {
-            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            let reply: APIResponse<PublishedPostReply> = try await APIClient.shared.requestWithHeaders(
                 PostsEndpoint.root,
                 method: "POST",
                 body: try JSONEncoder().encode(body),
                 queryItems: nil,
                 headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            // #13443 — la carte optimiste reçoit son id serveur sans attendre l'écho du socket.
+            PublicationConfirmation.announce(
+                reply.data,
+                clientMutationId: payload.clientMutationId,
+                on: SocialSocketManager.shared.postCreated
             )
         }
         PublicationMediaUploader.discardUploadedFiles(uploadedLocalPaths)
