@@ -49,8 +49,14 @@ async function openTab(deps: AdminDeps): Promise<HTMLDivElement> {
   return host;
 }
 
+const seen = (cell: Element): string => {
+  const copy = cell.cloneNode(true) as Element;
+  copy.querySelectorAll('.sr-only').forEach((node) => node.remove());
+  return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+};
+
 const rowsOf = (host: Element, table: string): readonly (readonly string[])[] =>
-  [...host.querySelectorAll(`[${table}] tbody tr`)].map((row) => [...row.children].map((c) => (c.textContent ?? '').replace(/\s+/g, ' ').trim()));
+  [...host.querySelectorAll(`[${table}] tbody tr`)].map((row) => [...row.children].map(seen));
 
 const stat = (host: Element, anchor: string): string => host.querySelector(`[data-admin-stat="${anchor}"]`)?.textContent ?? '';
 
@@ -82,6 +88,30 @@ describe('l’onglet Jeu — le retour à 1, 7 et 30 jours et les compteurs du J
     const recent = rowsOf(host, 'data-admin-game-retention-table')[0] ?? [];
     expect(recent[3]).toBe('—');
     expect(recent[4]).toBe('—');
+  });
+
+  test('au lecteur d’écran, « — » se dit « aucune donnée », jamais « tiret » (#20628)', async () => {
+    const host = await openTab(statsGateway({ [PATH]: { ok: true, data: baseline() } }).deps);
+
+    const cell = host.querySelectorAll('[data-admin-game-retention-table] tbody tr')[0]?.children[3];
+    expect(cell?.querySelector('[aria-hidden="true"]')?.textContent).toBe('—');
+    expect(cell?.querySelector('.sr-only')?.textContent).toBe('aucune donnée');
+  });
+
+  test('chaque tableau s’annonce par sa légende et défile au clavier ; chaque (i) est un bouton (#20628)', async () => {
+    const host = await openTab(statsGateway({ [PATH]: { ok: true, data: baseline() } }).deps);
+
+    for (const table of ['data-admin-game-retention-table', 'data-admin-game-daily-table']) {
+      const zone = host.querySelector(`[${table}] [role="region"]`);
+      expect(zone?.getAttribute('tabindex')).toBe('0');
+      expect(zone?.getAttribute('aria-label')).toBe(host.querySelector(`[${table}] caption`)?.textContent ?? '∅');
+      expect(host.querySelectorAll(`[${table}] th[scope="col"]`).length).toBeGreaterThan(0);
+    }
+    for (const section of ['game-today', 'game-retention', 'game-daily']) {
+      const info = host.querySelector(`[data-admin-stats-section="${section}"] button`);
+      expect(info).not.toBeNull();
+      expect(info?.getAttribute('tabindex')).not.toBe('-1');
+    }
   });
 
   test('un jour par ligne, du plus récent au plus ancien : Offrandes ouvertes, Meeshes frappées et dépensées', async () => {
