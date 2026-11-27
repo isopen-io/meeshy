@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { cleanupExpiredSessions } from './SessionService';
 import { AffiliateTrackingService } from './AffiliateTrackingService';
 import { EngagementQuotas } from './engagement/EngagementQuotas';
+import { SignupActiveDaysRecorder } from './game/SignupActiveDays';
 import { repairOrphanedMessageSenders } from './messaging/repairOrphanedMessageSenders';
 import { revokeShareLinkGuests, type GuestSocketRegistry } from '../socketio/revokeShareLinkGuests';
 import type { DepartedMemberEphemeralState } from '../socketio/endConversationMembership';
@@ -181,5 +182,14 @@ export async function cleanupExpiredData(prisma: PrismaClient, live: ShareLinkRe
     if (purged > 0) logger.info(`🧹 ${purged} empreintes de visiteurs de lien purgées`);
   } catch (error) {
     logger.error('❌ Erreur lors de la purge des empreintes de visiteurs:', error);
+  }
+
+  // Les jours d'activité des trente premiers jours (#20620) : un compte de plus de quatorze semaines n'est plus lu par
+  // aucune semaine mesurée du retour classique, ses jours se vident.
+  try {
+    const emptied = await new SignupActiveDaysRecorder(prisma).purgeExpired();
+    if (emptied > 0) logger.info(`🧹 ${emptied} comptes : jours d'activité des trente premiers jours vidés`);
+  } catch (error) {
+    logger.error('❌ Erreur lors du vidage des jours d’activité:', error);
   }
 }

@@ -27,7 +27,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 type Fixture = {
   readonly role: string;
-  readonly signups?: readonly { createdAt: Date; lastActiveAt: Date | null; signupActiveDays?: number[] }[];
+  readonly signups?: readonly { createdAt: Date; lastActiveAt: Date | null; signupActiveDays?: number[]; analyticsConsentWithdrawnAt?: Date | null; deletedAt?: Date | null }[];
   readonly flames?: readonly Record<string, unknown>[];
   readonly offerings?: readonly { chestClaimedAt: Date | null }[];
   readonly ledger?: readonly { reason: string; delta: number; createdAt: Date }[];
@@ -174,7 +174,24 @@ describe('GET /game — le point de départ du Jeu (#20617)', () => {
       day30: { eligible: 2, returned: 1, rate: 50 },
     });
     const [args] = prisma.user.findMany.mock.calls.find(([call]) => !('currentStreakDays' in (call as { where: object }).where)) as [{ select: Record<string, boolean> }];
-    expect(args.select).toEqual({ createdAt: true, lastActiveAt: true, signupActiveDays: true });
+    expect(args.select).toEqual({ createdAt: true, lastActiveAt: true, signupActiveDays: true, analyticsConsentWithdrawnAt: true, deletedAt: true });
+  });
+
+  it('écarte du retour classique un compte opposé à l’analyse ou supprimé (#20620)', async () => {
+    const signedUp = new Date(Date.now() - 40 * DAY);
+    const days = [0, 1, 7, 30];
+    const { app } = await appWith({
+      role: 'ADMIN',
+      signups: [
+        { createdAt: signedUp, lastActiveAt: new Date(), signupActiveDays: days },
+        { createdAt: signedUp, lastActiveAt: new Date(), signupActiveDays: days, analyticsConsentWithdrawnAt: new Date() },
+        { createdAt: signedUp, lastActiveAt: new Date(), signupActiveDays: days, deletedAt: new Date() },
+      ],
+    });
+
+    const [cohort] = (await app.inject({ method: 'GET', url: '/game' })).json().data.retention;
+
+    expect(cohort.classic.day7).toEqual({ eligible: 1, returned: 1, rate: 100 });
   });
 
   it('refuse un compte sans accès à l’administration', async () => {

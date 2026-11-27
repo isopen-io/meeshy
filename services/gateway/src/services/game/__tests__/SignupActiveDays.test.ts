@@ -8,6 +8,11 @@ import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SIGNUP_ACTIVE_DAYS_LAST_OFFSET, SIGNUP_ACTIVE_DAYS_RETENTION_DAYS } from '@meeshy/shared/types/game-baseline';
 import { SignupActiveDaysRecorder, signupDayOffset } from '../SignupActiveDays';
+import { cleanupExpiredData } from '../../cleanupExpiredData';
+
+jest.mock('../../../utils/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+}));
 
 const DAY = 24 * 60 * 60 * 1000;
 const signedUp = new Date('2026-11-01T10:00:00Z');
@@ -69,6 +74,14 @@ describe('SignupActiveDaysRecorder.observe', () => {
     expect(updateMany).not.toHaveBeenCalled();
   });
 
+  it('n’écrit rien pour un compte opposé à l’analyse d’usage', async () => {
+    const { recorder, updateMany } = recorderWith();
+
+    await recorder.observe('user-1', { createdAt: signedUp, signupActiveDays: [0], analyticsConsentWithdrawnAt: later(1) }, later(2));
+
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
   it('ne lève jamais : un échec d’écriture ne gêne pas la présence', async () => {
     const { recorder, updateMany } = recorderWith();
     updateMany.mockRejectedValueOnce(new Error('mongo down'));
@@ -92,5 +105,26 @@ describe('SignupActiveDaysRecorder.purgeExpired', () => {
 
   it('garde les jours tant que la plus ancienne semaine mesurée peut encore les lire', () => {
     expect(SIGNUP_ACTIVE_DAYS_RETENTION_DAYS).toBeGreaterThanOrEqual(13 * 7 + 7);
+  });
+});
+
+describe('le balayage des données expirées du nettoyage journalier', () => {
+  const sweepWith = (updateMany: jest.Mock<any>) => {
+    const empty = { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]) };
+    return { participant: empty, conversationShareLink: empty, user: { updateMany } } as unknown as PrismaClient;
+  };
+
+  it('vide les jours d’activité des comptes sortis de la fenêtre', async () => {
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 2 });
+
+    await cleanupExpiredData(sweepWith(updateMany));
+
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { signupActiveDays: { set: [] } } }));
+  });
+
+  it('un échec du vidage ne fait pas échouer le balayage', async () => {
+    const updateMany = jest.fn<any>().mockRejectedValue(new Error('mongo down'));
+
+    await expect(cleanupExpiredData(sweepWith(updateMany))).resolves.toBeUndefined();
   });
 });

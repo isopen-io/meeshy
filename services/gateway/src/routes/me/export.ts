@@ -647,6 +647,8 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
               timezone: true,
               createdAt: true,
               lastActiveAt: true,
+              // #20620 — les jours d'activité des trente premiers jours (rangs depuis l'inscription).
+              signupActiveDays: true,
               // #9614 — l'adresse et le lieu d'inscription et de dernière
               // connexion (effacés 12 mois après, #9642).
               registrationIp: true,

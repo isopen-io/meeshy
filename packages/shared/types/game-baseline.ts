@@ -4,7 +4,7 @@
  * Des AGRÉGATS sans identité : aucun identifiant de compte, aucun pseudonyme, aucune ligne par compte.
  *
  * @see services/gateway/src/services/game/gameBaselineAggregate.ts (la loi)
- * @see schema.prisma — `User.createdAt` / `lastActiveAt`, `GameDay.chestClaimedAt`, `MeeshLedger`, `GameProfile.gameHiddenAt`, `GameSparksDay`
+ * @see schema.prisma — `User.createdAt` / `lastActiveAt` / `signupActiveDays`, `GameDay.chestClaimedAt`, `MeeshLedger`, `GameProfile.gameHiddenAt`, `GameSparksDay`
  */
 
 export const GAME_BASELINE_DEFAULT_WINDOW_DAYS = 14;
@@ -15,6 +15,17 @@ export const GAME_BASELINE_COHORT_WEEKS = 13;
 export const GAME_BASELINE_LONG_FLAME_DAYS = 7;
 
 export const RETENTION_HORIZON_DAYS = { day1: 1, day7: 7, day30: 30 } as const;
+
+/**
+ * LES JOURS D'ACTIVITÉ DES TRENTE PREMIERS JOURS (#20620) — `User.signupActiveDays` garde, sans contenu, le rang des
+ * jours où le compte a été actif depuis son inscription : 0 le jour même, puis 1 à 30. Rien n'y entre au-delà.
+ */
+export const SIGNUP_ACTIVE_DAYS_LAST_OFFSET = 30;
+/**
+ * Ces jours s'effacent quand le compte a quatorze semaines : la plus ancienne des treize semaines mesurées
+ * (`GAME_BASELINE_COHORT_WEEKS`) ne peut plus les lire.
+ */
+export const SIGNUP_ACTIVE_DAYS_RETENTION_DAYS = 14 * 7;
 export type RetentionHorizon = keyof typeof RETENTION_HORIZON_DAYS;
 
 /** `rate` en pour cent, `null` (jamais 0) quand aucun compte n'a encore pu atteindre l'horizon. */
@@ -25,7 +36,17 @@ export type RetentionCell = {
 };
 
 /** `weekStart` : le lundi UTC de la semaine d'inscription, `AAAA-MM-JJ`. */
-export type RetentionCohort = { readonly weekStart: string; readonly accounts: number } & Readonly<Record<RetentionHorizon, RetentionCell>>;
+export type RetentionCohort = {
+  readonly weekStart: string;
+  readonly accounts: number;
+  /**
+   * Le retour CLASSIQUE (#20620) : un compte est revenu au jour N s'il a été actif CE jour-là — N jours pleins après
+   * son inscription, pendant vingt-quatre heures. Seuls comptent les comptes dont le jour de l'inscription est gardé,
+   * donc inscrits depuis le déploiement de la mesure ; avant, `eligible` vaut 0 et `rate` est `null`. Absent d'une
+   * passerelle d'avant #20620.
+   */
+  readonly classic?: Readonly<Record<RetentionHorizon, RetentionCell>>;
+} & Readonly<Record<RetentionHorizon, RetentionCell>>;
 
 /** Un jour UTC de la fenêtre. Les Meeshes se comptent en unités (somme des écritures), pas en écritures. */
 export type GameDailyCounters = {

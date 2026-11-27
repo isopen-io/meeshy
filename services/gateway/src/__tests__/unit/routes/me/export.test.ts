@@ -347,6 +347,22 @@ describe('GET /export — accord aux alertes de chute (#18748)', () => {
   });
 });
 
+describe('GET /export — jours d’activité des trente premiers jours (#20620)', () => {
+  it('lit et rend les jours gardés dans la section profile', async () => {
+    const mocks = {
+      ...makeMocks(),
+      userFindUnique: jest.fn<any>().mockResolvedValue({ ...mockUser, signupActiveDays: [0, 1, 7] }),
+    };
+    const { app } = await buildApp({ mocks });
+    const res = await app.inject({ method: 'GET', url: '/export?types=profile' });
+    expect(res.statusCode).toBe(200);
+    const [{ select }] = mocks.userFindUnique.mock.calls[0] as [{ select: Record<string, boolean> }];
+    expect(select).toMatchObject({ signupActiveDays: true });
+    expect(res.json().data.profile).toMatchObject({ signupActiveDays: [0, 1, 7] });
+    await app.close();
+  });
+});
+
 describe('GET /export — visites de mon lien de profil (#19206)', () => {
   it('rend, dans la section profile, chaque jour compté et son nombre de visites', async () => {
     const profileLinkVisits = jest.fn<any>().mockResolvedValue([{ day: new Date('2026-11-17T00:00:00.000Z'), visits: 57 }]);

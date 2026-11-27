@@ -198,7 +198,7 @@ describe('StatusService', () => {
       await act(sut);
       await settle();
 
-      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ select: { createdAt: true, signupActiveDays: true } }));
+      expect(prisma.user.update).toHaveBeenCalledWith(expect.objectContaining({ select: { createdAt: true, signupActiveDays: true, analyticsConsentWithdrawnAt: true } }));
       expect(prisma.user.updateMany).toHaveBeenCalledWith({ where: { id: 'user-1' }, data: { signupActiveDays: { push: 3 } } });
     });
 
