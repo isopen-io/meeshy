@@ -15,8 +15,9 @@
  * Les deux moitiés que ces témoins gardent, et elles ne se valent pas :
  *
  * 1. **l'éviction se NOMME** — le destinataire et le nombre d'entrées
- *    détruites, sur les QUATRE chemins qui en détruisent (enfilage Redis,
- *    enfilage mémoire, remise Redis, remise mémoire) ;
+ *    détruites, sur les chemins qui en détruisent (enfilage Redis,
+ *    enfilage mémoire, remise Redis, remise mémoire — et, depuis #19946,
+ *    l'éviction du compte le plus ancien du tas) ;
  * 2. **en deçà du plafond, RIEN ne part** — le chemin nominal est le plus
  *    chaud du produit, et une trace par enfilage serait pire que le silence
  *    qu'on vient de retirer.

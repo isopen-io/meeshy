@@ -9,6 +9,11 @@ import {
 } from '@meeshy/shared/types/delivery-queue';
 import { carriesMessageText } from '../socketio/queuedEventContract';
 import { destroyedAtBound, readBoundedPushReply } from './deliveryQueueBound';
+import { byEnqueuedAt, dedupIdentity, normalizedEventType } from './deliveryQueueOrdering';
+import {
+  countInHeap, heapSlice, putInHeap, restoreInHeap, sweepHeap, takeFromHeap,
+  type BoundEviction, type HeapSlice,
+} from './deliveryQueueHeapSlice';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 import { ServerAtRestUnavailableError, ServerAtRestUnreadableError } from './messaging/serverAtRest';
@@ -262,65 +267,10 @@ function parseRawEntries(raw: string[], userId: string, context: 'drain'): Queue
   });
 }
 
-function normalizedEventType(entry: QueuedMessagePayload): string {
-  return entry.eventType ?? 'new';
-}
-
-// FIFO replay order across the memory-fallback and Redis-backed slices. The two
-// can interleave in time: a message enqueued to Redis while it was healthy may
-// be FOLLOWED by an edit/delete for the SAME message that fell back to memory
-// during a transient Redis blip. Concatenating memory-first would then replay
-// the edit BEFORE the `new` it targets (see the FIFO invariant on ENQUEUE_DEDUP_LUA),
-// and the recipient's client drops an edit for a message it hasn't received yet.
-// Every entry carries a monotonic `enqueuedAt` stamped at enqueue time, so sort
-// by it to restore true FIFO. `Array.prototype.sort` is stable, so entries that
-// share a timestamp keep their memory-before-Redis order — preserving the
-// outage-only reconciliation contract (memory entries queued during a full
-// outage still lead).
-//
-// `enqueuedAt` est stampé à l'enfilage, donc TOUJOURS présent — pour ce qu'on
-// ÉCRIT. Ce qu'on RELIT est autre chose : `parseRawEntries` fait
-// `JSON.parse(…) as QueuedMessagePayload`, une AFFIRMATION qui ne vérifie aucun
-// champ, sur des octets vieux de 48 h au plus (`DELIVERY_QUEUE_TTL_SECONDS`).
-// `new Date(undefined).getTime()` rend `NaN`, et la spec (SortCompare, §23.1.3.30)
-// mappe un comparateur qui rend `NaN` sur `+0` : l'entrée se déclare ÉGALE à
-// toutes les autres.
-//
-// Un comparateur non transitif ne désordonne pas seulement l'entrée fautive, il
-// rend le tri indéfini pour les entrées SAINES. Mesuré sur cinq entrées :
-// `a, c, BAD, b, d` — deux entrées parfaitement datées inversées par la présence
-// d'une troisième qui ne l'est pas. C'est exactement l'isolation que la couche
-// de désérialisation promet trois fonctions plus haut (« so one corrupt entry
-// can never poison a whole drain/peek ») et qui s'arrêtait au `JSON.parse`.
-//
-// `Number.isFinite` rend donc le comparateur TOTAL : une entrée sans instant
-// lisible n'en a pas, et se range à la fin — déterministe, et sans opinion sur
-// l'ordre de celles qui en ont un. La ranger plutôt que la JETER est délibéré :
-// son message est toujours en base et le drain, destructif, est la seule
-// occasion de le rejouer.
-function enqueuedAtMillis(entry: QueuedMessagePayload): number {
-  const millis = new Date(entry.enqueuedAt).getTime();
-  return Number.isFinite(millis) ? millis : Number.POSITIVE_INFINITY;
-}
-
-function byEnqueuedAt(a: QueuedMessagePayload, b: QueuedMessagePayload): number {
-  const left = enqueuedAtMillis(a);
-  const right = enqueuedAtMillis(b);
-  // Deux entrées non datées : `Infinity - Infinity` rend `NaN`, ce qui
-  // réintroduirait le défaut entre elles. Le tri étant stable, `0` les laisse
-  // dans leur ordre d'arrivée.
-  if (left === right) return 0;
-  return left - right;
-}
-
 // Dedup identity: the same key enqueue() keeps unique per slice — the entry's
 // `dedupKey` if set (reactions scope it to messageId:reactor:emoji), else its
 // `messageId` — paired with the normalized eventType. Mirrors ENQUEUE_DEDUP_LUA
 // and the memory-path findIndex.
-function dedupIdentity(entry: QueuedMessagePayload): string {
-  return `${entry.dedupKey ?? entry.messageId}\u0000${normalizedEventType(entry)}`;
-}
-
 // Collapse duplicate (dedup identity, eventType) entries left by MERGING the
 // memory-fallback and Redis slices. enqueue() enforces one-entry-per-identity
 // WITHIN each slice independently (Redis via ENQUEUE_DEDUP_LUA, memory via
@@ -345,14 +295,8 @@ function collapseCrossSliceDuplicates(sorted: QueuedMessagePayload[]): QueuedMes
   return kept.reverse();
 }
 
-// Bounds for the in-process slice only. It holds what could not reach Redis
-// during a transient outage AND — depuis #19827 — ce qu'on n'a pas PU sceller
-// alors que Redis se portait bien. Il borne donc le TAS de la passerelle pour
-// tous les comptes à la fois — a different resource from the durable slice's
-// `DELIVERY_QUEUE_MAX_PER_USER`, which bounds Redis CPU, Redis memory and the
-// reconnect replay burst. The two caps are deliberately different sizes.
-const MEMORY_QUEUE_MAX_USERS = 1000;
-const MEMORY_QUEUE_MAX_PER_USER = 50;
+// Les bornes du tas — ses deux usages et leurs plafonds — vivent dans
+// `deliveryQueueHeapSlice.ts` (#19946).
 
 /**
  * #12822 (M3) — une entrée scellée qui ne se rouvre pas est JETÉE seulement si
@@ -455,7 +399,13 @@ export type RedisDeliveryQueueOptions = {
 };
 
 export class RedisDeliveryQueue {
+  /** Le tas, un usage par carte (#19946) : `memoryQueue` le repli de panne, `unsealedQueue` le clair gardé. */
   private memoryQueue: Map<string, QueuedMessagePayload[]> = new Map();
+  private readonly unsealedQueue: Map<string, QueuedMessagePayload[]> = new Map();
+  private readonly outageHeap: HeapSlice = heapSlice('outage', this.memoryQueue);
+  private readonly unsealedHeap: HeapSlice = heapSlice('unsealed', this.unsealedQueue);
+  private readonly heaps: readonly HeapSlice[] = [this.outageHeap, this.unsealedHeap];
+  private readonly note = (eviction: BoundEviction): void => this.noteBoundEviction(eviction);
   private readonly metrics: Pick<DeliveryQueueSealMetrics, 'unsealed'>;
   private readonly heapAdmission: HeapAdmission;
 
@@ -465,7 +415,7 @@ export class RedisDeliveryQueue {
     options: RedisDeliveryQueueOptions = {},
   ) {
     this.metrics = options.metrics ?? processDeliveryQueueSealMetrics;
-    const budget = new UnsealedRetentionBudget(options.unsealedBudget ?? DEFAULT_UNSEALED_BUDGET, () => this.memoryQueue.values());
+    const budget = new UnsealedRetentionBudget(options.unsealedBudget ?? DEFAULT_UNSEALED_BUDGET, () => this.unsealedQueue.values());
     this.heapAdmission = { soleInstance: options.soleInstance ?? UNVERIFIED_SOLE_INSTANCE, budget, metrics: this.metrics };
   }
 
@@ -584,54 +534,36 @@ export class RedisDeliveryQueue {
           String(DELIVERY_QUEUE_TTL_SECONDS), String(DELIVERY_QUEUE_MAX_PER_USER),
           ...live.map((entry) => JSON.stringify(entry)),
         ));
-        this.noteBoundEviction(
-          'restore', 'redis', userId,
-          destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), DELIVERY_QUEUE_MAX_PER_USER,
-        );
+        this.noteBoundEviction({
+          scope: 'restore', slice: 'redis', bound: 'per-account', userId,
+          destroyed: destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), cap: DELIVERY_QUEUE_MAX_PER_USER,
+        });
         return;
       } catch (error) {
         logger.warn('Redis restore failed, keeping the sealed entries in memory', { userId, error });
       }
     }
-    const existing = this.memoryQueue.get(userId) ?? [];
-    const present = new Set(existing.map(dedupIdentity));
-    const restored = live.filter((entry) => !present.has(dedupIdentity(entry)));
-    if (restored.length === 0) return;
-    const withRestored = [...restored, ...existing];
-    // `slice(-N)` garde les N DERNIÈRES, donc ce que le plafond détruit ici est
-    // pris en TÊTE — les entrées qu'on vient de remettre. Le dire est d'autant
-    // plus nécessaire : une remise peut détruire exactement ce qu'elle remet.
-    this.noteBoundEviction(
-      'restore', 'memory', userId,
-      destroyedAtBound(withRestored.length, MEMORY_QUEUE_MAX_PER_USER), MEMORY_QUEUE_MAX_PER_USER,
-    );
-    this.memoryQueue.set(userId, withRestored.slice(-MEMORY_QUEUE_MAX_PER_USER));
+    // Une remise ne porte que des entrées SCELLÉES (`openedForReplay` exige
+    // un `sealedPayload` pour classer `retry`) : elle revient au repli de panne.
+    restoreInHeap(this.outageHeap, userId, live, this.note);
   }
 
   /**
    * L'UNIQUE site qui nomme une éviction au plafond (#18733).
    *
-   * Les QUATRE chemins qui en détruisent y passent — enfilage Redis, enfilage
-   * mémoire, remise Redis, remise mémoire — et `destroyed <= 0 ⇒ silence` est
-   * donc tenu une fois : le chemin nominal est le plus chaud du produit, et une
-   * trace par enfilage serait pire que le silence qu'on vient de retirer.
+   * Les CINQ chemins qui en détruisent y passent — enfilage Redis, remise
+   * Redis, et dans le tas (`deliveryQueueHeapSlice.ts`) l'enfilage, la remise
+   * et l'éviction du compte le plus ancien, restée muette sur le volume
+   * jusqu'à #19946 — et `destroyed <= 0 ⇒ silence` est donc tenu une fois :
+   * le chemin nominal est le plus chaud du produit, et une trace par enfilage
+   * serait pire que le silence qu'on vient de retirer. La garde de source de
+   * `deliveryQueueHeapBudgets.test.ts` tombe si un sixième se tait.
    *
-   * Le niveau est `warn`, comme la map mémoire pleine quinze lignes plus bas.
-   * L'asymétrie était le constat de l'issue : celle-là, qui n'affecte que le
-   * repli, avertissait ; celui-ci, qui vit sur le chemin de PRODUCTION et
-   * détruit du rejeu, se taisait.
+   * Le niveau est `warn` : chacun de ces chemins détruit du rejeu.
    */
-  private noteBoundEviction(
-    scope: 'enqueue' | 'restore',
-    slice: 'redis' | 'memory',
-    userId: string,
-    destroyed: number,
-    cap: number,
-  ): void {
-    if (destroyed <= 0) return;
-    logger.warn('Delivery queue bound destroyed queued entries: they will never be replayed', {
-      scope, slice, userId, destroyed, cap,
-    });
+  private noteBoundEviction(eviction: BoundEviction): void {
+    if (eviction.destroyed <= 0) return;
+    logger.warn('Delivery queue bound destroyed queued entries: they will never be replayed', { ...eviction });
   }
 
   async enqueue(userId: string, incoming: QueuedMessagePayload, options: DeliveryQueueEnqueueOptions = {}): Promise<void> {
@@ -670,10 +602,10 @@ export class RedisDeliveryQueue {
           serialized, dedupId, String(DELIVERY_QUEUE_TTL_SECONDS), normalizedEventType(entry),
           String(DELIVERY_QUEUE_MAX_PER_USER), indexed ? '1' : '0', userId
         ));
-        this.noteBoundEviction(
-          'enqueue', 'redis', userId,
-          destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), DELIVERY_QUEUE_MAX_PER_USER,
-        );
+        this.noteBoundEviction({
+          scope: 'enqueue', slice: 'redis', bound: 'per-account', userId,
+          destroyed: destroyedAtBound(reply.lengthAfterPush, DELIVERY_QUEUE_MAX_PER_USER), cap: DELIVERY_QUEUE_MAX_PER_USER,
+        });
         if (reply.outcome === 0) {
           logger.debug('Delivery queue dedup: dedup id already queued', { userId, dedupId, messageId: entry.messageId });
         } else if (reply.outcome === 2) {
@@ -685,63 +617,15 @@ export class RedisDeliveryQueue {
       }
     }
 
-    // Evict oldest user bucket when global cap reached
-    if (this.memoryQueue.size >= MEMORY_QUEUE_MAX_USERS && !this.memoryQueue.has(userId)) {
-      const firstUser = this.memoryQueue.keys().next().value;
-      /* istanbul ignore next -- Map always has a key when size >= 1000 */
-      if (firstUser !== undefined) {
-        logger.warn('Memory delivery queue at capacity, evicting oldest user', { evicted: firstUser });
-        this.memoryQueue.delete(firstUser);
-      }
-    }
-    const existing = this.memoryQueue.get(userId) ?? [];
-    const dupIndex = existing.findIndex(e => (e.dedupKey ?? e.messageId) === dedupId && normalizedEventType(e) === normalizedEventType(entry));
-    if (dupIndex !== -1) {
-      if (normalizedEventType(entry) === 'new') {
-        logger.debug('Delivery queue dedup (memory): dedup id+eventType already queued', { userId, dedupId, eventType: normalizedEventType(entry) });
-        return;
-      }
-      // Mutable event (edited/deleted/reaction-*): supersede in place with the
-      // newest payload. The Redis twin re-pushes at the tail instead, because
-      // its bound trims by slot; this slice evicts by `enqueuedAt` below, so
-      // keeping the slot costs nothing here.
-      this.memoryQueue.set(userId, existing.map((e, i) => (i === dupIndex ? entry : e)));
+    // #19946 — chaque usage du tas a sa carte et son plafond : un incident
+    // de la base des clés n'évince plus l'arriéré d'une panne Redis, ni
+    // l'inverse.
+    const outcome = putInHeap(heapOnly ? this.unsealedHeap : this.outageHeap, userId, entry, this.note);
+    if (outcome === 'dedup') {
+      logger.debug('Delivery queue dedup (memory): dedup id+eventType already queued', { userId, dedupId, eventType: normalizedEventType(entry) });
+    } else if (outcome === 'supersede') {
       logger.debug('Delivery queue supersede (memory): mutable event replaced in place', { userId, dedupId, eventType: normalizedEventType(entry) });
-      return;
     }
-    const withNew = [...existing, entry];
-    if (withNew.length <= MEMORY_QUEUE_MAX_PER_USER) {
-      this.memoryQueue.set(userId, withNew);
-      return;
-    }
-    // Over capacity: evict the chronologically-OLDEST entries by `enqueuedAt`,
-    // NOT the head array slots. A mutable event superseded in place above keeps
-    // its original, earlier slot while carrying a NEWER enqueuedAt, so slot 0 is
-    // not necessarily the oldest — slicing by slot could drop the freshest
-    // edit/delete/reaction and strand the recipient on stale content after
-    // drain() (whose byEnqueuedAt sort cannot recover an entry already evicted
-    // here). Same array-slot-vs-enqueuedAt divergence that byEnqueuedAt fixed for
-    // the sibling drain path. Survivors keep their insertion order (drain()
-    // re-sorts, but the memory-before-Redis tiebreak in byEnqueuedAt relies on
-    // stable order).
-    const evictCount = withNew.length - MEMORY_QUEUE_MAX_PER_USER;
-    const evictIndices = new Set(
-      withNew
-        // `enqueuedAtMillis`, pas `new Date(...).getTime()` : une date illisible
-        // rendait `NaN`, et un comparateur qui rend `NaN` laisse l'ordre
-        // INDÉFINI — on évinçait alors une entrée arbitraire, dont la plus
-        // fraîche. C'est exactement le défaut que `byEnqueuedAt` a fermé pour le
-        // drain, et que le commentaire ci-dessus nomme déjà comme la même
-        // divergence. L'arbitrage du helper vaut ici : une entrée non datée se
-        // range à la FIN, donc ne s'évince pas — son message est toujours en
-        // base, et le drain est la seule occasion de le rejouer.
-        .map((e, index) => ({ ts: enqueuedAtMillis(e), index }))
-        .sort((a, b) => (a.ts === b.ts ? 0 : a.ts - b.ts))
-        .slice(0, evictCount)
-        .map(({ index }) => index),
-    );
-    this.noteBoundEviction('enqueue', 'memory', userId, evictCount, MEMORY_QUEUE_MAX_PER_USER);
-    this.memoryQueue.set(userId, withNew.filter((_, index) => !evictIndices.has(index)));
   }
 
   /**
@@ -840,23 +724,13 @@ export class RedisDeliveryQueue {
   /**
    * La tranche en mémoire, balayée par USAGE et non par index : elle ne porte
    * aucune clé Redis, donc l'index inverse ne la désigne pas. Son coût est borné
-   * par `MEMORY_QUEUE_MAX_USERS` × `MEMORY_QUEUE_MAX_PER_USER`. Elle se peuple
+   * par `HEAP_MAX_ACCOUNTS` × `HEAP_MAX_PER_ACCOUNT` et par usage. Elle se peuple
    * pendant une panne Redis, et — depuis #19827 — quand un scellement a échoué
    * pour une cause transitoire : ce balayage est alors le SEUL qui retire le
    * clair d'un message détruit, puisque l'index inverse ne désigne pas le tas.
    */
   private purgeMemorySlice(messageId: string): number {
-    let removed = 0;
-    for (const [userId, entries] of this.memoryQueue.entries()) {
-      const kept = entries.filter(
-        (entry) => !(entry.messageId === messageId && carriesMessageText(entry.eventType)),
-      );
-      if (kept.length === entries.length) continue;
-      removed += entries.length - kept.length;
-      if (kept.length === 0) this.memoryQueue.delete(userId);
-      else this.memoryQueue.set(userId, kept);
-    }
-    return removed;
+    return sweepHeap(this.heaps, (entry) => entry.messageId === messageId && carriesMessageText(entry.eventType));
   }
 
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
@@ -877,8 +751,7 @@ export class RedisDeliveryQueue {
     // `byEnqueuedAt` below, not by concatenation order — a mid-sequence blip can
     // leave a memory entry NEWER than a Redis one (e.g. an edit that fell back
     // to memory after its `new` reached Redis).
-    const memoryEntries = this.memoryQueue.get(userId) ?? [];
-    this.memoryQueue.delete(userId);
+    const memoryEntries = takeFromHeap(this.heaps, userId);
 
     if (redis) {
       try {
@@ -903,7 +776,7 @@ export class RedisDeliveryQueue {
 
   async size(userId: string): Promise<number> {
     const redis = this.getRedis();
-    const memoryCount = (this.memoryQueue.get(userId) ?? []).length;
+    const memoryCount = countInHeap(this.heaps, userId);
 
     if (redis) {
       try {
@@ -962,21 +835,11 @@ export class RedisDeliveryQueue {
     // (#19827), Redis sain — and must still expire
     // on schedule even after Redis recovers (drain() reads both, but cleanup
     // must not let them sit unbounded until then).
-    for (const [userId, entries] of this.memoryQueue.entries()) {
-      // Le MÊME prédicat que la branche Redis. Il rendait déjà le bon verdict
-      // ici, mais par accident de la négation (`NaN > cutoff` est faux, donc
-      // l'entrée n'était pas gardée) : un jour où quelqu'un inverse le test
-      // pour le lire plus facilement, le défaut revient en silence.
-      const fresh = entries.filter(e => !isPastRetention(e, cutoff));
-      const removed = entries.length - fresh.length;
-      totalRemoved += removed;
-
-      if (fresh.length === 0) {
-        this.memoryQueue.delete(userId);
-      } else {
-        this.memoryQueue.set(userId, fresh);
-      }
-    }
+    // Le MÊME prédicat que la branche Redis. Il rendait déjà le bon verdict
+    // ici, mais par accident de la négation (`NaN > cutoff` est faux, donc
+    // l'entrée n'était pas gardée) : un jour où quelqu'un inverse le test
+    // pour le lire plus facilement, le défaut revient en silence.
+    totalRemoved += sweepHeap(this.heaps, (entry) => isPastRetention(entry, cutoff));
 
     return totalRemoved;
   }

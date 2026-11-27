@@ -2,7 +2,7 @@
  * Ce que le PLAFOND d'une file de remise vient de DÉTRUIRE (#18733).
  *
  * `DELIVERY_QUEUE_MAX_PER_USER` (500, la tranche Redis) et
- * `MEMORY_QUEUE_MAX_PER_USER` (50, le repli mémoire) bornent la file hors
+ * `HEAP_MAX_PER_ACCOUNT` (50, le tas — `deliveryQueueHeapSlice.ts`) bornent la file hors
  * ligne par destinataire : au-delà, les arrivées les plus anciennes sont
  * détruites et leur rejeu n'aura jamais lieu. Trois issues nomment ce plafond
  * comme la cause d'un défaut visible par l'utilisateur — #18614, #18701,
