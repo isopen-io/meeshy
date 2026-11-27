@@ -24,7 +24,9 @@ extension GameWave2 {
             atlas: atlas,
             prestige: prestige ?? self.prestige,
             visibility: visibility ?? self.visibility,
-            achievementRarities: achievementRarities
+            achievementRarities: achievementRarities,
+            seasonUpcoming: seasonUpcoming,
+            photo: photo
         )
     }
 }

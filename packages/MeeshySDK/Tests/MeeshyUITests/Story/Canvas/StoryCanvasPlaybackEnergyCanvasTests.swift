@@ -121,6 +121,7 @@ final class StoryCanvasPlaybackEnergyCanvasTests: XCTestCase {
 
     func test_playbackSite_consultsTheCadenceAndArmingLaws() throws {
         let playback = try ComposerSourceGuard.source("Canvas/StoryCanvasUIView+Playback.swift")
+            + (try ComposerSourceGuard.source("Canvas/StoryCanvasUIView+EditClock.swift"))
         XCTAssertTrue(playback.contains("StoryPlaybackCadence.tier("))
         XCTAssertTrue(playback.contains("EditClockArming.shouldArm("))
         XCTAssertTrue(playback.contains("mediaTier: DeviceMediaTier.current"),

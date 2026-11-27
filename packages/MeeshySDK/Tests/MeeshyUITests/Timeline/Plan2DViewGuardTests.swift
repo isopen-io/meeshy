@@ -1015,8 +1015,16 @@ final class Plan2DViewGuardTests: XCTestCase {
             .appendingPathComponent("Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift")
     }
 
+    private static var plan2DViewGeometrySourceURL: URL {
+        plan2DViewSourceURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("Plan2DView+GestureGeometry.swift")
+    }
+
     private static func strippedPlan2DViewSource() throws -> String {
-        strippingLineComments(try String(contentsOf: plan2DViewSourceURL, encoding: .utf8))
+        let main = try String(contentsOf: plan2DViewSourceURL, encoding: .utf8)
+        let geometry = try String(contentsOf: plan2DViewGeometrySourceURL, encoding: .utf8)
+        return strippingLineComments(main + "\n" + geometry)
     }
 
     private static func strippedPlan2DViewLines() throws -> [String] {

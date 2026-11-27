@@ -471,6 +471,8 @@ public struct GameBlock: Codable, Sendable, Equatable {
     public var atlas: GameAtlasBlock? { wave2.atlas }
     public var prestige: GamePrestigeBlock? { wave2.prestige }
     public var visibility: GameVisibility? { wave2.visibility }
+    /// Le registre des moments photo (#20649) ; `nil` devant un serveur antérieur ou s'il est illisible.
+    public var photo: GamePhotoBlock? { wave2.photo }
 
     public init(level: Level, glory: Glory, treasury: TreasuryStanding, mint: GameMintPreview,
                 missions: Missions, chest: Chest, flame: Flame, boosts: Boosts, guideSeen: [String],
