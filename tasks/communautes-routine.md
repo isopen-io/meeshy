@@ -954,6 +954,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Mesure structurelle : pour N exclus, ~3N requêtes avant la réponse de `PUT /communities/:id` → 1 + 2·⌈N/500⌉ (10 000 exclus : ~30 000 → 41). Le p95 sur une vraie communauté de 10 000 occupants n'est PAS mesuré (aucune base ici) : suivi #20685.
 - Témoins : `community-salon-exit.test.ts` (+6), `community-salon-adoption.test.ts` (+1, 4 attentes réécrites : une passe au lieu d'une par exclu). Rouge prouvé : 9 + 1 échecs avant le code.
 - Revue adversariale : non bloquante ; corrigé dans le lot — une écriture groupée en échec emportait les créateurs de sa tranche. Restent (faibles) : un avis « X a quitté » possiblement doublé sur un départ concurrent ; les annonces relisent l'effectif par départ (hors réponse HTTP).
+- Fusion : PR #20695 fusionnée dans `dev` le 2026-11-27 à 22:45 UTC (`3752440f2`), branche à jour de `dev` `7e0ba3f7c` ; CI manuelle verte sur `66e6d91` (run 46065351920). En chemin : l'inventaire de la garde de forme Swift gardait `user:preferences-updated`, réparé par #16858 (« Tests · shared » rouge, retiré) ; #20694 a touché `communitySalonAdoption.ts` pendant le lot (fusion propre, un témoin venu de `dev` adapté à la sortie groupée) ; deux pannes de runner hors lot (Chromium absent pour Playwright, Maven Central en 429 pour l'APK), relancées. #16740 fermée ; le p95 reste à #20685.
 
 ## 2026-11-27 — réveil 13:01 UTC (bis, en parallèle du précédent)
 
