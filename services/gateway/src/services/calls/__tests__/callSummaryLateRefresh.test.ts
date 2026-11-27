@@ -11,6 +11,7 @@ jest.mock('../../../utils/logger', () => ({
   logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
 }));
 
+import { Prisma } from '@meeshy/shared/prisma/client';
 import { buildCallSummaryMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { createLateCallSummaryRefresher } from '../callSummaryLateRefresh';
 
@@ -73,11 +74,10 @@ const world = (options: { call: CallRow; summaryMetadata: unknown }) => {
     message: {
       findFirst: jest.fn(async (args: { where: Record<string, unknown> }) =>
         args.where.clientMessageId === callSummaryClientMessageId(CALL_ID) ? message() : null),
-      updateMany: jest.fn(async (args: { data: { metadata: unknown } }) => {
+      update: jest.fn(async (args: { data: { metadata: unknown } }) => {
         state.metadata = args.data.metadata;
-        return { count: 1 };
-      }),
-      findUnique: jest.fn(async () => message())
+        return message();
+      })
     },
     participant: { findMany: jest.fn(async () => []) }
   };
@@ -121,7 +121,7 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     await w.refresh(CALL_ID);
 
-    expect(w.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(w.prisma.message.update).not.toHaveBeenCalled();
     expect(w.broadcast).not.toHaveBeenCalled();
   });
 
@@ -133,7 +133,7 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     await w.refresh(CALL_ID);
 
-    expect(w.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(w.prisma.message.update).not.toHaveBeenCalled();
     expect(w.broadcast).not.toHaveBeenCalled();
   });
 
@@ -143,7 +143,7 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     await w.refresh(CALL_ID);
 
-    expect(w.prisma.message.updateMany).not.toHaveBeenCalled();
+    expect(w.prisma.message.update).not.toHaveBeenCalled();
     expect(w.broadcast).not.toHaveBeenCalled();
   });
 
@@ -157,6 +157,23 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     expect(w.prisma.callSession.findUnique.mock.calls.length).toBeLessThanOrEqual(2);
     expect(w.broadcast).toHaveBeenCalledTimes(1);
+  });
+
+  it('renonce sans diffuser quand une écriture concurrente a changé la bulle depuis sa lecture', async () => {
+    const w = world({
+      call: endedCall({ bytesReceivedTotal: 3_000_000 }),
+      summaryMetadata: postedSummaryMetadata(endedCall())
+    });
+    w.prisma.message.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Record to update not found.', { code: 'P2025', clientVersion: 'test' })
+    );
+
+    await w.refresh(CALL_ID);
+
+    expect(w.prisma.message.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: MESSAGE_ID, updatedAt: expect.any(Date) }) })
+    );
+    expect(w.broadcast).not.toHaveBeenCalled();
   });
 
   it('n’échoue jamais : une lecture en panne ne remonte pas', async () => {

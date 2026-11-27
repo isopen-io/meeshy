@@ -73,6 +73,7 @@ import { ringableCallees } from '../services/calls/callRingPolicy';
 import { isInvitedToCall } from '../services/calls/callInvitation';
 import { answeringLines, markCallParticipantsAnswered } from '../services/calls/callParticipantAnswered';
 import { withCallSummaryParticipantNames } from '../services/calls/callSummaryParticipantNames';
+import { createLateCallSummaryRefresher } from '../services/calls/callSummaryLateRefresh';
 import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
 import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
@@ -159,6 +160,7 @@ export class CallEventsHandler {
    * Stays null in unit tests that don't exercise the live-message path.
    */
   private messageUpdateBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
+  private readonly refreshLateCallSummary = createLateCallSummaryRefresher({ prisma: () => this.prisma, broadcastEdited: () => this.messageUpdateBroadcaster });
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -3564,13 +3566,10 @@ export class CallEventsHandler {
         // Check quality thresholds and emit alerts if needed
         const { stats } = data;
 
-        // Persist cumulative data usage + quality tier so the call-summary
-        // message can surface "data spent · network quality". Best-effort.
-        await this.callService.persistCallStats(data.callId, {
-          bytesSent: stats.bytesSent,
-          bytesReceived: stats.bytesReceived,
-          level: stats.level
+        const summaryMayBeStale = await this.callService.persistCallStats(data.callId, {
+          bytesSent: stats.bytesSent, bytesReceived: stats.bytesReceived, level: stats.level
         });
+        if (departed && summaryMayBeStale) await this.refreshLateCallSummary(data.callId);
 
         const isDegraded = stats.rtt > 300 || stats.packetLoss > 5;
         const streakKey = `${data.callId}:${participantId}`;

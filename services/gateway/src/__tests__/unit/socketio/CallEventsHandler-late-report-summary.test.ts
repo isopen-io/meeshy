@@ -107,11 +107,10 @@ function setup(options: { departed: boolean; statsChanged: boolean }) {
     callSession: { findUnique: jest.fn(async () => callRow) },
     message: {
       findFirst: jest.fn(async () => message()),
-      updateMany: jest.fn(async (args: { data: { metadata: unknown } }) => {
+      update: jest.fn(async (args: { data: { metadata: unknown } }) => {
         state.metadata = args.data.metadata;
-        return { count: 1 };
+        return message();
       }),
-      findUnique: jest.fn(async () => message()),
     },
     participant: { findMany: jest.fn(async () => []) },
   };
