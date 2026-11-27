@@ -52,6 +52,11 @@ export function storyAsFeedPost(story: StoryTrayPost): FeedPost {
   };
 }
 
+/** Ni un réel, ni une story, ni une humeur (`STATUS`) : l'onglet Publications de `ProfileSendContentKind.accepts`. */
+const NOT_A_PUBLICATION: ReadonlySet<string> = new Set(['REEL', 'STORY', 'STATUS']);
+
+const servedType = (post: FeedPost): string => post.type.toUpperCase();
+
 export function sendContentChoices(params: {
   readonly kind: SendContentKind;
   readonly posts: readonly FeedPost[];
@@ -59,9 +64,9 @@ export function sendContentChoices(params: {
 }): readonly FeedPost[] {
   switch (params.kind) {
     case 'publication':
-      return params.posts.filter((post) => post.type !== 'REEL' && post.type !== 'STORY');
+      return params.posts.filter((post) => !NOT_A_PUBLICATION.has(servedType(post)));
     case 'reel':
-      return params.posts.filter((post) => post.type === 'REEL');
+      return params.posts.filter((post) => servedType(post) === 'REEL');
     case 'story':
       return params.stories.map(storyAsFeedPost);
   }

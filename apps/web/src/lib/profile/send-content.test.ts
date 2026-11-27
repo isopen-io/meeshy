@@ -81,6 +81,12 @@ describe('« Lui envoyer un contenu » : les onglets', () => {
     expect(sendContentChoices({ kind: 'reel', posts, stories }).map((shown) => shown.id)).toEqual(['r1']);
   });
 
+  test('Publications : une humeur (STATUS) ne se propose pas, comme sur iOS ; le type se lit sans égard à la casse', () => {
+    const served = [...posts, post({ id: 'm1', type: 'STATUS', content: '☕' }), post({ id: 'r2', type: 'reel', media: [video] })];
+    expect(sendContentChoices({ kind: 'publication', posts: served, stories }).map((shown) => shown.id)).toEqual(['p1', 'p2']);
+    expect(sendContentChoices({ kind: 'reel', posts: served, stories }).map((shown) => shown.id)).toEqual(['r1', 'r2']);
+  });
+
   test('Stories : mes stories, devenues des contenus avec leurs médias', () => {
     const [only] = sendContentChoices({ kind: 'story', posts, stories });
     expect(only?.id).toBe('s1');
