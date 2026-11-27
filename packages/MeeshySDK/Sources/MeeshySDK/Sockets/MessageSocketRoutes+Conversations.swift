@@ -43,15 +43,23 @@ extension MessageSocketRoutes {
         ]
     }
 
-    /// Un nom d'événement, deux portées de charge (la passerelle émet une union) :
+    /// Un nom d'événement, trois portées de charge (la passerelle émet une union) :
     ///   portée conversation : { userId, conversationId, version, reset, preferences }
+    ///   portée communauté   : { userId, communityId, reset, preferences }
     ///   portée catégorie    : { userId, category }
-    /// On discrimine sur `conversationId` pour que chacune atterrisse sur son éditeur — la portée conversation
-    /// nourrit le chemin versionné de `ConversationStore`, la portée catégorie le chemin plat historique.
+    /// On discrimine sur `conversationId` puis `communityId` pour que chacune atterrisse sur son éditeur — la
+    /// portée conversation nourrit le chemin versionné de `ConversationStore`, la portée communauté
+    /// `CommunityPreferencesChannel` (#16858 : elle tombait dans le décodeur catégorie, qui exige `category`,
+    /// et la trame était jetée), la portée catégorie le chemin plat historique.
     private static func userPreferencesUpdated(_ m: MessageSocketManager) -> SocketInboundRoute {
         .raw(.userPreferencesUpdated) { [weak m] data in
             guard let m else { return }
-            guard let payload = data.first as? [String: Any], payload["conversationId"] is String else {
+            let payload = data.first as? [String: Any]
+            if payload?["conversationId"] == nil, payload?["communityId"] is String {
+                m.decode(CommunityPreferencesUpdatedEvent.self, from: data) { CommunityPreferencesChannel.shared.updated.send($0) }
+                return
+            }
+            guard let payload, payload["conversationId"] is String else {
                 m.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak m] in m?.userPreferencesUpdated.send($0) }
                 return
             }

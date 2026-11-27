@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">Einstellungen für diese Person</string>
     <string name="circles_sheet_settings_unavailable">Demnächst verfügbar</string>
     <string name="contacts_tab_circles">Kreise</string>
+    <string name="circles_settings_block_together">„Zusammen“-Einladungen stummschalten</string>
 </resources>
