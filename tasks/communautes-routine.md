@@ -978,3 +978,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : `tsc --noEmit` passerelle exit 0 ; `src/__tests__/*.test.ts` 79 suites vertes ; `routes/communities`, `routes/conversations`, `routes/admin`, `security`, `services/conversations` : 292 suites, 4 231 tests verts.
 - Suivi #20703 (même milestone) : les entrées une par une (salon, débannissement, partage, lien, appel), le budget non rendu quand `POST /conversations` n'écrit rien.
 - Prochain lot recommandé : #20703, puis #19813.
+
+## 2026-11-27 — réveil 21:37 UTC
+
+- Début du run : #20706 (#20694) fusionnée (`70f0234bf`) ; #20695 et #20682 ouvertes, leurs `ci.yml` en file depuis ~1 h (16 runs en attente sur le dépôt) : non touchées, rien à y faire tant que la CI ne rend pas de verdict.
+- Lot : #20703, les entrées UNE PAR UNE (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `admitConversationMember` (`services/conversations/memberAdmission.ts`) reçoit un port `communityBudget` et paie `spendCommunitySalonAdmission` AVANT d'écrire quand le salon appartient à une communauté privée (une tentative vers un compte non ajoutable se paie ; un refus d'autorisation et un membre déjà actif ne coûtent rien). Verdict neuf `throttled` : la forme historique `userId` rend 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After` ; le lot `userIds[]` rend `throttled` pour la personne refusée sans emporter les autres, et `Retry-After` (le plus long du lot) en en-tête — le délai ne voyage pas par personne. `POST /conversations/:id/invite` (`sharing-invite.ts`) paie le même prix. 429 déclaré aux deux schémas.
+- L'invitation dans un appel passe `communityBudget: null` (ses seaux vivent sur le serveur Fastify, que le transport socket ne tient pas) : suivi #20740.
+- Gates locaux : `tsc --noEmit` passerelle exit 0 ; `routes/conversations`, `services/conversations`, `socketio/__tests__`, `src/__tests__/*.test.ts`, `routes/__tests__` : 318 suites, 3 867 tests verts.
+- Témoins : `__tests__/unit/routes/conversations/salon-entry-addition-budget-20703.test.ts` (17, les deux portes ; rouge prouvé : 9 échecs 200 ≠ 429 avant l'implémentation).
+- Revue adversariale (non bloquante) : corrigé dans le lot — un identifiant SANS compte sortait en 404 avant le débit quand un compte désactivé ou bloquant le payait : la différence de débit disait si le compte existait (oracle). Il paie désormais la même unité, sur les deux portes (témoin +2, rouge prouvé). Suivis dans #20740 (même milestone) : invitation dans un appel, débannissement, entrée par lien (à décider), budget non rendu quand l'écriture n'a pas lieu après le débit. Fuite résiduelle connue et partagée avec `POST /communities/:id/invite` : un `throttled` isolé dans un lot laisse deviner qu'une cible est saturée.
+- Prochain lot recommandé : #20740, puis #19813 (décision produit).

@@ -42,6 +42,13 @@
  * l'équipe de la plateforme en est dispensée (rang d'administration, motif
  * écrit, journal d'audit) : ce n'est pas un ajout entre utilisateurs.
  *
+ * Les entrées UNE PAR UNE dans un salon d'une communauté privée s'y ajoutent
+ * depuis #20703, au même prix : `POST /conversations/:id/participants` (un
+ * verdict `throttled` par personne refusée dans un lot, 429 pour la forme
+ * historique `userId`) et `POST /conversations/:id/invite`. Un membre déjà
+ * actif de la communauté n'y entre pas : il ne coûte rien ; un identifiant
+ * sans compte coûte une unité, comme un compte non ajoutable.
+ *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau
  * de la cible, et son refus ne touche pas ce dernier. Un administrateur qui
