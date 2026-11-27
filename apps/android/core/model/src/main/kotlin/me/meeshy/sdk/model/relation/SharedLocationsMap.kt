@@ -19,7 +19,13 @@ public data class SharedLocationPin(
     val name: String?,
     val initials: String,
     val deadlineMillis: Long,
-)
+    val updatedAtMillis: Long = 0L,
+    val motion: SharedLocationMotion? = null,
+) {
+    /** Le mouvement à dessiner maintenant (#20665) : frais de moins de cinq minutes, et pas immobile. */
+    public fun drawnMotion(nowMillis: Long): SharedLocationMotion? =
+        SharedLocationMotion.drawn(SharedLocationMotion.shown(motion, updatedAtMillis, nowMillis))
+}
 
 /**
  * LA CARTE DES POSITIONS QU'ON ME PARTAGE, SUR ANDROID (#16985) — la projection PURE, iso `SharedLocationsMapViewModel.swift`
@@ -49,6 +55,8 @@ public object SharedLocationsMap {
                 name = name,
                 initials = name?.let(::initials) ?: "?",
                 deadlineMillis = entry.deadlineMillis,
+                updatedAtMillis = entry.updatedAtMillis,
+                motion = entry.motion,
             )
         }.sortedWith(compareBy<SharedLocationPin>({ it.name == null }, { it.name?.lowercase() }, { it.userId }))
 

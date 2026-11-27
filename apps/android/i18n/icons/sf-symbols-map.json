@@ -269,6 +269,12 @@
    "reason": "Icons.Filled.NotificationsOff; variante .fill rendue en Filled"
   },
   {
+   "symbol": "bicycle",
+   "status": "mapped",
+   "role": "Cycling",
+   "reason": "Icons.AutoMirrored.Filled.DirectionsBike"
+  },
+  {
    "symbol": "bold",
    "status": "mapped",
    "role": "Bold",
@@ -342,6 +348,12 @@
    "status": "mapped",
    "role": "Subtitles",
    "reason": "Icons.Filled.Subtitles (outil Transcrire de l'éditeur audio, #13462)"
+  },
+  {
+   "symbol": "car.fill",
+   "status": "mapped",
+   "role": "CarFilled",
+   "reason": "Icons.Filled.DirectionsCar"
   },
   {
    "symbol": "cart",
@@ -724,6 +736,18 @@
    "status": "mapped",
    "role": "EmojiFilled",
    "reason": "Icons.Filled.EmojiEmotions; variante .fill rendue en Filled"
+  },
+  {
+   "symbol": "figure.run",
+   "status": "mapped",
+   "role": "Running",
+   "reason": "Icons.AutoMirrored.Filled.DirectionsRun"
+  },
+  {
+   "symbol": "figure.walk",
+   "status": "mapped",
+   "role": "Walking",
+   "reason": "Icons.AutoMirrored.Filled.DirectionsWalk"
   },
   {
    "symbol": "film",
@@ -3366,6 +3390,22 @@
    "directional": false
   },
   "School": {
+   "origin": "material",
+   "directional": false
+  },
+  "Walking": {
+   "origin": "material",
+   "directional": true
+  },
+  "Running": {
+   "origin": "material",
+   "directional": true
+  },
+  "Cycling": {
+   "origin": "material",
+   "directional": true
+  },
+  "CarFilled": {
    "origin": "material",
    "directional": false
   }
