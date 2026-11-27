@@ -407,6 +407,8 @@ public struct GameWave2: Sendable, Equatable {
     public let achievementRarities: [String: GameRarityEntry]?
     /// La saison à venir, tant qu'aucune n'est ouverte (#10014) ; `nil` dès qu'une saison court.
     public let seasonUpcoming: GameUpcomingSeasonBlock?
+    /// Le registre des moments photo (#20649) : réglages, ligne de base des alertes, étapes présentées ou gardées.
+    public let photo: GamePhotoBlock?
 
     public static let empty = GameWave2()
 
@@ -414,7 +416,7 @@ public struct GameWave2: Sendable, Equatable {
                 trophies: GameTrophiesBlock? = nil, atlas: GameAtlasBlock? = nil,
                 prestige: GamePrestigeBlock? = nil, visibility: GameVisibility? = nil,
                 achievementRarities: [String: GameRarityEntry]? = nil,
-                seasonUpcoming: GameUpcomingSeasonBlock? = nil) {
+                seasonUpcoming: GameUpcomingSeasonBlock? = nil, photo: GamePhotoBlock? = nil) {
         self.league = league
         self.duo = duo
         self.season = season
@@ -424,10 +426,11 @@ public struct GameWave2: Sendable, Equatable {
         self.visibility = visibility
         self.achievementRarities = achievementRarities
         self.seasonUpcoming = seasonUpcoming
+        self.photo = photo
     }
 
     enum CodingKeys: String, CodingKey {
-        case league, duo, season, trophies, atlas, prestige, visibility, achievementRarities, seasonUpcoming
+        case league, duo, season, trophies, atlas, prestige, visibility, achievementRarities, seasonUpcoming, photo
     }
 
     /// Chaque extension se lit seule : l'une illisible tombe, les autres restent.
@@ -445,7 +448,8 @@ public struct GameWave2: Sendable, Equatable {
             prestige: (try? container.decodeIfPresent(GamePrestigeBlock.self, forKey: .prestige)) ?? nil,
             visibility: (try? container.decodeIfPresent(GameVisibility.self, forKey: .visibility)) ?? nil,
             achievementRarities: Self.rarities(in: container),
-            seasonUpcoming: (try? container.decodeIfPresent(GameUpcomingSeasonBlock.self, forKey: .seasonUpcoming)) ?? nil
+            seasonUpcoming: (try? container.decodeIfPresent(GameUpcomingSeasonBlock.self, forKey: .seasonUpcoming)) ?? nil,
+            photo: (try? container.decodeIfPresent(GamePhotoBlock.self, forKey: .photo)) ?? nil
         )
     }
 
@@ -468,6 +472,7 @@ public struct GameWave2: Sendable, Equatable {
         try container.encodeIfPresent(visibility, forKey: .visibility)
         try container.encodeIfPresent(achievementRarities, forKey: .achievementRarities)
         try container.encodeIfPresent(seasonUpcoming, forKey: .seasonUpcoming)
+        try container.encodeIfPresent(photo, forKey: .photo)
     }
 }
 

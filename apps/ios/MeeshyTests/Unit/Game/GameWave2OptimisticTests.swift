@@ -7,6 +7,18 @@ import MeeshySDK
 @MainActor
 final class GameWave2OptimisticTests: XCTestCase {
 
+    // MARK: - Le relais garde ce qu'il ne change pas
+
+    func test_replacing_keepsTheUpcomingSeasonAndThePhotoRegistry() {
+        let photo = GamePhotoBlock(atmosphere: nil, invitations: .major, baselineAt: nil, baseline: nil, treasuryPeakTier: nil,
+                                   moments: [GamePhotoMomentRow(stepId: "rank:voix:3", detectedAt: nil, presentedAt: nil, notifiedAt: nil, keptAt: nil)])
+        let wave2 = GameWave2(seasonUpcoming: GameWave2Fixture.upcoming, photo: photo)
+        let next = wave2.replacing(visibility: GameWave2Fixture.visibility)
+        XCTAssertEqual(next.photo, photo, "un geste optimiste ne fait pas oublier le registre des moments photo")
+        XCTAssertEqual(next.seasonUpcoming, GameWave2Fixture.upcoming)
+        XCTAssertEqual(next.visibility, GameWave2Fixture.visibility)
+    }
+
     // MARK: - La ligue
 
     func test_afterConsent_opensTheLeagueWithoutInventingThePseudonym() {

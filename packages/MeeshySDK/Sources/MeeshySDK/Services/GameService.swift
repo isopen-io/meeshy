@@ -242,3 +242,14 @@ extension GameService: GameArchiveServiceProviding {
         return response.data
     }
 }
+
+// MARK: - L'accusé d'une invitation présentée (#20649)
+//
+// Ici, et non à côté de son protocole : `api` est privé à ce fichier.
+extension GameService: GamePhotoRegistryProviding {
+    public func acknowledgePhotoMomentsPresented(_ stepIds: [String], requestId: String) async throws -> PhotoMomentsPresentedResponse {
+        let response: APIResponse<PhotoMomentsPresentedResponse> = try await api.post(
+            MeEndpoint.gamePhotoMomentsPresented, body: PhotoMomentsPresentedRequest(requestId: requestId, stepIds: stepIds))
+        return response.data
+    }
+}
