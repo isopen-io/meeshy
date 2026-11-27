@@ -209,6 +209,16 @@ function Pin({
   );
 }
 
+/** La ligne de la liste dit ce que dit le nom de l'épingle (#20658) : qui n'a pas la carte entend la même vie. */
+function Row({ userId, text, language, client }: { readonly userId: string; readonly text: string; readonly language: InterfaceLanguage; readonly client: QueryClient }) {
+  const life = usePinLife(userId, language, client);
+  return (
+    <li data-shared-location-row={userId} className="text-body">
+      {pinLifeLabel(text, life)}
+    </li>
+  );
+}
+
 export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
@@ -324,9 +334,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           <h2 className="text-title font-bold">{t('positions.list.title')}</h2>
           <ul className="grid gap-2">
             {rows.map(({ location, text }) => (
-              <li key={location.userId} data-shared-location-row={location.userId} className="text-body">
-                {text}
-              </li>
+              <Row key={location.userId} userId={location.userId} text={text} language={language} client={client} />
             ))}
           </ul>
         </div>
