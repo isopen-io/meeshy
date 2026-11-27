@@ -2246,3 +2246,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   liste. Le lien n'est ni effacé ni baissé : la réactivation rend le niveau d'avant.
 - Prochain lot : les lots iOS de la position quand #20514 aura fusionné ; sinon un autre lot serveur du jalon (#19539,
   #19538, #19450).
+
+## 2026-11-27 — réveil de 21 h : un parrain voit son filleul en Ami sans relancer l'app (#19540)
+
+- Reprise : #20714 (#19538, Connaissance née toute seule) est ouverte, `mergeable` propre, sa CI de 20 h 38 en cours
+  sur la tête `eb4aa54cb` ; la session de 20 h 40 la mène (fusion de `dev` et redispatch). Ce réveil ne l'a pas touchée :
+  pousser une fusion de `dev` aurait annulé ce run (même groupe de concurrence). Aucune branche vivante sur l'affiliation.
+- Lot : #19540, passerelle. `convertAffiliateVisit` (inscription et `POST /affiliate/register`) nouait le lien FRIEND sans
+  aucun signal temps réel. Il signale désormais `onFriendshipLinked` (paire, montée réelle du lien, demande que la
+  conversion vient d'accepter) ; `affiliate-friendship-announce.ts` l'annonce comme une acceptation ordinaire :
+  `relation:level-raised` aux deux (si le lien est né ou a monté), `friend-request:accepted` à l'expéditeur de la demande
+  acceptée, caches d'amis oubliés (`forgetFriends`, ce que l'ancien chemin oubliait aussi), écoute, batterie et position
+  partagée rejouées pour la paire. Un refus ou un blocage antérieur (`linked = false`), une demande déjà acceptée sur un
+  lien inchangé : rien. Un écho qui lève ne fait pas échouer la conversion.
+- Laissé hors du lot : la notification persistée « X a accepté » (`createFriendAcceptedNotification`) — le parrainage a
+  déjà son propre écho (#19446), et l'issue ne la demandait pas.
+- Gates : `affiliate-friendship-live` 8/8 (2 rouges avant le branchement, le module d'annonce absent avant) ; affiliation,
+  `auth`, `directory`, gardes d'émission et de promesses détachées, `socketio`, `relations` : 185 suites, 1 892/1 892 ;
+  `tsc` passerelle 0 ; dette `any` inchangée (484).
+- Prochain lot : finir #20714 si elle est encore ouverte ; puis les lots iOS de la position après #20514, sinon un autre
+  lot serveur du jalon 1/2.
