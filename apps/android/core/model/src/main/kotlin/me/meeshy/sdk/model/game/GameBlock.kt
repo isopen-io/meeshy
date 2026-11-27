@@ -52,6 +52,8 @@ public data class GameBlock(
     @EncodeDefault val visibility: GameVisibility? = null,
     /** La rareté mesurée de chaque succès, par clé de succès. */
     @EncodeDefault val achievementRarities: Map<String, GameRarityEntry>? = null,
+    /** Le registre des moments photo (#20651) : réglages, ligne de base des alertes, étapes présentées ou gardées. */
+    @EncodeDefault val photo: GamePhotoBlock? = null,
 ) {
     /** Les extensions de la vague 2, groupées. */
     val wave2: GameWave2
