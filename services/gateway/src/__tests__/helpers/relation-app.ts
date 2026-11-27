@@ -8,6 +8,7 @@ import { jest } from '@jest/globals';
 import Fastify from 'fastify';
 import { relationStore, type RelationStore } from './user-relation-store';
 import { clearPrivacyPreferencesCache } from '../../services/preferences/privacy-cache';
+import { findManyIn } from './mongo-where';
 
 export const MOI = '507f1f77bcf86cd799439011';
 export const AUTRE = '507f1f77bcf86cd799439022';
@@ -60,6 +61,8 @@ export type AppOptions = {
   readonly reglages?: ReadonlyArray<Record<string, unknown>>;
   /** Le document `UserPreferences.privacy` de chaque compte (#19362). */
   readonly privacy?: Readonly<Record<string, Record<string, boolean>>>;
+  /** L'état de compte de chacun (#19571) : `isActive`, `deactivatedAt`, `deletedAt` posés sur sa ligne `User`. */
+  readonly comptes?: Readonly<Record<string, Record<string, unknown>>>;
 };
 
 export type TestApp = {
@@ -102,14 +105,16 @@ export async function buildRelationApp(
   };
   const users = new Map<string, Record<string, unknown>>(
     [MOI, AUTRE, TIERS].map((id) => [id, {
-      id, deactivatedAt: null, blockedUserIds: options.bloques && id === AUTRE ? [...options.bloques] : [],
+      id, role: 'USER', isActive: true, deletedAt: null, deactivatedAt: null,
+      blockedUserIds: options.bloques && id === AUTRE ? [...options.bloques] : [],
       birthDate: options.naissances?.[id] ?? null, username: `u${id.slice(-2)}`, displayName: `U${id.slice(-2)}`,
+      ...(options.comptes?.[id] ?? {}),
     }]),
   );
   const prisma = {
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
-      findMany: jest.fn(async () => []),
+      findMany: jest.fn(findManyIn([...users.values()]).findMany),
       findFirst: jest.fn(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
         args.where.OR.map((branch) => users.get(branch.id)).find((u, i) =>
           u !== undefined && ((u.blockedUserIds as string[]) ?? []).includes(args.where.OR[i].blockedUserIds.has),
