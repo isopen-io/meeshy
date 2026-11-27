@@ -2083,3 +2083,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Reste : iOS #17988 et Android #17989 (même interrupteur) ; le talkie global (`talkieEnabled`) n'a pas d'interrupteur
   web non plus.
 - Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
+
+## 2026-11-27 — réveil de 14 h 40 : web de #20700 (couper le talkie de tous ses Proches)
+
+- Reprise : le run précédent de ce fil avait été coupé le 26/11 sans rien pousser. Aucune PR de la routine à finir dans
+  ce fil ; #20686, #20693, #20696 et #20698 sont fusionnées. Les lots iOS et Android (#17988, #17989, position) restent
+  cédés : la CI des PR est gelée (`PR_CI_GEL`), donc un lot natif ne se prouve pas avant fusion, et #20514 découpe
+  encore les fichiers iOS de la position.
+- Lot : `notification.talkieEnabled` (#14407, déjà obéi par `talkieGate`) entre dans le port des réglages du web et dans
+  « Notifications », juste après « Recevoir les invitations « ensemble » » : absent = reçu, écrit seul sous
+  `notification`, optimiste avec retour arrière, sept langues. La légende dit « vos Proches ne peuvent plus vous
+  parler » : entre Sangs ayant donné l'accord du palier, la coupure ne ferme pas (#20361).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Gates : témoins rouges (12) puis verts ; web `bun test` 35 607 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0 ;
+  `build` 0 ; `check-settings` (quinze bascules) et `check-interface-language` verts ; `check-verbosity` vert après un
+  relèvement motivé de `settings` (330 → 352, même convention que #17990).
+- Reste : iOS et Android du même interrupteur = #20707.
+- Prochain lot : #17988 / #17989 / #20707 quand la CI des PR est rouverte, ou un lot web/serveur du jalon 2.
