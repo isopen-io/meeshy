@@ -2801,3 +2801,40 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée : lire sa CI, fusionner `dev` dans la branche, puis fusionner la PR.
 1. **#20709** (la bulle de résumé reçoit le relevé tardif), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 81 — 2026-11-27
+
+- **Base** : `origin/dev` @ `eeef2d536`. La PR #20710 du cycle 80 (#20459) était ouverte, sa CI en file d'attente.
+- **Branche** : `claude/determined-volta-ia9zts`, **PR #20716, fusionnée** (`467263ce2`).
+- **Objectif** : **#20300** (doublon #20436). Sur iOS, la grâce du fondu des commandes d'appel se mesure sur l'horloge monotone.
+- **Coordination** :
+  - `apps/ios/tasks/routine-appels.md` n'a aucun point sur `CallControlGlass.swift` ;
+  - la routine iOS n'a fait aucun commit sous `Features/Call/Views/` depuis le 2026-11-24 ;
+  - aucune branche vivante n'écrit ce fichier.
+- **Livré** (`apps/ios/` seulement, 3 fichiers) :
+  - `CallChromeFadeGrace` (`Features/Call/Models/CallChromeInteraction.swift`) : l'instant de masquage, en secondes de `CallMonotonicClock`, et `acceptsTouches(isVisible:now:)`.
+  - `CallChromeVisibility.acceptsTouches` : un intervalle négatif ou NaN vaut un fondu achevé. Le pire cas est sans gravité : le toucher atteint la scène et rallume le chrome.
+  - `CallChromeVisibilityModifier` (`CallControlGlass.swift`) ne lit plus `Date()`. Durée du fondu, `.revive`, `hidden()` et animation sont inchangés.
+- **Tests** :
+  - 8 nouveaux tests dans `CallChromeInteractionTests` : recul d'horloge, bornes du fondu, absence de masquage, et une garde de texte (pas de `Date()`, `Date.now` ni `timeIntervalSince`).
+  - Le rouge n'a pas pu être constaté : pas de Swift dans le conteneur. Il se raisonne par mutation, et 4 mutations sont attrapées (QA).
+  - **`ios.yml` run 46044079660 sur `a565f6c92`** (qui contient `dev`) : build vert, **27/27** `CallChromeInteractionTests`.
+  - Gardes iOS (house rules, cohésion, inscription, couleurs) : ok sur l'arbre fusionné.
+- **QA** (indépendante) : favorable avec réserves.
+  - Pas de risque Swift 6 : isolation MainActor par défaut, et des précédents compilent déjà (`PlayerBannerHost.swift:396`, `CallCaptionsViews.swift:253`).
+  - Réserve : la garde de texte est une liste d'interdits.
+- **Suivi ouvert** : **#20715**. Le jumeau du kit SDK `MeeshyGlassPillStow` mesure encore son retrait sur `Date()`.
+- **PR #20710 (cycle 80)** :
+  - `dev` fusionnée dans la branche.
+  - Suites d'appel de la passerelle sur l'arbre fusionné : 56 suites et 783 tests verts, dont `tsc-never-loaded-tests-ratchet`.
+  - CI `ci.yml` 46036890384, sur `9d8bac4dc` : passerelle tranches 1, 2 et 3 vertes.
+  - Deux rouges, tous deux hors du lot :
+    - `Tests · shared` : `swift-socket-payload-shape-gate`, `user:preferences-updated` réparé par #16858 mais resté dans l'inventaire. Ce rouge est **aussi sur `dev`** (run 46027378749), et quatre PR ouvertes le corrigent (#20691, #20695, #20706, #20714).
+    - `Tests · web` : `CommunityInviteSheet`. Il n'est pas reproduit en local (3/3, trois fois, sur l'arbre fusionné), et le diff ne touche pas le web. Une relance des jobs rouges est demandée.
+- **Limites** : rien n'a été vérifié sur appareil. Les files de runners ont imposé plus d'une heure d'attente par run.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR #20710 n'est pas fusionnée : lire la relance de `Tests · web` sur le run 46036890384. Si elle est verte, ou si `dev` est revenue au vert entre-temps, fusionner `dev` dans la branche, puis la PR.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20715** (SDK), **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
