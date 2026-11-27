@@ -64,6 +64,15 @@ describe('bindPresenceLive', () => {
     expect(livePresenceOf(store.getState(), BOB, NOW)).toBe('offline');
   });
 
+  test('la présence retirée après une baisse de cercle éteint la pastille aussitôt, même sur une activité récente (#19539)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW) });
+
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: false, lastActiveAt: null });
+
+    expect(livePresenceOf(store.getState(), BOB, NOW)).toBe('offline');
+  });
+
   test('presence:snapshot amorce tous les contacts servis, en ligne ou non', () => {
     const { store, fire } = bound();
 
