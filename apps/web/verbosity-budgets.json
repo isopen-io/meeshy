@@ -301,7 +301,7 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 307,
+      "total": 352,
       "firstScreen": 61
     },
     "settings-appareils-chiffres": {
@@ -640,15 +640,15 @@
     },
     "settings": {
       "de": {
-        "total": 284,
+        "total": 330,
         "firstScreen": 61
       },
       "a": {
-        "total": 307,
+        "total": 352,
         "firstScreen": 61
       },
-      "motif": "La rangée « Un de mes Sangs tout près » (#20540) — la porte du push de proximité d'un Sang, rangée avec les autres cercles — porte sa légende visible, même convention que ses deux voisines « Retour d'un contact » et « Recevoir des Bring »",
-      "issue": 20544
+      "motif": "La rangée « Recevoir le talkie » (#20700) — l'interrupteur global du talkie, rangé sous « Recevoir les invitations « ensemble » » — porte sa légende visible, même convention que ses voisines « Recevoir des Bring » et « Recevoir les invitations « ensemble » »",
+      "issue": 20700
     }
   }
 }
