@@ -27,6 +27,8 @@ import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement'
 import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
 import { purgeExpiredExternalPeers } from '../services/external-conversation/peer-retention';
 import { externalConversationsEnabled } from '../services/external-conversation/external-conversation-flag';
+import { bloodLocationSwitchedOn } from '../services/bloodLocation/bloodLocationFlag';
+import { purgeExpiredBloodProximityNotices } from '../services/bloodLocation/bloodProximityRetraction';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -81,6 +83,7 @@ export class BackgroundJobsManager {
   private verificationSweepInterval: NodeJS.Timeout | null = null;
   /** #17120 — le filet de l'index TTL : les numéros d'amis WhatsApp échus s'effacent, une requête toutes les heures. */
   private externalPeerSweepInterval: NodeJS.Timeout | null = null;
+  private bloodProximitySweepInterval: NodeJS.Timeout | null = null;
   private isRunning: boolean = false;
 
   private prismaClient: PrismaClient;
@@ -184,6 +187,21 @@ export class BackgroundJobsManager {
       balayerLesNumerosEchus();
       this.externalPeerSweepInterval = guardedInterval({ name: 'external-peer-retention-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesNumerosEchus });
       this.externalPeerSweepInterval.unref();
+    }
+
+    /* #20542 — une alerte « un Sang s'approche » échue (2 h) part de la base :
+       `expiresAt` ne faisait que la masquer. Armée là seulement où la position du
+       Sang est allumée (`BLOOD_LOCATION_ENABLED`, éteint en production) : aucune
+       purge ne tourne en production sans décision (#9223). */
+    const balayerLesAlertesDeSangEchues = () => {
+      purgeExpiredBloodProximityNotices(this.prismaClient, new Date())
+        .then((n) => { if (n > 0) logger.info(`${n} expired blood proximity notification(s) erased`); })
+        .catch((err) => logger.error('Blood proximity notification sweep failed', err instanceof Error ? err.name : 'unknown'));
+    };
+    if (bloodLocationSwitchedOn(process.env)) {
+      balayerLesAlertesDeSangEchues();
+      this.bloodProximitySweepInterval = guardedInterval({ name: 'blood-proximity-notice-sweep', everyMs: 60 * 60 * 1000, logger, run: balayerLesAlertesDeSangEchues });
+      this.bloodProximitySweepInterval.unref();
     }
 
     /* LE CACHE GEOIP SE LIBÈRE (#9239). Ses entrées expirées n'étaient
@@ -291,6 +309,10 @@ export class BackgroundJobsManager {
       this.sessionSweepInterval = null;
     }
 
+    if (this.bloodProximitySweepInterval) {
+      clearInterval(this.bloodProximitySweepInterval);
+      this.bloodProximitySweepInterval = null;
+    }
     if (this.externalPeerSweepInterval) {
       clearInterval(this.externalPeerSweepInterval);
       this.externalPeerSweepInterval = null;
