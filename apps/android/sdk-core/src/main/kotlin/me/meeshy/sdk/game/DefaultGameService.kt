@@ -16,6 +16,7 @@ import me.meeshy.sdk.model.game.GameArchiveParser
 import me.meeshy.sdk.model.game.GameIntegrationParser
 import me.meeshy.sdk.model.game.GameLeagueWeekArchive
 import me.meeshy.sdk.model.game.GamePathSegments
+import me.meeshy.sdk.model.game.GamePhotoRegistry
 import me.meeshy.sdk.model.game.GamePrivacyRequest
 import me.meeshy.sdk.model.game.GamePrivacyResponse
 import me.meeshy.sdk.model.game.GameSeasonArchive
@@ -32,6 +33,8 @@ import me.meeshy.sdk.model.game.LeaguePseudonymRequest
 import me.meeshy.sdk.model.game.LeaguePseudonymResponse
 import me.meeshy.sdk.model.game.LeagueWeekResponse
 import me.meeshy.sdk.model.game.MissionRerollResponse
+import me.meeshy.sdk.model.game.PhotoMomentsPresentedResponse
+import me.meeshy.sdk.model.game.PhotoMomentsRequest
 import me.meeshy.sdk.model.game.PrestigeResponse
 import me.meeshy.sdk.model.game.SeasonClaimResponse
 import me.meeshy.sdk.model.game.SeasonSealResponse
@@ -46,8 +49,9 @@ import retrofit2.HttpException
 import retrofit2.Response
 
 /**
- * Le service du jeu : les quatre contrats ([GameServiceProviding], [GameWave2ServiceProviding],
- * [GameIntegrationServiceProviding], [GameArchiveServiceProviding]) sur [GameApi]. Port de `GameService` (iOS).
+ * Le service du jeu : les cinq contrats ([GameServiceProviding], [GameWave2ServiceProviding],
+ * [GameIntegrationServiceProviding], [GameArchiveServiceProviding], [GamePhotoRegistryServiceProviding]) sur [GameApi].
+ * Port de `GameService` (iOS).
  *
  * **Rien n'est mis en file.** Une coupure rend [GameServiceResult.Offline] et le geste ne part pas. **Un refus 409 se lit
  * depuis le corps brut** ([GameRefusalMapper]) ; un code inconnu ou un 5xx est un [GameServiceResult.Failed], jamais un
@@ -58,7 +62,11 @@ import retrofit2.Response
 @Singleton
 class DefaultGameService @Inject constructor(
     private val api: GameApi,
-) : GameServiceProviding, GameWave2ServiceProviding, GameIntegrationServiceProviding, GameArchiveServiceProviding {
+) : GameServiceProviding,
+    GameWave2ServiceProviding,
+    GameIntegrationServiceProviding,
+    GameArchiveServiceProviding,
+    GamePhotoRegistryServiceProviding {
 
     // --- Lot 1 : les cinq écritures (routes servies depuis le premier lot, jamais opt-in) ---
 
@@ -162,6 +170,16 @@ class DefaultGameService @Inject constructor(
             GameServiceResult.Offline
         } catch (_: SerializationException) {
             GameServiceResult.Failed(null)
+        }
+
+    // --- Registre des moments photo ---
+
+    override suspend fun acknowledgePhotoMomentsPresented(
+        stepIds: List<String>,
+        requestId: String,
+    ): GameServiceResult<PhotoMomentsPresentedResponse> =
+        rawCall(GamePhotoRegistry::presented, optIn = true) {
+            api.markPhotoMomentsPresented(PhotoMomentsRequest(requestId, stepIds))
         }
 
     // --- Plomberie ---
