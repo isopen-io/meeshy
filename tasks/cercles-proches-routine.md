@@ -2021,6 +2021,25 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
 
+## 2026-11-27 — réveil de 13 h : web de #19888, chaque épingle dit ce que vit la personne
+
+- Reprise : aucune PR de la routine ouverte. Le journal s'était arrêté le 2026-11-23 ; entre-temps, d'autres sessions
+  ont fusionné l'alerte « un Sang s'approche » (#20540) et réservé `claude/cercles-20542-purge-alerte-sang` (#20542).
+  #20514 (découpage iOS du partage de position, ouverte depuis le 2026-11-24) écrit les fichiers iOS de
+  `SharedLocation/` : les lots iOS de #20416, #20308 et #20054 lui cèdent. #19682 attend toujours la décision du porteur.
+- Lot : la part « épingles vivantes » de #19888, iso `PeerLiveOverlays` (iOS #19885). Chaque épingle de la carte des
+  cercles porte l'écoute (bandeau défilant), la batterie, le téléphone injoignable (qui prime sur la batterie),
+  « En appel » et l'alerte d'inactivité, lus dans leurs caches tels que servis à ce lecteur, et les dit dans le nom de
+  l'épingle. `usePinLife` / `pinLifeLabel` (`apps/web/src/lib/shared-locations/pin-life.ts`). Rien de nouveau ne part
+  du serveur ; aucune requête de plus.
+- Audit adversarial : non requis (affichage de signaux déjà servis et déjà tronqués par la passerelle).
+- Gates : témoins `shared-locations-map-pin-life` 7/7 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
+  hérité (`act-leak-guard`) ; `tsc` web 0.
+- Reste de #19888 : commandes dans la zone sûre, « Autour de toi » et la fiche rangeables, appui long ⇒ talkie,
+  chrome lisible sur fond clair. La chute (#18748) n'a pas encore de glyphe d'avatar sur le web.
+- Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
+  dès que #20514 est fusionnée ou abandonnée.
+
 ## 2026-11-27 — réveil de 13 h : #20542 (une alerte « un Sang s'approche » ne laisse pas de copie)
 
 - Reprise : aucune PR de la routine ouverte ; #20417 et #20463 fusionnées le 23, #20249 et #19884 fermées. Les lots
@@ -2037,5 +2056,7 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Audit adversarial : non bloquant. Corrigés dans le lot : l'effacement passe AVANT l'écriture du retrait (sinon un
   échec n'était plus jamais soldé au rejeu), le magasin de test refuse un `userId` en chaîne nue, un en-tête à jour.
   Suivis ouverts : #20688 (départ d'un compte), #20689 (alerte en vol après un retrait).
-- Prochain lot : les lots iOS de la position quand #20514 est fusionnée ou abandonnée ; sinon #19888 (web, carte des
-  cercles) ou #20130 (témoin de latence du talkie sans marge).
+- Une session parallèle a fusionné le web de #19888 (épingles vivantes, #20693) pendant ce lot : les deux entrées du
+  27 coexistent, `dev` gardée telle quelle à la fusion.
+- Prochain lot : le reste de #19888 (feuilles rangeables, talkie à l'appui long) ou #20130 ; iOS de la position dès que
+  #20514 est fusionnée ou abandonnée.
