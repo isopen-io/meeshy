@@ -87,7 +87,7 @@ function setup(sessions: ReadonlyArray<ReadonlyArray<Row>>) {
     data: {},
     on: jest.fn((event: string, listener: Listener) => listeners.set(event, listener)),
     emit: jest.fn(),
-    to: jest.fn(() => ({ emit: roomEmit })),
+    to: jest.fn((_room: string) => ({ emit: roomEmit })),
   };
   const io = { to: jest.fn(() => ({ emit: jest.fn() })) };
   const handler = new CallEventsHandler({} as PrismaClient, callService);
