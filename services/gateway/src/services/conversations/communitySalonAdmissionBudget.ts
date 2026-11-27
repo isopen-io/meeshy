@@ -31,6 +31,20 @@ export async function spendCommunitySalonAdmission(
   const invited = [...admission.creations, ...admission.reactivations]
     .filter((entrant) => entrant.via === 'invited')
     .map((entrant) => entrant.userId);
+  return spendCommunityEntrants(fastify, actorId, invited);
+}
+
+/**
+ * Le prix de `invited` personnes qu'un même geste fait entrer sans leur accord :
+ * l'acteur paie leur nombre, puis chacune débite son seau ; refusé par une
+ * cible, le geste ne coûte à l'acteur qu'une unité. Partagé par la création
+ * d'un salon, son rattachement (#20464) et la bascule en privée (#20694).
+ */
+export async function spendCommunityEntrants(
+  fastify: FastifyInstance,
+  actorId: string,
+  invited: readonly string[]
+): Promise<CommunityAdditionVerdict> {
   if (invited.length === 0) return ALLOWED;
   const byActor = await spendCommunityAdditionByActor(fastify, actorId, invited.length);
   if (!byActor.allowed) return byActor;

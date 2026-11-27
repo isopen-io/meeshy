@@ -85,16 +85,7 @@ import {
  * diverge ENCORE. Une entrée réparée fait rougir la garde jusqu'à ce qu'on la
  * retire — c'est ce qui distingue un inventaire d'un baseline.
  */
-const INVENTAIRE: ReadonlyMap<string, string> = new Map([
-  [
-    'user:preferences-updated',
-    "#18120 — l'aiguillage `.raw` n'implémente que la moitié de son discriminant : il teste " +
-      '`conversationId` et jamais `communityId`, donc la portée COMMUNAUTÉ tombe dans la branche ' +
-      "« sinon », qui décode `UserPreferencesUpdatedEvent` — dont `category` est requis et que cette " +
-      "portée ne porte pas. Épingler, masquer ou mettre en sourdine une communauté depuis un autre " +
-      'appareil ne se propage pas sur iOS.',
-  ],
-]);
+const INVENTAIRE: ReadonlyMap<string, string> = new Map();
 
 const swift = readSwift();
 const contract = readContractPayloads();
