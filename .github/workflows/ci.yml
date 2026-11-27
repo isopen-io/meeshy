@@ -314,6 +314,13 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           cd ../../apps/web
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} check:tokens
+          # #6020 — les deux moitiés du thème : aucune couleur écrite en dur
+          # dans un écran (#8879, maillon du composite qui ne tournait nulle
+          # part), et un SEUL moteur clair/sombre (`src/lib/scheme.ts` +
+          # `src/lib/inline-scheme-bootstrap.js`). Lisent les sources, sans
+          # build : leur place est avant lui.
+          node scripts/check-design-harmony.mjs
+          node scripts/check-theme-engine.mjs
           # #5606 — les actifs DÉRIVÉS de l'icône iOS (icônes PWA, splashs des
           # deux coques) sont commités : sans ce contrôle, une icône iOS
           # retouchée laisserait `public/` et les coques périmés EN SILENCE.
