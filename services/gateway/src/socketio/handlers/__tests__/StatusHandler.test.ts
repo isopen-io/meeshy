@@ -46,7 +46,6 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 import { StatusHandler } from '../StatusHandler';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import {
-  BLOCKED_SOCKET_ID,
   BLOCKED_VIEWER_ID,
   CONV_ID,
   SOCKET_ID,
@@ -887,7 +886,7 @@ describe('StatusHandler', () => {
       await handler.handleTypingStart(socket, { conversationId: CONV_ID });
 
       const toResult = ((socket.to as jest.Mock).mock.results[0] as any).value;
-      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      expect(toResult.except).toHaveBeenCalledWith([ROOMS.user(BLOCKED_VIEWER_ID)]);
       expect(toResult.emit).not.toHaveBeenCalled();
       const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
       expect(exceptEmit).toHaveBeenCalledWith(
@@ -905,7 +904,7 @@ describe('StatusHandler', () => {
       await handler.handleTypingStop(socket, { conversationId: CONV_ID });
 
       const toResult = ((socket.to as jest.Mock).mock.results[1] as any).value;
-      expect(toResult.except).toHaveBeenCalledWith([BLOCKED_SOCKET_ID]);
+      expect(toResult.except).toHaveBeenCalledWith([ROOMS.user(BLOCKED_VIEWER_ID)]);
       const exceptEmit = ((toResult.except as jest.Mock).mock.results[0] as any).value.emit as jest.Mock;
       expect(exceptEmit).toHaveBeenCalledWith(
         SERVER_EVENTS.TYPING_STOP,
@@ -1197,7 +1196,7 @@ describe('StatusHandler', () => {
         ROOMS.conversation(CONV_ID),
         SERVER_EVENTS.TYPING_STOP,
         expect.objectContaining({ userId: USER_ID, isTyping: false }),
-        [BLOCKED_SOCKET_ID]
+        [ROOMS.user(BLOCKED_VIEWER_ID)]
       );
     });
   });

@@ -133,19 +133,12 @@ function makeWorld({
     [CAROL_SOCKET, CAROL],
     [DAVE_SOCKET, DAVE],
   ]);
-  const userSockets = new Map<string, Set<string>>([
-    [ALICE, new Set([ALICE_SOCKET])],
-    [BOB, new Set([BOB_SOCKET])],
-    [CAROL, new Set([CAROL_SOCKET])],
-    [DAVE, new Set([DAVE_SOCKET])],
-  ]);
 
   const handler = new LocationHandler({
     io,
     prisma: prisma as any,
     connectedUsers,
     socketToUser,
-    userSockets,
     normalizeConversationId: jest.fn<any>(async (id: string) => id),
     engagement: null,
     now: () => clock,
@@ -191,15 +184,15 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
 
     expect(started(world.emissions)).toHaveLength(1);
     expect(started(world.emissions)[0].target).toBe(ROOM);
-    expect(started(world.emissions)[0].except).toContain(BOB_SOCKET);
-    expect(started(world.emissions)[0].except).not.toContain(CAROL_SOCKET);
+    expect(started(world.emissions)[0].except).toContain(ROOMS.user(BOB));
+    expect(started(world.emissions)[0].except).not.toContain(ROOMS.user(CAROL));
   });
 
   it('le blocage est BIDIRECTIONNEL — c\'est Bob qui a bloqué Alice, et il est exclu de même', async () => {
     const world = makeWorld({ blocks: { [BOB]: [ALICE] } });
     await share(world, world.makeSocket(ALICE_SOCKET));
 
-    expect(started(world.emissions)[0].except).toContain(BOB_SOCKET);
+    expect(started(world.emissions)[0].except).toContain(ROOMS.user(BOB));
   });
 
   it('chaque MISE À JOUR exclut les sockets du pair bloqué', async () => {
@@ -209,7 +202,7 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
     await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
 
     expect(updated(world.emissions)).toHaveLength(1);
-    expect(updated(world.emissions)[0].except).toContain(BOB_SOCKET);
+    expect(updated(world.emissions)[0].except).toContain(ROOMS.user(BOB));
   });
 
   it('le RATTRAPAGE ne sert pas la position d\'un partageur bloqué à l\'arrivant', async () => {
@@ -271,13 +264,13 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
     const world = makeWorld({ blocks });
     const alice = world.makeSocket(ALICE_SOCKET);
     await share(world, alice);
-    expect(started(world.emissions)[0].except).not.toContain(BOB_SOCKET);
+    expect(started(world.emissions)[0].except).not.toContain(ROOMS.user(BOB));
 
     blocks[ALICE] = [BOB];
     world.advance(61_000);
     await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
 
-    expect(updated(world.emissions)[0].except).toContain(BOB_SOCKET);
+    expect(updated(world.emissions)[0].except).toContain(ROOMS.user(BOB));
   });
 
   /**
@@ -402,7 +395,7 @@ describe('LocationHandler — un pair bloqué ne suit pas une position en direct
       blocks[ALICE] = [BOB];
       world.advance(61_000);
       await world.handler.handleLiveLocationUpdate(alice, { ...LYON, conversationId: CONV_ID });
-      expect(updated(world.emissions)[0].except).toContain(BOB_SOCKET);
+      expect(updated(world.emissions)[0].except).toContain(ROOMS.user(BOB));
 
       jest.advanceTimersByTime(130_000);
       await Promise.resolve();

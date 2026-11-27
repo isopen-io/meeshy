@@ -484,10 +484,6 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
-      // La liste d'exclusion d'un blocage (#16745) : un ensemble d'ids de
-      // comptes s'y traduit en ids de sockets, comme chez `StatusHandler` et
-      // `ConversationViewingHandler`, les deux autres signaux de ce salon.
-      userSockets: this.userSockets,
       normalizeConversationId: (id: string) => this.normalizeConversationId(id),
     });
 
@@ -576,7 +572,6 @@ export class MeeshySocketIOManager {
       privacyPreferencesService: this.privacyPreferencesService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
-      userSockets: this.userSockets,
     });
 
     // #18556 — « vu puis quitté » constaté par le serveur quand le client ne l'a pas dit.
@@ -2168,15 +2163,15 @@ export class MeeshySocketIOManager {
           const otherSocketIds = new Set([...allUserSockets].filter(sid => sid !== socket.id));
           void this.statusHandler.handleSocketDisconnecting(
             socket.id,
-            (room, event, data, exceptSocketIds) => {
+            (room, event, data, exceptRooms) => {
               // `broadcastFn` DÉCLARE son seul canal (`typing:stop`) et la charge
               // qui lui correspond : le couple arrive ici CORRÉLÉ, et part par la
               // porte sans qu'aucun cast ne le décorrèle. La version d'avant
               // portait `event as keyof ServerToClientEvents, data as any` sous
               // un commentaire qui AFFIRMAIT la même contrainte — une affirmation
               // que seul le type peut tenir (#18649).
-              const emitter = exceptSocketIds && exceptSocketIds.length > 0
-                ? this.io.to(room).except(exceptSocketIds)
+              const emitter = exceptRooms && exceptRooms.length > 0
+                ? this.io.to(room).except(exceptRooms)
                 : this.io.to(room);
               emitServerEvent(emitter, event, data);
             },

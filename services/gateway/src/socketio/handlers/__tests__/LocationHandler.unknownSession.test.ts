@@ -94,7 +94,6 @@ function makeWorld({
     prisma: prisma as any,
     connectedUsers: new Map(users.map(u => [u.id, u])),
     socketToUser: new Map([[ALICE_SOCKET, ALICE], [BOB_SOCKET, BOB]]),
-    userSockets: new Map([[ALICE, new Set([ALICE_SOCKET])], [BOB, new Set([BOB_SOCKET])]]),
     normalizeConversationId: jest.fn<any>(async (id: string) => id),
     engagement: null,
     now: () => clock,
@@ -160,7 +159,7 @@ describe('LocationHandler — une session inconnue amortit ses lectures sur une 
 
     expect(world.reads.conversationRead).toHaveBeenCalledTimes(2);
     expect(world.reads.blockersRead).toHaveBeenCalledTimes(2);
-    expect(updated(world.emissions)[1].except).toContain(BOB_SOCKET);
+    expect(updated(world.emissions)[1].except).toContain(ROOMS.user(BOB));
   });
 
   it('un refus de la règle 5 est retenu lui aussi — un mineur dans Global ne relit pas à chaque point', async () => {

@@ -104,7 +104,6 @@ function makeHandler(conversationRow: unknown = OPEN) {
       [SHARER_ID, { id: SHARER_ID, isAnonymous: false, displayName: 'Alice' }],
       [VIEWER_ID, { id: VIEWER_ID, isAnonymous: false, displayName: 'Bob' }],
     ]),
-    userSockets: new Map(),
     socketToUser: new Map<string, string>([
       [SHARER_SOCKET, SHARER_ID],
       [VIEWER_SOCKET, VIEWER_ID],

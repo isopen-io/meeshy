@@ -120,7 +120,6 @@ function makeHandler({
       io: io as any,
       prisma,
       connectedUsers,
-      userSockets: new Map(),
       socketToUser,
       normalizeConversationId: mockNormalize,
     }),

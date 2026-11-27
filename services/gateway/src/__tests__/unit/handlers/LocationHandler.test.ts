@@ -136,7 +136,6 @@ describe('LocationHandler', () => {
       io: mockIO as any,
       prisma: mockPrisma,
       connectedUsers,
-      userSockets: new Map(),
       socketToUser,
       normalizeConversationId,
     });

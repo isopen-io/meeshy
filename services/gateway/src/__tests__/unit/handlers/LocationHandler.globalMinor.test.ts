@@ -51,7 +51,6 @@ function setup(params: { readonly type: string; readonly birthDate: Date | null 
     io: { to: jest.fn(() => ({ emit: ioEmit })) } as never,
     prisma: prisma as never,
     connectedUsers: new Map([[USER_ID, user]]),
-    userSockets: new Map(),
     socketToUser: new Map([[SOCKET_ID, USER_ID]]),
     normalizeConversationId: async (id: string) => id,
     engagement: null,

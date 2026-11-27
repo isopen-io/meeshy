@@ -50,7 +50,6 @@ function build(options: { anonymous?: boolean; member?: boolean; closed?: boolea
       user: noBlocksUserSurface(),
     } as any,
     connectedUsers: new Map(),
-    userSockets: new Map(),
     socketToUser: new Map([[SOCKET_ID, USER_ID]]),
     normalizeConversationId: async (id: string) => id,
     engagement,

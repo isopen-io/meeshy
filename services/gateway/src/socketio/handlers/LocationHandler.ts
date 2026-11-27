@@ -87,7 +87,7 @@
  * ─── LE BLOCAGE : un FILTRE D'ANNONCE, et rien d'autre (#16745) ────────────
  *
  * Deux signaux du MÊME salon filtrent déjà le blocage bidirectionnel, et le
- * disent : la frappe (`StatusHandler._getBlockedSocketIdsInRoom` — « typing is
+ * disent : la frappe (`StatusHandler._hiddenRoomsInConversation` — « typing is
  * a more sensitive, moment-to-moment signal than presence ») et le regard
  * (`ConversationViewingHandler` — « exclut les pairs bloqués dans les deux
  * sens »). Ce handler n'avait AUCUNE occurrence de `block` : ses quatre
@@ -150,20 +150,15 @@
  * `viewing:start`, l'instantané et `viewing:activity`, et les deux rétractations
  * partent sans exclusion.
  *
- * ─── CE QUE CET INVARIANT NE COUVRE PAS (#16800) ────────────────────────────
+ * ─── L'INVARIANT EST GLOBAL, PAS LOCAL AU NŒUD (#16800) ─────────────────────
  *
- * Il est LOCAL AU NŒUD. `userSockets` — d'où se compose la liste d'exclusion —
- * est une `Map` en mémoire, par processus, alors que `io.to(room).emit(...)`
- * traverse les instances : l'adaptateur Redis de Socket.IO est monté en
- * production (`REDIS_URL` y est défini). Avec une SECONDE instance de
- * passerelle, un pair bloqué attaché au nœud B recevrait donc une annonce
- * émise depuis le nœud A, dont la carte ne contient pas son socket.
- *
- * Une seule instance tourne aujourd'hui, donc la garde est complète ; elle
- * s'armerait par une opération d'INFRASTRUCTURE, sans qu'un témoin rougisse.
- * Les deux jumeaux de salon (frappe, regard) ont exactement la même limite, et
- * elle est dite ici parce qu'un invariant annoncé plus fort qu'il n'est vaut
- * moins que pas d'invariant.
+ * La liste d'exclusion se compose par IDENTITÉ (`identityExclusion` : la room
+ * `ROOMS.user(id)` de chaque pair bloqué), jamais depuis une carte de sockets
+ * du processus. L'adaptateur Redis transporte l'ensemble `except` jusqu'à
+ * chaque instance, qui résout la room chez elle : un pair bloqué est exclu
+ * quel que soit le nœud où ses appareils sont attachés. Le témoin est
+ * `salon-block-exclusion-multi-node.test.ts`, deux serveurs réels sur un bus
+ * d'adaptateurs.
  */
 
 import type { MeeshySocket as Socket } from '../typed-socket';
@@ -199,6 +194,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { guardedTimeout } from '../../utils/guarded-timer.js';
+import { identityExclusion } from '../utils/identity-exclusion';
 
 const logger = enhancedLogger.child({ module: 'LocationHandler' });
 
@@ -207,14 +203,6 @@ export interface LocationHandlerDependencies {
   prisma: PrismaClient;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
-  /**
-   * `userId` → ses sockets, pour composer la liste d'exclusion d'un blocage
-   * (#16745). Même dépendance, même usage et même forme que chez les deux
-   * jumeaux de salon, `StatusHandler` et `ConversationViewingHandler` : un
-   * ensemble d'ids de comptes s'y traduit en ids de sockets en O(|bloqués|),
-   * jamais par un balayage de la population connectée.
-   */
-  userSockets: Map<string, Set<string>>;
   normalizeConversationId: (conversationId: string) => Promise<string>;
   /**
    * Le moteur d'engagement (#8959 `tool.location`, variante `live`). Absent ⇒
@@ -304,7 +292,6 @@ export class LocationHandler {
   private prisma: PrismaClient;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
-  private userSockets: Map<string, Set<string>>;
   private normalizeConversationId: (conversationId: string) => Promise<string>;
   private rateLimiter = getSocketRateLimiter();
   private sessions = new Map<string, LiveLocationSession>();
@@ -334,7 +321,6 @@ export class LocationHandler {
     this.prisma = deps.prisma;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
-    this.userSockets = deps.userSockets;
     this.normalizeConversationId = deps.normalizeConversationId;
     this.engagement = deps.engagement === undefined ? new EngagementService(deps.prisma) : deps.engagement;
     this.now = deps.now ?? (() => new Date());
@@ -923,12 +909,6 @@ export class LocationHandler {
     return verdict;
   }
 
-  /** Les sockets des comptes à exclure — O(|bloqués|), comme chez les jumeaux. */
-  private _socketIdsOf(userIds: ReadonlySet<string>): string[] {
-    if (userIds.size === 0) return [];
-    return [...userIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
-  }
-
   /**
    * Le salon MOINS les pairs bloqués, depuis le socket du partageur — qui
    * s'exclut déjà lui-même.
@@ -945,7 +925,7 @@ export class LocationHandler {
    * aucune diffusion nominale ne change de forme.
    */
   private _fromSocketExcept(socket: Socket, room: string, hidden: ReadonlySet<string>) {
-    const excluded = this._socketIdsOf(hidden);
+    const excluded = identityExclusion(hidden);
     return excluded.length > 0 ? socket.to(room).except(excluded) : socket.to(room);
   }
 

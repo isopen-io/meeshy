@@ -71,14 +71,12 @@ describe('« Est dans la conversation » — e2e sur de vraies sockets', () => {
     io = new SocketIOServer(httpServer);
     const connectedUsers = new Map<string, SocketUser>();
     const socketToUser = new Map<string, string>();
-    const userSockets = new Map<string, Set<string>>();
     const handler = new ConversationViewingHandler({
       io: io as never,
       prisma: prismaStub,
       privacyPreferencesService: { shouldShowOnlineStatus: async () => true },
       connectedUsers,
       socketToUser,
-      userSockets,
     });
 
     /* Miroir de l'authentification de MeeshySocketIOManager / AuthHandler :
@@ -87,11 +85,9 @@ describe('« Est dans la conversation » — e2e sur de vraies sockets', () => {
       const userId = socket.handshake.auth.userId as string;
       connectedUsers.set(userId, { id: userId, socketId: socket.id, isAnonymous: false, language: 'fr' } as SocketUser);
       socketToUser.set(socket.id, userId);
-      userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socket.id]));
       socket.on(CLIENT_EVENTS.VIEWING_START, (data: unknown) => void handler.handleStart(socket as never, data).catch(() => undefined));
       socket.on(CLIENT_EVENTS.VIEWING_STOP, (data: unknown) => void handler.handleStop(socket as never, data).catch(() => undefined));
       socket.on('disconnecting', () => {
-        userSockets.get(userId)?.delete(socket.id);
         void handler.handleSocketDisconnecting(socket.id).catch(() => undefined);
       });
       await socket.join([ROOMS.user(userId), ROOMS.conversation(CONV)]);

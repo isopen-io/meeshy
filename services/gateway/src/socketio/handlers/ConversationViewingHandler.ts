@@ -15,14 +15,13 @@
  * Tout vit en mémoire : aucune écriture en base, un registre borné par le
  * nombre de sockets connectés, vidé à `disconnecting`.
  *
- * ─── CE QUE CE FILTRE NE COUVRE PAS (#16800) ────────────────────────────────
+ * ─── LE FILTRE EST GLOBAL, PAS LOCAL AU NŒUD (#16800) ───────────────────────
  *
- * Il est LOCAL AU NŒUD, comme chez ses deux jumeaux de salon : `userSockets`
- * est une `Map` par processus, alors que la diffusion traverse les instances
- * (l'adaptateur Redis est monté en production). Avec une seconde instance, un
- * pair bloqué attaché à l'autre nœud recevrait les annonces émises ici. Une
- * seule instance tourne aujourd'hui ; la limite est dite parce qu'un invariant
- * annoncé plus fort qu'il n'est vaut moins que pas d'invariant.
+ * Comme chez ses deux jumeaux de salon, l'exclusion se compose par IDENTITÉ
+ * (`identityExclusion` : la room `ROOMS.user(id)` du lecteur lui-même et de
+ * chaque pair bloqué), que chaque instance résout chez elle quand l'adaptateur
+ * Redis lui transporte l'ensemble `except`. Un pair bloqué attaché à un autre
+ * nœud est exclu comme un voisin de processus.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -37,6 +36,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketViewingActivitySchema, SocketViewingSchema } from '../../validation/socket-event-schemas.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
+import { identityExclusion } from '../utils/identity-exclusion';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { setConversationViewingProbe } from '../conversationViewingProbe';
 
@@ -52,7 +52,6 @@ export interface ConversationViewingHandlerDependencies {
   privacyPreferencesService: Pick<PrivacyPreferencesService, 'shouldShowOnlineStatus'>;
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
-  userSockets: Map<string, Set<string>>;
   /** Injectable pour les tests ; l'horloge murale en production (#16752). */
   now?: () => number;
 }
@@ -102,7 +101,6 @@ export class ConversationViewingHandler {
   private readonly privacyPreferencesService: ConversationViewingHandlerDependencies['privacyPreferencesService'];
   private readonly connectedUsers: Map<string, SocketUser>;
   private readonly socketToUser: Map<string, string>;
-  private readonly userSockets: Map<string, Set<string>>;
   private readonly now: () => number;
   private readonly bySocket = new Map<string, SocketViewing>();
   private readonly byConversation = new Map<string, Map<string, Set<string>>>();
@@ -131,7 +129,6 @@ export class ConversationViewingHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
-    this.userSockets = deps.userSockets;
     this.now = deps.now ?? (() => Date.now());
     // #14147 — la batterie des Proches demande « a-t-il la conversation ouverte ? ».
     setConversationViewingProbe((userId, conversationId) => this.isHere(userId, conversationId));
@@ -508,7 +505,7 @@ export class ConversationViewingHandler {
     payload: ViewingEvent,
     blockRelated: ReadonlySet<string>,
   ): void {
-    const excluded = [payload.userId, ...blockRelated].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+    const excluded = identityExclusion([payload.userId, ...blockRelated]);
     try {
       this.io.to(ROOMS.conversation(payload.conversationId)).except(excluded).emit(event, payload);
     } catch (error) {

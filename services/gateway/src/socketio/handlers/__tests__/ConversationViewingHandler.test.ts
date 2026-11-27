@@ -5,7 +5,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { ConversationViewingHandler, MAX_PENDING_OPENINGS } from '../ConversationViewingHandler';
-import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 const CONV = '507f1f77bcf86cd799439011';
 const OTHER_CONV = '507f1f77bcf86cd799439099';
@@ -69,7 +69,6 @@ function makeWorld({
   };
   const connectedUsers = new Map<string, any>();
   const socketToUser = new Map<string, string>();
-  const userSockets = new Map<string, Set<string>>();
 
   const handler = new ConversationViewingHandler({
     io: io as any,
@@ -77,13 +76,11 @@ function makeWorld({
     privacyPreferencesService: privacyPreferencesService as any,
     connectedUsers,
     socketToUser,
-    userSockets,
   });
 
   const connect = (userId: string, socketId: string, rooms: readonly string[] = []) => {
     connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
     socketToUser.set(socketId, userId);
-    userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socketId]));
     const direct: Array<{ event: string; data: unknown }> = [];
     const socket = {
       id: socketId,
@@ -113,7 +110,6 @@ function makeWorld({
     const authenticate = (userId: string) => {
       connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
       socketToUser.set(socketId, userId);
-      userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socketId]));
     };
     return { socket: socket as any, direct, authenticate };
   };
@@ -142,7 +138,7 @@ describe('ConversationViewingHandler — ouvrir la conversation', () => {
     expect(startsFor(emissions)).toEqual([
       {
         room: `conversation:${CONV}`,
-        except: ['s-alice'],
+        except: [ROOMS.user(ALICE)],
         event: SERVER_EVENTS.VIEWING_START,
         data: { userId: ALICE, conversationId: CONV },
       },
@@ -209,8 +205,8 @@ describe('ConversationViewingHandler — blocage', () => {
 
     await handler.handleStart(alice.socket, { conversationId: CONV });
 
-    expect(startsFor(emissions)[0].except).toEqual(expect.arrayContaining(['s-alice', 's-bob']));
-    expect(startsFor(emissions)[0].except).not.toContain('s-carol');
+    expect(startsFor(emissions)[0].except).toEqual(expect.arrayContaining([ROOMS.user(ALICE), ROOMS.user(BOB)]));
+    expect(startsFor(emissions)[0].except).not.toContain(ROOMS.user(CAROL));
   });
 
   it('ne révèle pas à l’arrivant un pair présent qui l’a bloqué', async () => {
@@ -241,7 +237,7 @@ describe('ConversationViewingHandler — quitter la conversation', () => {
     expect(stopsFor(emissions)).toEqual([
       {
         room: `conversation:${CONV}`,
-        except: ['s-alice'],
+        except: [ROOMS.user(ALICE)],
         event: SERVER_EVENTS.VIEWING_STOP,
         data: { userId: ALICE, conversationId: CONV },
       },
@@ -502,7 +498,7 @@ describe('ConversationViewingHandler — regarder, écouter, agir (#9061)', () =
     expect(activitiesFor(emissions)).toEqual([
       {
         room: `conversation:${CONV}`,
-        except: ['s-alice'],
+        except: [ROOMS.user(ALICE)],
         event: SERVER_EVENTS.VIEWING_ACTIVITY,
         data: { userId: ALICE, conversationId: CONV },
       },
@@ -548,7 +544,7 @@ describe('ConversationViewingHandler — regarder, écouter, agir (#9061)', () =
 
     await handler.handleActivity(alice.socket, { conversationId: CONV });
 
-    expect(activitiesFor(emissions).map(e => [...e.except].sort())).toEqual([['s-alice', 's-bob']]);
+    expect(activitiesFor(emissions).map(e => [...e.except].sort())).toEqual([[ROOMS.user(ALICE), ROOMS.user(BOB)]]);
   });
 
   it('ignore une charge invalide', async () => {
@@ -652,7 +648,7 @@ describe('ConversationViewingHandler — fin d’appartenance (#16654)', () => {
     expect(stopsFor(emissions)).toEqual([
       {
         room: `conversation:${CONV}`,
-        except: ['s-alice'],
+        except: [ROOMS.user(ALICE)],
         event: SERVER_EVENTS.VIEWING_STOP,
         data: { userId: ALICE, conversationId: CONV },
       },

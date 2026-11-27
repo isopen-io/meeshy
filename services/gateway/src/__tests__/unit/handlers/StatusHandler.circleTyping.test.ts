@@ -7,6 +7,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { StatusHandler, type StatusHandlerDependencies } from '../../../socketio/handlers/StatusHandler';
 import { ADULT_BIRTH, messagingWorld, type CircleLink } from '../../helpers/messaging-circle-world';
 
@@ -76,7 +77,7 @@ describe('typing:start — la frappe suit le cercle (#14107)', () => {
     const { handler, socket, excepted, emitted } = setup();
     await handler.handleTypingStart(socket as never, { conversationId: CONV });
     expect(emitted).toEqual(['typing:start']);
-    expect([...(excepted[0] ?? [])].sort()).toEqual(['s-bloqueur', 's-inconnu']);
+    expect([...(excepted[0] ?? [])].sort()).toEqual([ROOMS.user(AMI_BLOQUEUR), ROOMS.user(INCONNU)].sort());
   });
 
   it('personne n\'est exclu quand tous sont au moins Connaissance', async () => {
@@ -87,13 +88,13 @@ describe('typing:start — la frappe suit le cercle (#14107)', () => {
       ],
     });
     await handler.handleTypingStart(socket as never, { conversationId: CONV });
-    expect(excepted).toEqual([['s-bloqueur']]);
+    expect(excepted).toEqual([[ROOMS.user(AMI_BLOQUEUR)]]);
   });
 
   it('un invité de lien qui écrit garde la règle d\'avant : seul le blocage l\'exclut', async () => {
     const { handler, socket, excepted, emitted } = setup({ anonymousTyper: true });
     await handler.handleTypingStart(socket as never, { conversationId: CONV });
     expect(emitted).toEqual(['typing:start']);
-    expect(excepted).toEqual([['s-bloqueur']]);
+    expect(excepted).toEqual([[ROOMS.user(AMI_BLOQUEUR)]]);
   });
 });

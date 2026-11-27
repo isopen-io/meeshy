@@ -113,7 +113,6 @@ function makeHandler() {
     io,
     prisma: makePrisma() as any,
     connectedUsers,
-    userSockets: new Map(),
     socketToUser,
     normalizeConversationId: jest.fn<any>(async (id: string) =>
       id === CONV_ID ? NORMALIZED_CONV_ID : id

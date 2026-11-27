@@ -27,7 +27,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
 import { ConversationViewingHandler } from '../ConversationViewingHandler';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 const CONV = '507f1f77bcf86cd799439011';
 const ALICE = '507f1f77bcf86cd7994390a1';
@@ -77,7 +77,6 @@ function makeWorld(blocks: Readonly<Record<string, readonly string[]>> = { [ALIC
 
   const connectedUsers = new Map<string, any>();
   const socketToUser = new Map<string, string>();
-  const userSockets = new Map<string, Set<string>>();
 
   const handler = new ConversationViewingHandler({
     io: io as any,
@@ -85,14 +84,12 @@ function makeWorld(blocks: Readonly<Record<string, readonly string[]>> = { [ALIC
     privacyPreferencesService: { shouldShowOnlineStatus: jest.fn<any>().mockResolvedValue(true) } as any,
     connectedUsers,
     socketToUser,
-    userSockets,
     now: () => clock,
   });
 
   const connect = (userId: string, socketId: string, rooms: readonly string[] = [CONV]) => {
     connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
     socketToUser.set(socketId, userId);
-    userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socketId]));
     const direct: Array<{ event: string; data: unknown }> = [];
     const socket = {
       id: socketId,
@@ -164,8 +161,8 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const stop = stops(world.emissions);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).not.toContain('socket-bob');
-    expect(stop[0].except).toContain('socket-alice');
+    expect(stop[0].except).not.toContain(ROOMS.user(BOB));
+    expect(stop[0].except).toContain(ROOMS.user(ALICE));
     expect(world.blockReads.findMany.mock.calls.length).toBe(readsAfterStart);
   });
 
@@ -180,7 +177,7 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const stop = stops(world.emissions);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).not.toContain('socket-bob');
+    expect(stop[0].except).not.toContain(ROOMS.user(BOB));
   });
 
   /**
@@ -205,7 +202,7 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const stop = stops(world.emissions);
     expect(stop).toHaveLength(1);
-    expect(stop[0].except).not.toContain('socket-bob');
+    expect(stop[0].except).not.toContain(ROOMS.user(BOB));
   });
 
   /**
@@ -225,7 +222,7 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
     await world.handler.handleActivity(alice.socket, { conversationId: CONV });
     const avant = world.emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
     expect(avant).toHaveLength(1);
-    expect(avant[0].except).not.toContain('socket-bob');
+    expect(avant[0].except).not.toContain(ROOMS.user(BOB));
 
     blocks[BOB] = [ALICE];
     world.advance(61_000);
@@ -233,7 +230,7 @@ describe('ConversationViewingHandler — une lecture de blocage qui échoue n\'o
 
     const apres = world.emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
     expect(apres).toHaveLength(2);
-    expect(apres[1].except).toContain('socket-bob');
+    expect(apres[1].except).toContain(ROOMS.user(BOB));
   });
 
   it('le POULS ne relit la base qu\'une fois par pas, pas à chaque battement', async () => {

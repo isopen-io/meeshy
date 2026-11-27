@@ -98,7 +98,6 @@ function makeHandler() {
       [SHARER_ID, { id: SHARER_ID, isAnonymous: false, displayName: 'Alice' }],
       [OTHER_SHARER_ID, { id: OTHER_SHARER_ID, isAnonymous: false, displayName: 'Bob' }],
     ]),
-    userSockets: new Map(),
     socketToUser: new Map<string, string>([
       [SHARER_SOCKET, SHARER_ID],
       [OTHER_SHARER_SOCKET, OTHER_SHARER_ID],

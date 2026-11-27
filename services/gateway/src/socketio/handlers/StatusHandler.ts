@@ -27,6 +27,7 @@ import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { pairAccessAmong } from '../../services/relations/pairAccess';
 import { guardedInterval } from '../../utils/guarded-timer.js';
 import { createEndToEndRegimeReader } from '../../services/e2ee/e2ee-signal-channel';
+import { identityExclusion } from '../utils/identity-exclusion';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -136,7 +137,7 @@ export class StatusHandler {
       room: string,
       event: typeof SERVER_EVENTS.TYPING_STOP,
       data: TypingEvent,
-      exceptSocketIds?: string[]
+      exceptRooms?: string[]
     ) => void,
     otherSocketIds?: ReadonlySet<string>
   ): Promise<void> {
@@ -158,8 +159,8 @@ export class StatusHandler {
             }
             const room = ROOMS.conversation(conversationId);
             const typingEvent: TypingEvent = { userId, username, displayName, conversationId, isTyping: false };
-            const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, conversationId);
-            broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, blockedSocketIds.length > 0 ? blockedSocketIds : undefined);
+            const hiddenRooms = await this._hiddenRoomsInConversation(userId, conversationId);
+            broadcastFn(room, SERVER_EVENTS.TYPING_STOP, typingEvent, hiddenRooms.length > 0 ? hiddenRooms : undefined);
           } catch (error) {
             logger.error('typing:stop broadcast on disconnect failed', { error, socketId, conversationId });
           }
@@ -188,7 +189,12 @@ export class StatusHandler {
   }
 
   /**
-   * PRIVACY: socket ids to exclude from a typing broadcast.
+   * PRIVACY: the identity rooms (`ROOMS.user(id)`) to exclude from a typing
+   * broadcast — GLOBAL across gateway instances (#16800). A socket id names only
+   * what THIS process knows; a user room resolves on every node the Redis
+   * adapter delivers to, so a hidden member is excluded wherever their devices
+   * are attached. For the same reason the candidates are every registered
+   * participant, never this node's `connectedUsers`.
    *
    * - The bidirectional BLOCKING rule already enforced on the presence channel
    *   (`_broadcastUserStatus` in MeeshySocketIOManager): typing is a more
@@ -201,23 +207,21 @@ export class StatusHandler {
    * blocked: an anonymous typer keeps the blocking rule alone, an anonymous
    * viewer is never in this list.
    */
-  private async _getBlockedSocketIdsInRoom(userId: string, conversationId: string): Promise<string[]> {
+  private async _hiddenRoomsInConversation(userId: string, conversationId: string): Promise<string[]> {
     const participants = await this.prisma.participant.findMany({
       where: { conversationId, isActive: true, userId: { not: null } },
       select: { userId: true }
     });
-    const onlineParticipantUserIds = participants
+    const viewerUserIds = participants
       .map(p => p.userId)
-      .filter((id): id is string => !!id && id !== userId && this.connectedUsers.has(id));
-    if (onlineParticipantUserIds.length === 0) return [];
+      .filter((id): id is string => !!id && id !== userId);
+    if (viewerUserIds.length === 0) return [];
 
     const typerIsRegistered = participants.some((p) => p.userId === userId);
     const hiddenUserIds = typerIsRegistered
-      ? await this._typingDeniedAmong(userId, onlineParticipantUserIds)
-      : await getBlockedUserIdsAmong(this.prisma, userId, onlineParticipantUserIds);
-    if (hiddenUserIds.size === 0) return [];
-
-    return [...hiddenUserIds].flatMap(id => [...(this.userSockets.get(id) ?? [])]);
+      ? await this._typingDeniedAmong(userId, viewerUserIds)
+      : await getBlockedUserIdsAmong(this.prisma, userId, viewerUserIds);
+    return identityExclusion(hiddenUserIds);
   }
 
   /** The members the law refuses `dm.typing` from `typerId` — blocking included. */
@@ -386,8 +390,8 @@ export class StatusHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
-      const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
+      const hiddenRooms = await this._hiddenRoomsInConversation(userId, normalizedId);
+      const emitter = hiddenRooms.length > 0 ? socket.to(room).except(hiddenRooms) : socket.to(room);
       emitter.emit(SERVER_EVENTS.TYPING_START, typingEvent);
     } catch (error) {
       logger.error('typing:start failed', { error });
@@ -498,8 +502,8 @@ export class StatusHandler {
     );
     if (!anotherIsTyping) {
       const room = ROOMS.conversation(normalizedId);
-      const blockedSocketIds = await this._getBlockedSocketIdsInRoom(userId, normalizedId);
-      const emitter = blockedSocketIds.length > 0 ? socket.to(room).except(blockedSocketIds) : socket.to(room);
+      const hiddenRooms = await this._hiddenRoomsInConversation(userId, normalizedId);
+      const emitter = hiddenRooms.length > 0 ? socket.to(room).except(hiddenRooms) : socket.to(room);
       emitter.emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
     }
   }
