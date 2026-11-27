@@ -931,3 +931,14 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
+
+## 2026-11-27 — réveil 13:01 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19812 fusionnée (`8861451f1`). Lot prévu #20464 CÉDÉ : une autre session a poussé `claude/communautes-budget-salon` à 13:03, avant mon premier push (« celui qui n'a rien écrit cède »). #19813 est une `décision-produit` : non prise.
+- Lot : #20657 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »), moitié web — le suivi client noté par #19812.
+- Défaut : un 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` tombait dans `failed` (`community-invite.ts`, `verdictOf`) : la feuille « Inviter » disait « L'invitation a échoué. Réessayez. » et relisait les membres alors que rien n'était écrit.
+- Web : verdict `throttled` (429 AVEC le code du budget seulement ; le 429 du plafond global par IP reste une panne) : la ligne optimiste repart, le compteur redescend, rien n'est relu. `InviteOutcome.throttled` ; `inviteStatusOf` dit « Trop d'ajouts pour l'instant. Réessayez plus tard. » (seule, ou après le nombre d'entrées), et l'emporte sur une panne voisine. Clé `community.invite.throttled`, sept langues. La phrase ne dit pas qui est saturé.
+- Témoins : `lib/api/community-invite.test.ts` (+2, 6 attendus étendus), `lib/communities/invite-status.test.ts` (6, neuf ; rouge prouvé : 9 échecs avant l'implémentation).
+- Gates locaux : `bun test src/lib/communities/ src/lib/api/community src/routes/community` 244 verts ; `src/lib/i18n src/lib/interface` 311 verts ; `tsc --noEmit` vert.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée.
+- Reste : iOS et Android disent le même refus (suivi à ouvrir, même clé).
