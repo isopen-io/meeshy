@@ -23,6 +23,7 @@ const f = {
   'admin.analytics.game.hidden': 'Cuentas con el Juego oculto',
   'admin.analytics.game.notificationsOff': 'Cuentas sin notificaciones del Juego',
   'admin.analytics.game.sampled': 'Lectura limitada: las cifras son mínimos.',
+  'admin.analytics.game.noValue': 'sin datos',
 } satisfies Readonly<Record<GameStatsTextKey, string>>;
 
 export default f;

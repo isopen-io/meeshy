@@ -119,6 +119,28 @@ describe('AdminChartCard — le cadre, la figure, le tableau', () => {
     expect(host.querySelector('td')?.textContent).toBe('12');
   });
 
+  test('AdminChartTable : la zone qui défile se nomme par la légende et s’atteint au clavier (#20628)', async () => {
+    const host = await mount(<AdminChartTable table={table} />);
+    const zone = host.querySelector('[data-admin-chart-table]')?.parentElement;
+    expect(zone?.getAttribute('role')).toBe('region');
+    expect(zone?.getAttribute('tabindex')).toBe('0');
+    expect(zone?.getAttribute('aria-label')).toBe(table.caption);
+    expect(zone?.className).toContain('overflow-x-auto');
+    expect(zone?.className).toContain('[contain:inline-size]');
+  });
+
+  test('AdminChartTable : « — » reste « — » à l’œil et se dit par le mot de l’appelant au lecteur d’écran (#20628)', async () => {
+    const host = await mount(<AdminChartTable table={{ caption: 'Retour', columns: ['Semaine', 'J7'], rows: [['16 nov.', '—']], noValue: 'aucune donnée' }} />);
+    const cell = host.querySelector('td');
+    expect(cell?.querySelector('[aria-hidden="true"]')?.textContent).toBe('—');
+    expect(cell?.querySelector('.sr-only')?.textContent).toBe('aucune donnée');
+  });
+
+  test('AdminChartTable sans mot de l’appelant : « — » reste tel quel', async () => {
+    const host = await mount(<AdminChartTable table={{ caption: 'Retour', columns: ['Semaine', 'J7'], rows: [['16 nov.', '—']] }} />);
+    expect(host.querySelector('td')?.innerHTML).toBe('—');
+  });
+
   test('les couleurs de catégories sont des jetons dans un ordre fixe, « Autres » à part', () => {
     expect([...ADMIN_SERIES_TOKENS]).toHaveLength(4);
     expect(ADMIN_SERIES_TOKENS[0]).toBe('--ios-indigo-500');

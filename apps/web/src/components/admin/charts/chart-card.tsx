@@ -34,14 +34,32 @@ export type AdminChartTableData = {
   readonly caption: string;
   readonly columns: readonly string[];
   readonly rows: readonly (readonly string[])[];
+  /** Le mot que le lecteur d'écran dit à la place de « — » (« aucune donnée ») ; sans lui, « — » est lu tel quel. */
+  readonly noValue?: string;
 };
+
+const NO_VALUE = '—';
+
+function TableCell({ cell, noValue }: { readonly cell: string; readonly noValue: string | undefined }) {
+  if (cell !== NO_VALUE || noValue === undefined) return <>{cell}</>;
+  return (
+    <>
+      <span aria-hidden="true">{NO_VALUE}</span>
+      <span className="sr-only">{noValue}</span>
+    </>
+  );
+}
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
-/** Le tableau accessible d'un graphique : les mêmes valeurs, formatées, que l'œil lit — et le chemin clavier et lecteur d'écran. */
+/**
+ * Le tableau accessible d'un graphique : les mêmes valeurs, formatées, que l'œil lit — et le chemin clavier et lecteur d'écran.
+ * La zone qui défile est une région nommée par la légende et atteignable au clavier ; `contain: inline-size` l'empêche
+ * d'imposer la largeur du tableau à la page : à 320 px, c'est elle qui défile, la page ne déborde pas (#20628).
+ */
 export function AdminChartTable({ id, table }: { readonly id?: string; readonly table: AdminChartTableData }) {
   return (
-    <div {...(id === undefined ? {} : { id })} className="overflow-x-auto">
+    <div {...(id === undefined ? {} : { id })} role="region" tabIndex={0} aria-label={table.caption} className={`overflow-x-auto [contain:inline-size] ${FOCUS}`}>
       <table data-admin-chart-table className="w-full border-collapse text-start text-caption">
         <caption className="sr-only">{table.caption}</caption>
         <thead>
@@ -63,7 +81,7 @@ export function AdminChartTable({ id, table }: { readonly id?: string; readonly 
                   </th>
                 ) : (
                   <td key={column} className="px-2 py-2 tabular-nums" style={{ color: INK, borderBottom: `1px solid ${EDGE}` }}>
-                    {cell}
+                    <TableCell cell={cell} noValue={table.noValue} />
                   </td>
                 ),
               )}

@@ -23,6 +23,7 @@ const f = {
   'admin.analytics.game.hidden': 'Accounts with the Game hidden',
   'admin.analytics.game.notificationsOff': 'Accounts without Game notifications',
   'admin.analytics.game.sampled': 'Capped reading: the figures are lower bounds.',
+  'admin.analytics.game.noValue': 'no data',
 } satisfies Readonly<Record<GameStatsTextKey, string>>;
 
 export default f;

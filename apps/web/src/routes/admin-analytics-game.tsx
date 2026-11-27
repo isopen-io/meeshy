@@ -38,7 +38,7 @@ function RetentionTable({ language, texts, data }: { readonly language: AdminLan
     ]);
   return (
     <div data-admin-game-retention-table>
-      <AdminChartTable table={{ caption: gameStatsText(texts, 'admin.analytics.game.retention.title'), columns, rows }} />
+      <AdminChartTable table={{ caption: gameStatsText(texts, 'admin.analytics.game.retention.title'), columns, rows, noValue: gameStatsText(texts, 'admin.analytics.game.noValue') }} />
     </div>
   );
 }
@@ -50,7 +50,7 @@ function DailyTable({ language, texts, data }: { readonly language: AdminLanguag
     .map((day) => [dayLabel(day.day, language), formatCount(day.offeringsOpened, language), formatCount(day.meeshesMinted, language), formatCount(day.meeshesSpent, language)]);
   return (
     <div data-admin-game-daily-table>
-      <AdminChartTable table={{ caption: gameStatsText(texts, 'admin.analytics.game.daily.title'), columns, rows }} />
+      <AdminChartTable table={{ caption: gameStatsText(texts, 'admin.analytics.game.daily.title'), columns, rows, noValue: gameStatsText(texts, 'admin.analytics.game.noValue') }} />
     </div>
   );
 }
