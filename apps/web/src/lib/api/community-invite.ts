@@ -25,6 +25,12 @@ import type { ApiResult } from './http';
  * relire la vérité. Hors ligne, rien ne part : le web n'a pas de file
  * d'écriture (#6325).
  *
+ * **Le budget d'ajouts** (#19812) : au-delà, la passerelle rend 429
+ * `COMMUNITY_ADDITION_BUDGET_EXCEEDED` et n'écrit RIEN. C'est un verdict
+ * propre (`throttled`, #20657) : la ligne provisoire repart comme pour un
+ * refus, et rien n'est relu. Un 429 sans ce code (le plafond global par IP)
+ * reste une panne.
+ *
  * La ligne servie remplace la provisoire par une PROJECTION
  * (`decodeCommunityMember`) : seule la présence servie (`isOnline`, gardée par
  * `resolvePresenceVisibility`) y entre, jamais l'activité ni les coordonnées.
@@ -32,7 +38,16 @@ import type { ApiResult } from './http';
 
 export type InviteOutcome =
   | { readonly status: 'offline' }
-  | { readonly status: 'done'; readonly invited: number; readonly already: number; readonly refused: number; readonly failed: number };
+  | {
+      readonly status: 'done';
+      readonly invited: number;
+      readonly already: number;
+      readonly refused: number;
+      readonly failed: number;
+      readonly throttled: number;
+    };
+
+export const COMMUNITY_ADDITION_BUDGET_CODE = 'COMMUNITY_ADDITION_BUDGET_EXCEEDED';
 
 export async function inviteToCommunity(
   deps: CommunityActionDeps,
@@ -84,11 +99,12 @@ const appendToLastPage = (queryClient: QueryClient, communityId: string, rows: r
   return true;
 };
 
-type Verdict = 'invited' | 'already' | 'refused' | 'failed';
+type Verdict = 'invited' | 'already' | 'refused' | 'failed' | 'throttled';
 
 const verdictOf = (result: ApiResult<unknown>): Verdict => {
   if (result.ok) return 'invited';
   if (result.status === 409) return 'already';
+  if (result.status === 429 && result.code === COMMUNITY_ADDITION_BUDGET_CODE) return 'throttled';
   return result.status === 403 || result.status === 404 ? 'refused' : 'failed';
 };
 
@@ -132,7 +148,7 @@ export async function performInviteMembers({
     void queryClient.invalidateQueries({ queryKey: DETAIL_PREFIX });
   }
   const count = (verdicts: readonly Verdict[]) => settled.filter((verdict) => verdicts.includes(verdict)).length;
-  return { status: 'done', invited: count(['invited']), already: count(['already']), refused: count(['refused']), failed: count(['failed']) };
+  return { status: 'done', invited: count(['invited']), already: count(['already']), refused: count(['refused']), failed: count(['failed']), throttled: count(['throttled']) };
 }
 
 export type CreateWithMembersOutcome =

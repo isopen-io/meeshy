@@ -94,7 +94,7 @@ describe('inviter, optimiste', () => {
     expect(detail()?.memberCount).toBe(3);
     releaseAll();
     const outcome = await pending;
-    expect(outcome).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0 });
+    expect(outcome).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0, throttled: 0 });
     expect(rows().find((row) => row.userId === 'u-ann')?.id).toBe('row-u-ann');
     expect(detail()?.memberCount).toBe(3);
   });
@@ -117,7 +117,7 @@ describe('inviter, optimiste', () => {
     const pending = performInviteMembers({ community: community(), people: [person('u-ann'), person('u-cy')], deps });
     expect(detail()?.memberCount).toBe(4);
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 1, already: 0, refused: 1, failed: 0 });
+    expect(await pending).toEqual({ status: 'done', invited: 1, already: 0, refused: 1, failed: 0, throttled: 0 });
     expect(rows().map((row) => row.userId)).toEqual(['u-creator', 'u-bob', 'u-ann']);
     expect(detail()?.memberCount).toBe(3);
   });
@@ -127,7 +127,7 @@ describe('inviter, optimiste', () => {
     const before = rows();
     const pending = performInviteMembers({ community: community(), people: [person('u-ann')], deps });
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 0, already: 0, refused: 0, failed: 1 });
+    expect(await pending).toEqual({ status: 'done', invited: 0, already: 0, refused: 0, failed: 1, throttled: 0 });
     expect(rows()).toEqual(before);
     expect(detail()?.memberCount).toBe(2);
   });
@@ -136,7 +136,7 @@ describe('inviter, optimiste', () => {
     const { deps, rows, detail, releaseAll } = setup({ answers: { 'u-bob': { ok: false, status: 409, error: 'already' } } });
     const pending = performInviteMembers({ community: community(), people: [person('u-bob')], deps });
     releaseAll();
-    expect(await pending).toEqual({ status: 'done', invited: 0, already: 1, refused: 0, failed: 0 });
+    expect(await pending).toEqual({ status: 'done', invited: 0, already: 1, refused: 0, failed: 0, throttled: 0 });
     expect(rows().filter((row) => row.userId === 'u-bob')).toHaveLength(1);
     expect(detail()?.memberCount).toBe(2);
   });
@@ -158,6 +158,28 @@ describe('inviter, optimiste', () => {
     releaseAll();
     await pending;
     expect(stale()).toBe(true);
+  });
+
+  test('au-delà du budget d’ajouts (429, #19812) : la ligne repart, le compteur redescend, et RIEN n’est relu — rien n’a été écrit (#20657)', async () => {
+    const { deps, rows, detail, releaseAll, stale } = setup({
+      answers: {
+        'u-ann': { ok: true, data: servedRow('u-ann') },
+        'u-cy': { ok: false, status: 429, error: 'Trop d’ajouts', code: 'COMMUNITY_ADDITION_BUDGET_EXCEEDED' },
+      },
+    });
+    const pending = performInviteMembers({ community: community(), people: [person('u-ann'), person('u-cy')], deps });
+    releaseAll();
+    expect(await pending).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0, throttled: 1 });
+    expect(rows().map((row) => row.userId)).toEqual(['u-creator', 'u-bob', 'u-ann']);
+    expect(detail()?.memberCount).toBe(3);
+    expect(stale()).toBe(false);
+  });
+
+  test('un 429 SANS le code du budget reste une panne : le plafond global par IP ne dit rien des ajouts', async () => {
+    const { deps, releaseAll } = setup({ answers: { 'u-ann': { ok: false, status: 429, error: 'Too many requests' } } });
+    const pending = performInviteMembers({ community: community(), people: [person('u-ann')], deps });
+    releaseAll();
+    expect(await pending).toEqual({ status: 'done', invited: 0, already: 0, refused: 0, failed: 1, throttled: 0 });
   });
 
   test('hors ligne, rien ne part ni ne change', async () => {
@@ -202,7 +224,7 @@ describe('créer avec des membres (#6376, miroir `CommunityCreateViewModel.creat
     expect(outcome.status).toBe('created');
     expect(sent.map((request) => request.path)).toEqual(['/api/v1/communities', '/api/v1/communities/c-new/invite', '/api/v1/communities/c-new/invite']);
     expect(sent.slice(1).map((request) => request.body)).toEqual([{ userId: 'u-ann' }, { userId: 'u-cy' }]);
-    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 2, already: 0, refused: 0, failed: 0 });
+    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 2, already: 0, refused: 0, failed: 0, throttled: 0 });
   });
 
   test('sans personne choisie, seule la création part', async () => {
@@ -223,6 +245,6 @@ describe('créer avec des membres (#6376, miroir `CommunityCreateViewModel.creat
     const queryClient = new QueryClient();
     const deps = { source: 'fixtures' as const, transport: {} as HttpTransport, queryClient, isOnline: () => true };
     const outcome = await performCreateCommunityWithMembers({ draft: draft('Cercle des créateurs'), people: [person('u-amina')], deps });
-    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0 });
+    expect(outcome.status === 'created' ? outcome.invited : null).toEqual({ status: 'done', invited: 1, already: 0, refused: 0, failed: 0, throttled: 0 });
   });
 });
