@@ -630,7 +630,6 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         XCTAssertEqual(problem?.pointReplacement?.recipientIds, [alice, carol])
         XCTAssertTrue(sut.emitter.starts.isEmpty)
-        XCTAssertEqual(sut.fixes.asks, 0)
         XCTAssertTrue(sut.center.roster.isFixedPoint)
     }
 
@@ -868,5 +867,78 @@ final class SharedLocationServedSourceTests: XCTestCase {
 
         XCTAssertEqual(problem, .refused(.invalid))
         XCTAssertEqual(sut.served.reads, reads + 1)
+    }
+
+    // MARK: - La position se prend AVANT la relecture (#20308), un refus certain garde le démarrage d'ici (#20416)
+
+    func test_confirming_aPointRelaunchedElsewhereDuringTheFix_sendsNothing_andAsksAgain() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        let relaunched = served([alice], source: .manual, startedAt: s2, acceptsExpectedStart: true)
+        sut.fixes.onAsk = { [served = sut.served] in served.snapshot = relaunched }
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem?.pointReplacement, SharedLocationPointReplacement(startedAt: s2, recipientIds: [alice]))
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+        XCTAssertNil(sut.center.entry(for: bob))
+        XCTAssertTrue(sut.center.roster.isFixedPoint)
+    }
+
+    func test_confirming_takesThePositionBeforeReadingTheServedShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        var readsAtFix: Int?
+        sut.fixes.onAsk = { [served = sut.served] in readsAtFix = served.reads }
+        let readsBefore = sut.served.reads
+
+        _ = await confirm(sut, asked)
+
+        XCTAssertEqual(readsAtFix, readsBefore)
+        XCTAssertGreaterThan(sut.served.reads, readsBefore)
+    }
+
+    private let publishedHere = "2026-01-01T00:00:00.000Z"
+
+    private func confirmFromADeviceThatPublished(verdict: SharedLocationStartVerdict) async -> FakeSharedLocationRosterStore {
+        let store = FakeSharedLocationRosterStore()
+        store.publishedStart = publishedHere
+        let sut = makeSUT(store: store)
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        sut.emitter.startVerdict = verdict
+        _ = await confirm(sut, asked)
+        return store
+    }
+
+    func test_anInvalidOfAnAnswerSentWithTheKey_keepsTheStartPublishedHere() async {
+        let store = await confirmFromADeviceThatPublished(verdict: .refused(.invalid))
+
+        XCTAssertEqual(store.publishedStart, publishedHere)
+    }
+
+    func test_aStartedElsewhere_keepsTheStartPublishedHere() async {
+        let store = await confirmFromADeviceThatPublished(verdict: .refused(.startedElsewhere))
+
+        XCTAssertEqual(store.publishedStart, publishedHere)
+    }
+
+    func test_aDoubtfulRefusal_stillForgetsTheStartPublishedHere() async {
+        let store = await confirmFromADeviceThatPublished(verdict: .refused(.unavailable))
+
+        XCTAssertNil(store.publishedStart)
+    }
+
+    // MARK: - Un nom vide ne se nomme pas (#20308)
+
+    func test_theQuestion_neverNamesABlankName_andNamesThePersonFromAnotherEntry() {
+        let asked = SharedLocationPointReplacement(startedAt: s1, recipientIds: [alice, bob])
+
+        let audience = asked.audience(knownNames: [(alice, "  "), (alice, "Alice"), (bob, "")])
+
+        XCTAssertEqual(audience.named, ["Alice"])
+        XCTAssertEqual(audience.others, 1)
     }
 }
