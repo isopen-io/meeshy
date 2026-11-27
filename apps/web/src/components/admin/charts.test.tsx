@@ -126,6 +126,7 @@ describe('AdminChartCard — le cadre, la figure, le tableau', () => {
     expect(zone?.getAttribute('tabindex')).toBe('0');
     expect(zone?.getAttribute('aria-label')).toBe(table.caption);
     expect(zone?.className).toContain('overflow-x-auto');
+    expect(zone?.className).toContain('[contain:inline-size]');
   });
 
   test('AdminChartTable : « — » reste « — » à l’œil et se dit par le mot de l’appelant au lecteur d’écran (#20628)', async () => {

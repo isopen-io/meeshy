@@ -27,6 +27,7 @@ const f = {
   'admin.analytics.game.hidden': 'Comptes en « Jeu masqué »',
   'admin.analytics.game.notificationsOff': 'Comptes sans notifications du Jeu',
   'admin.analytics.game.sampled': 'Lecture plafonnée : les chiffres sont des minorants.',
+  'admin.analytics.game.noValue': 'aucune donnée',
 } as const;
 
 export type GameStatsTextKey = keyof typeof f;
