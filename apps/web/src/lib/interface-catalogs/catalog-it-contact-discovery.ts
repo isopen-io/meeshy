@@ -17,7 +17,7 @@ const itContactDiscovery = {
     'Una persona vicina può far squillare il tuo telefono per un’emergenza estrema, anche in silenzioso. Disattivato, nessuno potrà più farti squillare.',
   'settings.notif.together': 'Ricevere inviti «insieme»',
   'settings.notif.together.info':
-    'Una persona vicina può invitarti a guardare o ascoltare insieme un video o un audio. Disattivato, le persone vicine non potranno più invitarti.',
+    'Una persona vicina può invitarti a guardare o ascoltare insieme. Disattivato, non può più farlo.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default itContactDiscovery;

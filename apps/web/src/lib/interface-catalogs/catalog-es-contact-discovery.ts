@@ -17,7 +17,7 @@ const esContactDiscovery = {
     'Un allegado puede hacer sonar tu teléfono en una emergencia extrema, incluso en silencio. Desactivado, nadie podrá hacerte sonar.',
   'settings.notif.together': 'Recibir invitaciones «juntos»',
   'settings.notif.together.info':
-    'Un allegado puede invitarte a ver o escuchar juntos un vídeo o un audio. Desactivado, tus allegados ya no podrán invitarte.',
+    'Un allegado puede invitarte a ver o escuchar juntos. Desactivado, tus allegados ya no pueden.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default esContactDiscovery;

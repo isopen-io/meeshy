@@ -17,7 +17,7 @@ const deContactDiscovery = {
     'Eine nahestehende Person kann dein Telefon bei einem extremen Notfall klingeln lassen, auch im Lautlosmodus. Aus: Niemand kann dich mehr klingeln lassen.',
   'settings.notif.together': 'Einladungen „gemeinsam“ empfangen',
   'settings.notif.together.info':
-    'Eine nahestehende Person kann dich einladen, gemeinsam ein Video oder Audio anzusehen oder anzuhören. Aus: Deine nahestehenden Personen können dich nicht mehr einladen.',
+    'Eine nahestehende Person kann dich einladen, gemeinsam zu schauen oder zu hören. Aus: Sie kann es nicht mehr.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default deContactDiscovery;

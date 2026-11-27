@@ -17,7 +17,7 @@ const ptContactDiscovery = {
     'Uma pessoa próxima pode fazer seu telefone tocar numa emergência extrema, mesmo no silencioso. Desativado, ninguém poderá fazer você tocar.',
   'settings.notif.together': 'Receber convites «juntos»',
   'settings.notif.together.info':
-    'Uma pessoa próxima pode convidar você para assistir ou ouvir juntos um vídeo ou um áudio. Desligado, suas pessoas próximas não poderão mais convidar você.',
+    'Uma pessoa próxima pode convidar você para assistir ou ouvir juntos. Desligado, ela não pode mais.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default ptContactDiscovery;
