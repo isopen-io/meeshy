@@ -2020,3 +2020,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : web, chaque épingle dit ce que vit la personne (#20658, tranche de #19888)
+
+- Reprise : le run du 2026-11-24 a été coupé avant toute écriture. #20417 (iOS de #20249) et #20463 (#19884) sont
+  fusionnées. Aucune PR de la routine ouverte.
+- Garde anti-collision : la PR #20514 (autre session) découpe `SharedLocationSharingCenter.swift` et ses voisins, donc
+  les lots iOS de #20416, #20308, #20054 et #20056 lui cèdent. `claude/cercles-20542-purge-alerte-sang` et
+  `claude/dev-vert-sang-ci-20540` sont réservées : #20540 et #20542 aussi.
+- Lot : #20658, tranche web de #19888. L'épingle de la carte des cercles passe à son avatar l'écoute (bandeau
+  défilant), la batterie et le téléphone injoignable de SA personne, lus dans les caches déjà servis
+  (`useListeningBand`, `useBatteryBadge`, `usePhoneUnreachableBadge`, aucune requête de plus). Le libellé de l'épingle
+  et la ligne de la liste disent la même chose au lecteur d'écran. Rien ne part du serveur.
+- Audit adversarial : non requis (affichage de signaux déjà servis à ce lecteur, aucun accès ni chiffrement touché).
+- Gates : `shared-locations-map-view.test.tsx` 28/28 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
+  hérité (`act-leak-guard`, rouge aussi sans ce lot) ; `tsc` web 0.
+- Reste de #19888 : zone sûre, feuille rangeable, appui long ⇒ talkie ; l'avatar web ne sait pas encore peindre
+  l'inactivité ni l'appel en cours.
+- Prochain lot : suite web de #19888, ou les lots iOS de position quand #20514 sera fusionnée.
