@@ -44,7 +44,13 @@ La troisième n'était écrite nulle part. Elle a deux moitiés.
    `delivery_queue_unsealed_entries_total{disposition="dropped_multi_instance"}`.
 2. **La condition est VÉRIFIÉE, pas supposée** (`services/gatewayInstanceCensus.ts`).
    Chaque instance pose `gateway:instance:<uuid>` avec un TTL de 30 s, le
-   renouvelle toutes les 10 s, et recompte par `SCAN` les clés vivantes.
+   renouvelle toutes les 10 s, s'inscrit au registre `gateway:instances`, et
+   recompte les inscrits dont la clé vit encore (`SMEMBERS` + `MGET`, les
+   partis retirés par `SREM`). Le coût est en O(instances) : un `SCAN` de
+   l'espace de clés coûtait une commande par centaine de clés de tout Redis,
+   toutes les 10 s et par instance — 500 commandes par battement à 50 000
+   clés. Le TTL reste celui du serveur Redis, donc une horloge d'instance
+   décalée n'efface personne.
    L'instance est unique si et seulement si le dernier recensement est FRAIS
    (≤ 30 s), n'a vu qu'elle, et qu'aucun déploiement ne DÉCLARE plusieurs
    répliques (`GATEWAY_INSTANCES` > 1). Tout le reste n'atteste rien et la

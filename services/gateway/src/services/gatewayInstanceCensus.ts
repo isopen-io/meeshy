@@ -14,8 +14,12 @@ const logger = enhancedLogger.child({ module: 'GatewayInstanceCensus' });
  * obtenir la livraison qu'elle achète. Décision :
  * `decisions/2026-11-27-garder-dans-le-tas-exige-une-instance-unique-attestee-19947.md`.
  *
- * Chaque instance pose `gateway:instance:<id>` avec un TTL et recompte les clés
- * vivantes à chaque battement. L'instance est unique si et seulement si le
+ * Chaque instance pose `gateway:instance:<id>` avec un TTL, s'inscrit au
+ * registre `gateway:instances`, et recompte à chaque battement les inscrits
+ * dont la clé vit encore — en O(instances), jamais en parcourant l'espace de
+ * clés : un `SCAN` coûtait une commande par centaine de clés de TOUT Redis,
+ * toutes les 10 s et par instance. Le TTL reste celui du serveur Redis : une
+ * horloge d'instance décalée n'efface personne. L'instance est unique si et seulement si le
  * dernier recensement est FRAIS, n'a vu qu'elle, et qu'aucun déploiement ne
  * DÉCLARE plusieurs répliques (`GATEWAY_INSTANCES`). Tout le reste — avant le
  * premier battement, Redis absent, battement en échec, recensement périmé —
@@ -28,7 +32,10 @@ export const UNVERIFIED_SOLE_INSTANCE: SoleInstanceWitness = { isSoleInstance: (
 
 export type InstanceCensusClient = {
   set(key: string, value: string, mode: 'PX', ttlMs: number): Promise<unknown>;
-  scan(cursor: string, match: 'MATCH', pattern: string, count: 'COUNT', size: number): Promise<[string, string[]]>;
+  mget(...keys: string[]): Promise<ReadonlyArray<string | null>>;
+  sadd(key: string, ...members: string[]): Promise<unknown>;
+  smembers(key: string): Promise<string[]>;
+  srem(key: string, ...members: string[]): Promise<unknown>;
   del(key: string): Promise<unknown>;
 };
 
@@ -41,6 +48,8 @@ export type GatewayInstanceCensusOptions = {
 };
 
 const INSTANCE_KEY_PREFIX = 'gateway:instance:';
+const INSTANCE_REGISTRY_KEY = 'gateway:instances';
+const instanceKey = (instanceId: string) => `${INSTANCE_KEY_PREFIX}${instanceId}`;
 const DEFAULT_TTL_MS = 30_000;
 const BEAT_EVERY_MS = 10_000;
 
@@ -79,7 +88,8 @@ export class GatewayInstanceCensus implements SoleInstanceWitness {
         this.last = null;
         return;
       }
-      await client.set(`${INSTANCE_KEY_PREFIX}${this.instanceId}`, String(this.now()), 'PX', this.ttlMs);
+      await client.set(instanceKey(this.instanceId), String(this.now()), 'PX', this.ttlMs);
+      await client.sadd(INSTANCE_REGISTRY_KEY, this.instanceId);
       this.last = { count: await this.countLive(client), at: this.now() };
     } catch (error) {
       this.last = null;
@@ -99,19 +109,21 @@ export class GatewayInstanceCensus implements SoleInstanceWitness {
     this.timer = null;
     this.last = null;
     try {
-      await this.options.client()?.del(`${INSTANCE_KEY_PREFIX}${this.instanceId}`);
+      const client = this.options.client();
+      await client?.del(instanceKey(this.instanceId));
+      await client?.srem(INSTANCE_REGISTRY_KEY, this.instanceId);
     } catch {
       return;
     }
   }
 
   private async countLive(client: InstanceCensusClient): Promise<number> {
-    const walk = async (cursor: string, seen: ReadonlySet<string>): Promise<ReadonlySet<string>> => {
-      const [next, keys] = await client.scan(cursor, 'MATCH', `${INSTANCE_KEY_PREFIX}*`, 'COUNT', 100);
-      const union = new Set([...seen, ...keys]);
-      return next === '0' ? union : walk(next, union);
-    };
-    return (await walk('0', new Set())).size;
+    const members = await client.smembers(INSTANCE_REGISTRY_KEY);
+    if (members.length === 0) return 0;
+    const values = await client.mget(...members.map(instanceKey));
+    const departed = members.filter((_, index) => values[index] === null);
+    if (departed.length > 0) await client.srem(INSTANCE_REGISTRY_KEY, ...departed);
+    return members.length - departed.length;
   }
 }
 

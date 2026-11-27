@@ -93,16 +93,40 @@ describe('#19947 — on ne garde en clair dans le tas que sous une instance uniq
   });
 });
 
-/** Un Redis partagé par plusieurs instances, qui honore `PX` sur une horloge commune. */
-const sharedRedis = (clock: { now: number }) => {
-  const keys = new Map<string, number>();
-  const live = () => [...keys.entries()].filter(([, expiresAt]) => expiresAt > clock.now).map(([key]) => key);
-  const client: InstanceCensusClient = {
-    set: async (key, _value, _mode, ttlMs) => { keys.set(key, clock.now + ttlMs); return 'OK'; },
-    scan: async (_cursor, _match, pattern) => ['0', live().filter((key) => key.startsWith(pattern.replace('*', '')))],
-    del: async (key) => { keys.delete(key); return 1; },
+/**
+ * Un Redis partagé par plusieurs instances, qui honore `PX` sur une horloge
+ * commune, pagine `SCAN` comme le vrai (COUNT clés de l'espace par appel) et
+ * compte les commandes reçues.
+ */
+const sharedRedis = (clock: { now: number }, unrelatedKeys = 0) => {
+  const keys = new Map<string, number>(
+    Array.from({ length: unrelatedKeys }, (_, index) => [`cache:${index}`, Number.POSITIVE_INFINITY] as const),
+  );
+  const sets = new Map<string, Set<string>>();
+  const commands = { count: 0 };
+  const alive = (key: string) => (keys.get(key) ?? Number.NEGATIVE_INFINITY) > clock.now;
+  const sent = () => { commands.count += 1; };
+  const client = {
+    set: async (key: string, _value: string, _mode: 'PX', ttlMs: number) => { sent(); keys.set(key, clock.now + ttlMs); return 'OK'; },
+    scan: async (cursor: string, _match: 'MATCH', pattern: string, _count: 'COUNT', size: number): Promise<[string, string[]]> => {
+      sent();
+      const all = [...keys.keys()];
+      const start = Number(cursor);
+      const page = all.slice(start, start + size).filter((key) => alive(key) && key.startsWith(pattern.replace('*', '')));
+      const next = start + size >= all.length ? '0' : String(start + size);
+      return [next, page];
+    },
+    mget: async (...names: string[]) => { sent(); return names.map((name) => (alive(name) ? 'x' : null)); },
+    sadd: async (key: string, ...members: string[]) => { sent(); sets.set(key, new Set([...(sets.get(key) ?? []), ...members])); return members.length; },
+    smembers: async (key: string) => { sent(); return [...(sets.get(key) ?? [])]; },
+    srem: async (key: string, ...members: string[]) => {
+      sent();
+      sets.set(key, new Set([...(sets.get(key) ?? [])].filter((member) => !members.includes(member))));
+      return members.length;
+    },
+    del: async (key: string) => { sent(); keys.delete(key); return 1; },
   };
-  return client;
+  return Object.assign(client as InstanceCensusClient, { commands });
 };
 
 const census = (client: InstanceCensusClient | null, clock: { now: number }, instanceId: string, declaredInstances: number | null = null) =>
@@ -176,12 +200,40 @@ describe('#19947 — le recensement des instances : la condition « processus un
     const redis = sharedRedis(clock);
     const flaky = census(redis, clock, 'a');
     await flaky.beat();
-    const failing: InstanceCensusClient = { ...redis, scan: async () => { throw new Error('ECONNRESET'); } };
+    const failing: InstanceCensusClient = { ...redis, smembers: async () => { throw new Error('ECONNRESET'); } };
     const sameInstance = new GatewayInstanceCensus({ client: () => failing, instanceId: 'a', ttlMs: 30_000, now: () => clock.now });
 
     await sameInstance.beat();
 
     expect(sameInstance.isSoleInstance()).toBe(false);
+  });
+
+  it('un battement coûte autant de commandes quel que soit l’espace de clés : il ne parcourt pas tout Redis', async () => {
+    const clock = { now: 1_000 };
+    const crowded = sharedRedis(clock, 50_000);
+    const alone = census(crowded, clock, 'a');
+    await alone.beat();
+    const before = crowded.commands.count;
+
+    await alone.beat();
+
+    expect(alone.isSoleInstance()).toBe(true);
+    expect(crowded.commands.count - before).toBeLessThanOrEqual(5);
+  });
+
+  it('une instance arrêtée sans `stop()` cesse de compter quand sa clé expire', async () => {
+    const clock = { now: 1_000 };
+    const redis = sharedRedis(clock);
+    const first = census(redis, clock, 'a');
+    const crashed = census(redis, clock, 'b');
+    await crashed.beat();
+    await first.beat();
+    expect(first.isSoleInstance()).toBe(false);
+
+    clock.now += 30_001;
+    await first.beat();
+
+    expect(first.isSoleInstance()).toBe(true);
   });
 
   it('un déploiement qui DÉCLARE plusieurs répliques n’est jamais unique, même seul à battre', async () => {
