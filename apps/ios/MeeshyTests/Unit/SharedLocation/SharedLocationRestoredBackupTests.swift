@@ -900,9 +900,11 @@ final class SharedLocationServedSourceTests: XCTestCase {
         XCTAssertGreaterThan(sut.served.reads, readsBefore)
     }
 
+    private let publishedHere = "2026-01-01T00:00:00.000Z"
+
     private func confirmFromADeviceThatPublished(verdict: SharedLocationStartVerdict) async -> FakeSharedLocationRosterStore {
         let store = FakeSharedLocationRosterStore()
-        store.publishedStart = mine
+        store.publishedStart = publishedHere
         let sut = makeSUT(store: store)
         sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
         let asked = await question(sut)
@@ -914,13 +916,13 @@ final class SharedLocationServedSourceTests: XCTestCase {
     func test_anInvalidOfAnAnswerSentWithTheKey_keepsTheStartPublishedHere() async {
         let store = await confirmFromADeviceThatPublished(verdict: .refused(.invalid))
 
-        XCTAssertEqual(store.publishedStart, mine)
+        XCTAssertEqual(store.publishedStart, publishedHere)
     }
 
     func test_aStartedElsewhere_keepsTheStartPublishedHere() async {
         let store = await confirmFromADeviceThatPublished(verdict: .refused(.startedElsewhere))
 
-        XCTAssertEqual(store.publishedStart, mine)
+        XCTAssertEqual(store.publishedStart, publishedHere)
     }
 
     func test_aDoubtfulRefusal_stillForgetsTheStartPublishedHere() async {
