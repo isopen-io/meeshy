@@ -31,6 +31,62 @@ final class CallChromeInteractionTests: XCTestCase {
         XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: .infinity))
     }
 
+    func test_acceptsTouches_negativeInterval_refusesInsteadOfProlongingTheGrace() {
+        XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: -1))
+        XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: -.infinity))
+        XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: .nan))
+    }
+
+    // MARK: - #20300 la grâce du fondu se mesure sur une horloge monotone
+
+    func test_fadeGraceAcceptsTouches_visible_returnsTrue() {
+        XCTAssertTrue(CallChromeFadeGrace.shown.acceptsTouches(isVisible: true, now: 42))
+        XCTAssertTrue(CallChromeFadeGrace.hidden(at: 42).acceptsTouches(isVisible: true, now: 1_000))
+    }
+
+    func test_fadeGraceAcceptsTouches_hiddenNow_acceptsDuringTheFade() {
+        let grace = CallChromeFadeGrace.hidden(at: 100)
+        XCTAssertTrue(grace.acceptsTouches(isVisible: false, now: 100))
+        XCTAssertTrue(grace.acceptsTouches(isVisible: false, now: 100 + CallChromeVisibility.fadeDuration / 2))
+    }
+
+    func test_fadeGraceAcceptsTouches_afterTheFade_returnsFalse() {
+        let grace = CallChromeFadeGrace.hidden(at: 100)
+        XCTAssertFalse(grace.acceptsTouches(isVisible: false, now: 100 + CallChromeVisibility.fadeDuration + 0.001))
+    }
+
+    func test_fadeGraceAcceptsTouches_neverHidden_returnsFalseWhenNotVisible() {
+        XCTAssertFalse(CallChromeFadeGrace.shown.acceptsTouches(isVisible: false, now: 0))
+    }
+
+    func test_fadeGraceAcceptsTouches_clockGoesBackwards_neverProlongsTheGrace() {
+        let grace = CallChromeFadeGrace.hidden(at: 100)
+        let rewound = stride(from: 99.999, through: 0, by: -7.5).map { grace.acceptsTouches(isVisible: false, now: $0) }
+        XCTAssertFalse(rewound.contains(true))
+    }
+
+    func test_fadeGraceShown_forgetsTheHiddenInstant() {
+        XCTAssertNil(CallChromeFadeGrace.shown.hiddenAt)
+        XCTAssertEqual(CallChromeFadeGrace.hidden(at: 7).hiddenAt, 7)
+    }
+
+    func test_chromeVisibilityModifier_neverReadsTheWallClock() throws {
+        let source = try String(contentsOf: Self.callControlGlassURL, encoding: .utf8)
+        let start = try XCTUnwrap(source.range(of: "private struct CallChromeVisibilityModifier"))
+        let end = try XCTUnwrap(source.range(of: "struct CallButtonGlassModifier", range: start.upperBound..<source.endIndex))
+        let modifier = source[start.lowerBound..<end.lowerBound]
+        XCTAssertFalse(modifier.contains("Date()"))
+        XCTAssertFalse(modifier.contains("Date?"))
+        XCTAssertTrue(modifier.contains("CallMonotonicClock.seconds()"))
+    }
+
+    private static let callControlGlassURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Meeshy/Features/Call/Views/CallControlGlass.swift")
+
     func test_fadeDuration_isAQuarterSecond() {
         XCTAssertEqual(CallChromeVisibility.fadeDuration, 0.25, accuracy: 0.0001)
         XCTAssertEqual(CallChromeVisibility.fadeDurationNanoseconds, 250_000_000)
