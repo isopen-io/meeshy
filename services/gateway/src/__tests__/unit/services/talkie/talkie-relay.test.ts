@@ -147,6 +147,8 @@ describe('#13935 — le son se lit dès sa réception', () => {
     await Promise.resolve();
     const beforeRead = of(gated, 'talkie:chunk').length;
     pending.splice(0).forEach((release) => release());
+    for (let tick = 0; tick < 5; tick += 1) await Promise.resolve();
+    const afterRead = of(gated, 'talkie:chunk').length;
     await relayed;
     t.relay.dispose();
     gated.relay.dispose();
@@ -154,7 +156,7 @@ describe('#13935 — le son se lit dès sa réception', () => {
     expect(of(t, 'talkie:chunk')).toHaveLength(300);
     expect({ judge: calls.judge - opened.judge, withinStartRate: calls.withinStartRate - opened.withinStartRate, cutAt: calls.cutAt - opened.cutAt })
       .toEqual({ judge: 0, withinStartRate: 0, cutAt: 300 });
-    expect([beforeRead, of(gated, 'talkie:chunk').length]).toEqual([0, 1]);
+    expect([beforeRead, afterRead]).toEqual([0, 1]);
   });
 
   it('un ArrayBuffer est relayé en octets', async () => {
