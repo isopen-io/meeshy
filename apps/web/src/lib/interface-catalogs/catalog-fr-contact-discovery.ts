@@ -20,6 +20,12 @@ const frContactDiscovery = {
   'settings.notif.bring': 'Recevoir des Bring',
   'settings.notif.bring.info':
     'Un Proche peut faire sonner votre téléphone pour une urgence extrême, même en silencieux. Coupé, personne ne peut plus vous faire sonner.',
+  'settings.notif.together': 'Recevoir les invitations « ensemble »',
+  'settings.notif.together.info':
+    'Un Proche peut vous inviter à regarder ou écouter ensemble. Coupé, vos Proches ne le peuvent plus.',
+  'settings.notif.talkie': 'Recevoir le talkie',
+  'settings.notif.talkie.info':
+    'Un Proche peut vous parler en direct, sans que vous décrochiez. Coupé, vos Proches ne peuvent plus vous parler.',
 } as const;
 
 export type ContactDiscoveryCatalogSlice = Readonly<Record<keyof typeof frContactDiscovery, string>>;

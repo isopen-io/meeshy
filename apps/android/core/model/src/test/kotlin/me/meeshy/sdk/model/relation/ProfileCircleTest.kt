@@ -115,9 +115,9 @@ class ReceptionSettingsOfferedTest {
         assertThat(CirclePersonSetting.receptionAt(RelationLevel.ACQUAINTANCE)).isEmpty()
         assertThat(CirclePersonSetting.receptionAt(RelationLevel.FRIEND)).containsExactly(RelationReceptionSetting.BRING)
         assertThat(CirclePersonSetting.receptionAt(RelationLevel.CLOSE))
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
         assertThat(CirclePersonSetting.receptionAt(RelationLevel.BLOOD))
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test

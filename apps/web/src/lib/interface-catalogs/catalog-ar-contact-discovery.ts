@@ -15,6 +15,12 @@ const arContactDiscovery = {
   'settings.notif.bring': 'تلقي Bring',
   'settings.notif.bring.info':
     'يمكن لأحد المقرّبين أن يجعل هاتفك يرنّ في حالة طوارئ قصوى، حتى في الوضع الصامت. عند الإيقاف، لا يمكن لأحد أن يجعل هاتفك يرنّ.',
+  'settings.notif.together': 'تلقي دعوات «معًا»',
+  'settings.notif.together.info':
+    'يمكن لشخص مقرّب أن يدعوك للمشاهدة أو الاستماع معًا. عند الإيقاف، لن يعود بإمكانه ذلك.',
+  'settings.notif.talkie': 'تلقي جهاز اللاسلكي',
+  'settings.notif.talkie.info':
+    'يمكن لشخص مقرّب أن يتحدث إليك مباشرة دون أن تردّ. عند الإيقاف، لن يعود بإمكانه ذلك.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default arContactDiscovery;

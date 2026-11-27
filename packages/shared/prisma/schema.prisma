@@ -2523,6 +2523,9 @@ model Notification {
   // Prisma ne sait pas déclarer un index sur un chemin de `Json` : migration
   // `2026-11-01-notification-post-link-indexes.mongodb.js` (#14254). Un
   // `prisma db push` les retirerait : il est interdit (#9035).
+  // L'alerte de proximité entre Sangs (`blood_proximity`) EXPIRE par un index
+  // TTL partiel sur `expiresAt`, posé hors schéma lui aussi :
+  // `2026-11-27-notification-blood-proximity-ttl.mongodb.js` (#20542).
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)

@@ -55,4 +55,5 @@
     <string name="circles_sheet_settings_title">إعدادات هذا الشخص</string>
     <string name="circles_sheet_settings_unavailable">قريبًا</string>
     <string name="contacts_tab_circles">الدوائر</string>
+    <string name="circles_settings_block_together">كتم دعواته «معًا»</string>
 </resources>

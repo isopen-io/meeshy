@@ -49,6 +49,7 @@ class CircleReceptionBlockViewModelTest {
             val pending = answer ?: return when (setting) {
                 RelationReceptionSetting.BRING -> RelationPersonSettings(userId, bringBlocked = blocked)
                 RelationReceptionSetting.TALKIE -> RelationPersonSettings(userId, talkieBlocked = blocked)
+                RelationReceptionSetting.TOGETHER -> RelationPersonSettings(userId, togetherBlocked = blocked)
             }
             return pending.await()
         }
@@ -130,6 +131,18 @@ class CircleReceptionBlockViewModelTest {
 
         assertThat(viewModel.state.value.isOn).isTrue()
         assertThat(gateway.settings).containsExactly(RelationReceptionSetting.TALKIE)
+    }
+
+    @Test
+    fun `couper les invitations ensemble lit et ecrit son propre reglage, ni Bring ni talkie`() {
+        val gateway = FakeGateway(served = RelationPersonSettings("u2", bringBlocked = true, talkieBlocked = true))
+        val viewModel = loaded(gateway, RelationReceptionSetting.TOGETHER)
+        assertThat(viewModel.state.value.isOn).isFalse()
+
+        viewModel.setOn(true)
+
+        assertThat(viewModel.state.value.isOn).isTrue()
+        assertThat(gateway.settings).containsExactly(RelationReceptionSetting.TOGETHER)
     }
 
     @Test

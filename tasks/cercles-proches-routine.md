@@ -2020,3 +2020,130 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : web de #19888, chaque épingle dit ce que vit la personne
+
+- Reprise : aucune PR de la routine ouverte. Le journal s'était arrêté le 2026-11-23 ; entre-temps, d'autres sessions
+  ont fusionné l'alerte « un Sang s'approche » (#20540) et réservé `claude/cercles-20542-purge-alerte-sang` (#20542).
+  #20514 (découpage iOS du partage de position, ouverte depuis le 2026-11-24) écrit les fichiers iOS de
+  `SharedLocation/` : les lots iOS de #20416, #20308 et #20054 lui cèdent. #19682 attend toujours la décision du porteur.
+- Lot : la part « épingles vivantes » de #19888, iso `PeerLiveOverlays` (iOS #19885). Chaque épingle de la carte des
+  cercles porte l'écoute (bandeau défilant), la batterie, le téléphone injoignable (qui prime sur la batterie),
+  « En appel » et l'alerte d'inactivité, lus dans leurs caches tels que servis à ce lecteur, et les dit dans le nom de
+  l'épingle. `usePinLife` / `pinLifeLabel` (`apps/web/src/lib/shared-locations/pin-life.ts`). Rien de nouveau ne part
+  du serveur ; aucune requête de plus.
+- Audit adversarial : non requis (affichage de signaux déjà servis et déjà tronqués par la passerelle).
+- Gates : témoins `shared-locations-map-pin-life` 7/7 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
+  hérité (`act-leak-guard`) ; `tsc` web 0.
+- Reste de #19888 : commandes dans la zone sûre, « Autour de toi » et la fiche rangeables, appui long ⇒ talkie,
+  chrome lisible sur fond clair. La chute (#18748) n'a pas encore de glyphe d'avatar sur le web.
+- Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
+  dès que #20514 est fusionnée ou abandonnée.
+
+## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
+
+- Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
+  (867e62f8b, plus complet : appel et inactivité en plus). Selon la règle « celui qui a payé le second cède », ce run
+  a repris la version de `dev` et n'a gardé que ce qu'elle ne faisait pas.
+- Lot : #20658. La ligne de la liste des positions dit la même vie que le nom de l'épingle (`usePinLife` /
+  `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
+- Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.
+
+## 2026-11-27 — réveil de 14 h : une alerte de proximité entre Sangs ne survit pas (#20542)
+
+- Reprise : #20417 (iOS de #20249) fusionnée le 23/11, #20463 (Android de #19883) aussi. Aucune PR de la routine
+  ouverte. Les lots iOS de position (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift` et `SharedLocationRosterStore.swift`, que la PR brouillon #20514 (découpage par
+  responsabilité, autre session) a déjà écrits : ce réveil cède et prend un lot serveur.
+- Lot : #20542. L'effacement de l'historique retire toute alerte `blood_proximity` qui nomme le titulaire (chez tous ses
+  Sangs) et celles de sa cloche ; retirer `location.proximity` à un Sang retire chez lui les alertes qui nomment le
+  titulaire. Lignes supprimées puis annoncées (`notification:deleted`, révocation push). Index TTL PARTIEL sur
+  `Notification.expiresAt` au seul type `blood_proximity` (`2026-11-27-notification-blood-proximity-ttl.mongodb.js`) :
+  à jouer sur le staging ; en production, feu vert du porteur et sauvegarde vérifiée d'abord.
+- PR : #20698 (vers `dev`). Suivis de l'audit : #20697.
+- Prochain lot : #20514 fusionnée ou abandonnée ⇒ iOS de #20416 / #20308, #20054, #20056 ; sinon un lot web/serveur
+  du jalon 2 (#20540 suites, #19888).
+
+## 2026-11-27 — réveil de 13 h : web de #17990 (couper toutes les invitations « ensemble »)
+
+- Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées le 2026-11-23 ; aucune PR de la routine ouverte.
+  Les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) restent cédés : #20514 (autre session, ouverte
+  depuis le 2026-11-24) découpe `SharedLocationSharingCenter.swift` et ses voisins.
+- #18539 constaté réglé sur `dev` (échéance arrondie à la seconde, témoins à `t + 5 ms` et `t + 999 ms`, fiche sur une
+  horloge pilotée) : fermée avec la preuve.
+- Lot : `notification.togetherEnabled` (#17023, déjà obéi par `guestReceivesInvitesFrom`) entre dans le port des
+  réglages du web et dans « Notifications », juste après « Recevoir des Bring » : absent = reçues, écrit seul sous
+  `notification`, optimiste avec retour arrière, sept langues. Le libellé dit « vos Proches ne peuvent plus vous
+  inviter » et non « personne » : entre Sangs ayant donné l'accord du palier, la coupure ne ferme pas (#20361).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Gates : web `bun test` 35 588 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0 ; `build` 0 ;
+  `check-settings` (quatorze bascules) et `check-interface-language` verts avec `CHROMIUM=/opt/pw-browsers/chromium-1243/…`
+  ; `check-verbosity` vert après un relèvement motivé de `settings` (307 → 330, même convention que #20544). La CI des
+  PR est gelée (`PR_CI_GEL`, jobs sautés) : la preuve du lot est locale.
+- Reste : iOS #17988 et Android #17989 (même interrupteur) ; le talkie global (`talkieEnabled`) n'a pas d'interrupteur
+  web non plus.
+- Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
+
+## 2026-11-27 — réveil de 14 h 40 (heure de Paris) : sur Android, on coupe les invitations « ensemble » d'un Proche (#17989)
+
+- Reprise : les trois runs de 13 h ont fusionné (#20698, #20686, #20696) ; aucune PR de la routine ouverte. Les lots
+  iOS de la position restent cédés à #20514 (brouillon, autre session) ; #20659 (iOS de #20416) est vivante ailleurs.
+- Lot : la part FICHE de #17989. `RelationPersonSettings.togetherBlocked` décodé (absent ⇒ ouvert),
+  `RelationReceptionSetting.TOGETHER` écrit seul (`TogetherBlockBody`, `RelationsApi.setTogetherBlocked`),
+  `CirclePersonSetting.TOGETHER` ouvert dès Proche, juste après le talkie ; la fiche d'un collègue de l'équipe sans
+  lien l'offre aussi (`receptionAt`). Libellé repris du web, sept langues, `android-only` tant qu'iOS (#17988) ne
+  porte pas la clé `circles.settings.blockTogether`.
+- Pas d'explication sous l'interrupteur : le cliquet de verbosité de `:feature:contacts` (9 libellés > 80 car.) la
+  refuse. Le web dit « Elle n'en est pas prévenue » ; l'Android ne le dit pas encore (à ranger derrière un (i)).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Reste de #17989 : la bascule globale `togetherEnabled`, à poser avec celle des Bring (#18834) dans une section
+  « Réception » des réglages de notification Android, qui n'existe pas encore. iOS : #17988.
+
+## 2026-11-27 — réveil de 14 h 40 : web de #20700 (couper le talkie de tous ses Proches)
+
+- Reprise : le run précédent de ce fil avait été coupé le 26/11 sans rien pousser. Aucune PR de la routine à finir dans
+  ce fil ; #20686, #20693, #20696 et #20698 sont fusionnées. Les lots iOS et Android (#17988, #17989, position) restent
+  cédés : la CI des PR est gelée (`PR_CI_GEL`), donc un lot natif ne se prouve pas avant fusion, et #20514 découpe
+  encore les fichiers iOS de la position.
+- Lot : `notification.talkieEnabled` (#14407, déjà obéi par `talkieGate`) entre dans le port des réglages du web et dans
+  « Notifications », juste après « Recevoir les invitations « ensemble » » : absent = reçu, écrit seul sous
+  `notification`, optimiste avec retour arrière, sept langues. La légende dit « vos Proches ne peuvent plus vous
+  parler » : entre Sangs ayant donné l'accord du palier, la coupure ne ferme pas (#20361).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Gates : témoins rouges (12) puis verts ; web `bun test` 35 607 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0 ;
+  `build` 0 ; `check-settings` (quinze bascules) et `check-interface-language` verts ; `check-verbosity` vert après un
+  relèvement motivé de `settings` (330 → 352, même convention que #17990).
+- Reste : iOS et Android du même interrupteur = #20707.
+- Prochain lot : #17988 / #17989 / #20707 quand la CI des PR est rouverte, ou un lot web/serveur du jalon 2.
+
+## 2026-11-27 — réveil de 14 h 36 : web de #19888, l'appui long sur un Proche ou un Sang lui parle par talkie
+
+- Reprise : #20698 (#20542) fusionnée. Le suivi #20697 (retrait des alertes de proximité sur les autres chemins) est
+  cédé : la PR brouillon #20691, d'une autre session, écrit `bloodRitual.ts` et `ritualShareWithdrawal.ts`.
+- Lot : la part « talkie à l'appui long » de #19888, iso `TalkieLongHoldModifier` (iOS #19885). Un toucher sur
+  l'épingle choisit toujours la personne ; tenu 350 ms, l'appui ouvre la voix, qui part tant que le doigt (ou Espace)
+  reste posé, et le relâcher ne choisit personne. Proposé seulement sur le cercle SERVI Proche ou Sang ; un
+  `TALKIE_NOT_ALLOWED` retire la personne ; téléphone injoignable ⇒ message vocal (#20241). Un émetteur pour toute la
+  carte (`useSharedLocationsMapTalkie`), le geste dans `createLongHold` (`lib/talkie/talkie-long-hold.ts`). Rien de
+  nouveau ne part du serveur : le talkie existant, rejugé à chaque appui.
+- Audit adversarial : non requis (aucun nouveau chemin de données ; la passerelle juge le talkie comme avant).
+- Reste de #19888 : commandes dans la zone sûre, feuilles « Autour de toi » et fiche rangeables, chrome sur fond clair.
+- Prochain lot : le reste de #19888 ; iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ou abandonnée ;
+  #20697 si #20691 est abandonnée.
+
+## 2026-11-27 — réveil de 15 h 20 : web de #19888, la liste des positions et la fiche se rangent
+
+- Reprise : #20701 (talkie à l'appui long) et #20708 fusionnées ; aucune PR de ce fil ouverte. Les lots natifs restent
+  cédés (CI des PR gelée, #20514 sur les fichiers iOS de la position).
+- Lot : la dernière part web de #19888, iso iOS #19885. « Liste des positions » porte un bouton « Ranger la liste » /
+  « Voir qui est autour » (`aria-expanded`, `aria-controls`) qui range la liste sans retirer aucune épingle ; une fiche
+  fermée se rouvre par « Afficher {name} » tant que la personne partage (rien ne promet une position finie). Sept
+  langues. Zone sûre et chrome sur fond clair : déjà tenus sur le web (en-tête `pt-safe`, carte posée dans la page,
+  commandes sur panneau opaque, jamais de verre) — constaté, rien à changer.
+- Audit adversarial : non requis (affichage seul, aucune donnée ni accès nouveaux).
+- Gates : témoins `shared-locations-map-fold` 7 (3 rouges avant le code) ; web `bun test` 35 627 verts, 2 rouges dont
+  l'hérité `act-leak-guard` et le cliquet d'appui, recalé dans le lot par une réponse d'appui (899 tenu) ; `tsc` web 0 ;
+  `build` 0 ; `check-verbosity` (90 vues), `check-interface-language` et `check-ts-catalog-dead-entries` verts.
+- Reste de #19888 : rien côté web. Android : #19889.
+- Prochain lot : iOS de #20416 / #20308 / #20054 dès que #20514 est fusionnée ; #20697 si #20691 est abandonnée ;
+  sinon un lot web/serveur du jalon 2.
