@@ -293,7 +293,11 @@ class MeeshyServer {
 
     // Initialiser les background jobs (cleanup, digest, etc.)
     const emailService = new EmailService();
-    this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue);
+    // #19538 — l'io est relu à chaque passe : le rattrapage des Connaissances
+    // démarre avec les jobs, Socket.IO peut encore être en train de monter.
+    this.backgroundJobs = new BackgroundJobsManager(this.prisma, emailService, this.deliveryQueue, {
+      resolveIO: () => this.socketIOHandler.getManager()?.getIO(),
+    });
 
     // Rattrapage des jetons de recherche (#4159), en arrière-plan : une route
     // de recherche adossée à un index vide ne trouve personne, et le

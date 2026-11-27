@@ -2202,3 +2202,20 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   liste. Le lien n'est ni effacé ni baissé : la réactivation rend le niveau d'avant.
 - Prochain lot : les lots iOS de la position quand #20514 aura fusionné ; sinon un autre lot serveur du jalon (#19539,
   #19538, #19450).
+
+## 2026-11-27 — réveil de 17 h : une Connaissance née toute seule apparaît aussitôt dans « Mes cercles » (#19538)
+
+- Reprise : trois PR de cercles ouvertes, toutes menées par d'autres sessions (#20690 et #20691 repoussées à 17 h et
+  16 h 33 ; #20662 a une CI lancée à 16 h 41, en file) : ce réveil les cède et prend un lot serveur du jalon.
+- Lot : #19538, passerelle. `evaluateAutoAcquaintance` émet `relation:level-raised` (niveau ACQUAINTANCE) à la room
+  de chacune des deux personnes, avec l'identifiant de l'autre, quand le lien est créé ou relevé, au même endroit que
+  la notification et sous la même condition : une renaissance (préférence rallumée), un retrait silencieux ou une passe
+  sans changement n'émettent rien (RG-07). `RelationWeeklyJob` reçoit `resolveIO`, relu à chaque passe (le job démarre
+  avant Socket.IO) ; `BackgroundJobsManager` le relaie depuis `server.ts`. Un échec d'émission ne défait pas le lien.
+- Clients : aucun changement. Les trois relisent déjà leurs cercles sur `relation:level-raised` (web
+  `discover-circles.tsx`, iOS `CirclesViewModel` et `AvatarCircleDirectory`, Android `CirclesViewModel`), quel que soit
+  le niveau.
+- Gates : nouveau témoin 9/9 (3 rouges avant), passerelle relations + jobs 501/501, socketio + sécurité 3417/3417,
+  `tsc` 0.
+- Prochain lot : #19540 (le filleul apparaît en Ami chez son parrain, même manque d'émission) ; puis les lots iOS de
+  la position quand #20514 aura fusionné.
