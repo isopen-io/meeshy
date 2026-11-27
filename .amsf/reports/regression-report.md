@@ -9,8 +9,8 @@ Conditions : bun 1.3.14, `TZ=UTC` sauf mention, conteneur 2 cœurs.
 | `packages/shared` | build vert, 11 096 sur 11 097 | 1, déjà rouge sur `dev` (PR #20719) |
 | `apps/web` | type-check et build verts, 35 637 sur 35 638 | 1, `act-leak-guard.test.ts`, rouge dans toute suite complète locale (#20737) |
 | `services/gateway`, routes, sécurité, push | 1 045 suites sur 1 049, 15 506 tests sur 15 520 | 4 suites, 14 tests, identiques sur l'arbre de dépendances inchangé : client Prisma absent |
-| `services/gateway`, 2 028 suites restantes | non rejoué | laissé à la CI de la PR |
-| `services/agent` | non rejoué | laissé à la CI de la PR |
+| `services/gateway`, 2 028 suites restantes | non rejoué | la CI des PR est gelée : preuve attendue de la CI de `dev` après fusion |
+| `services/agent` | non rejoué | la CI des PR est gelée : preuve attendue de la CI de `dev` après fusion |
 
 `bun audit` : de 50 avis (21 élevés) à 14 (5 élevés). Aucun rouge introduit dans ce qui a été rejoué.
 
