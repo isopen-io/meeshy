@@ -39,6 +39,7 @@ jest.mock('../../../../services/conversations/communitySalonAdoption', () => ({
 }));
 
 import { registerSettingsRoutes } from '../../../../routes/communities/settings';
+import { closeSalonsAfterSwitch } from '../../../../services/conversations/communitySalonAdoption';
 import { COMMUNITY_ADDITION_BUDGET, COMMUNITY_ADDITION_BUDGET_CODE } from '../../../../utils/community-addition-budget';
 
 const CREATEUR = '507f1f77bcf86cd7994300c0';
@@ -153,6 +154,15 @@ describe('PUT /communities/:id — passer en privée paie le budget des ajouts (
     expect(written).toHaveLength(COMMUNITY_ADDITION_BUDGET.actorPerHour);
     expect(written).not.toContain(ANCIEN);
     expect(written).not.toContain(MORT);
+  });
+
+  it('la seconde passe reçoit le MÊME budget que la première (ses témoins : community-salon-adoption)', async () => {
+    const app = await build(prismaDouble([]));
+    expect((await goPrivate(app)).statusCode).toBe(200);
+    expect(closeSalonsAfterSwitch).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ communityId: COMMUNITY, spend: expect.any(Function) }),
+    );
   });
 
   it('une bascule sans occupant à faire entrer ne débite rien', async () => {

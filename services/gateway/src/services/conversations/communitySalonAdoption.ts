@@ -63,7 +63,8 @@ export async function admitSalonOccupants(
 /** Ce que la bascule fait de ses occupants : ils entrent (et les autres sortiront), ou le budget refuse tout. */
 export type SalonOccupantAdmission =
   | { readonly kind: 'admitted'; readonly outsiders: readonly string[] }
-  | { readonly kind: 'refused'; readonly verdict: CommunityAdditionVerdict };
+  /** `outsiders` : tous ceux que la bascule ne fait pas entrer — après une bascule déjà écrite, ils sortent. */
+  | { readonly kind: 'refused'; readonly verdict: CommunityAdditionVerdict; readonly outsiders: readonly string[] };
 
 /** Débite les personnes que la bascule va faire entrer, AVANT toute écriture. */
 export type SalonOccupantBudget = (entrants: readonly string[]) => Promise<CommunityAdditionVerdict>;
@@ -113,7 +114,7 @@ export async function admitSalonOccupantsUnderBudget(
   const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
   const admitted = strangers.filter((userId) => addable.has(userId));
   const verdict = admitted.length > 0 ? await spend(admitted) : ALLOWED;
-  if (!verdict.allowed) return { kind: 'refused', verdict };
+  if (!verdict.allowed) return { kind: 'refused', verdict, outsiders: [...former, ...strangers] };
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
     reactivations: [],
@@ -158,15 +159,27 @@ async function addableUnderCreator(
  * dans un salon entre la première passe et l'écriture (la communauté était
  * encore publique) ; puis tous ceux qui ne peuvent pas entrer sortent. Ne
  * rejette jamais.
+ *
+ * La seconde passe paie le MÊME budget que la première (#20694) : sans quoi des
+ * ajouts au salon lancés pendant la bascule entraient en masse sans débit. La
+ * bascule étant écrite, un retardataire que le budget refuse SORT des salons —
+ * il ne peut pas entrer sans payer. Sans `spend` (la bascule de l'équipe,
+ * dispensée), la passe n'est pas bornée.
  */
 export async function closeSalonsAfterSwitch(
   deps: SalonExitDeps & { readonly prisma: SalonAdoptionPrisma; readonly announce: CommunityMemberAnnounce },
-  request: SalonAdoptionRequest & { readonly outsiders: readonly string[]; readonly now: Date },
+  request: SalonAdoptionRequest & {
+    readonly outsiders: readonly string[];
+    readonly now: Date;
+    readonly spend?: SalonOccupantBudget;
+  },
 ): Promise<void> {
-  const late = await admitSalonOccupants(deps.prisma, request, deps.announce).catch((error: unknown) => {
-    logger.error('Late salon admission failed', { communityId: request.communityId, error });
-    return [] as readonly string[];
-  });
+  const late = await admitSalonOccupantsUnderBudget(deps.prisma, request, deps.announce, request.spend ?? (async () => ALLOWED))
+    .then((admission) => admission.outsiders)
+    .catch((error: unknown) => {
+      logger.error('Late salon admission failed', { communityId: request.communityId, error });
+      return [] as readonly string[];
+    });
   const userIds = [...new Set([...request.outsiders, ...late])];
   if (userIds.length === 0) return;
   await exitSalonOutsiders(deps, { communityId: request.communityId, userIds, now: request.now });

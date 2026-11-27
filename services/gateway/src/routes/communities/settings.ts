@@ -159,16 +159,17 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // bascule ; ceux qui ne peuvent pas entrer en sortent APRÈS.
       const closesSalons = isBecomingPrivate({ before: community.isPrivate, requested: validatedData.isPrivate });
       // #20694 — les faire entrer, c'est les ajouter sans leur accord : le créateur paie le budget de #19812.
+      const spend = (entrants: readonly string[]) => spendCommunityEntrants(fastify, userId, entrants);
       const occupants = closesSalons
         ? await admitSalonOccupantsUnderBudget(
             fastify.prisma,
             { communityId: id, createdBy: community.createdBy },
             communityMemberAnnouncerFrom(fastify),
-            (entrants) => spendCommunityEntrants(fastify, userId, entrants),
+            spend,
           )
         : null;
       if (occupants?.kind === 'refused') return refuseCommunityAddition(reply, occupants.verdict.retryAfter);
-      const outsiders = occupants?.kind === 'admitted' ? occupants.outsiders : [];
+      const outsiders = occupants?.outsiders ?? [];
 
       const updatedCommunity = await fastify.prisma.community.update({
         where: { id },
@@ -188,7 +189,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       if (closesSalons) {
         await closeSalonsAfterSwitch(
           { prisma: fastify.prisma, socketIOHandler: fastify.socketIOHandler, announce: communityMemberAnnouncerFrom(fastify) },
-          { communityId: id, createdBy: community.createdBy, outsiders, now: new Date() },
+          { communityId: id, createdBy: community.createdBy, outsiders, now: new Date(), spend },
         );
       }
       scheduleCommunityUpdatedBroadcastFrom(fastify, { communityId: id });
