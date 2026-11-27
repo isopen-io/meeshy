@@ -5,6 +5,7 @@ import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.relation.ListeningCategoryShareBody
 import me.meeshy.sdk.model.relation.BringBlockBody
 import me.meeshy.sdk.model.relation.TalkieBlockBody
+import me.meeshy.sdk.model.relation.TogetherBlockBody
 import me.meeshy.sdk.model.relation.NowPlayingSnapshotWire
 import me.meeshy.sdk.model.relation.RelationPersonSettings
 import me.meeshy.sdk.model.relation.RelationLinkWire
@@ -107,6 +108,10 @@ interface RelationsApi {
     /** Couper (ou non) le talkie de cette personne vers moi (#16675) : sa voix arrive alors en message vocal. */
     @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
     suspend fun setTalkieBlocked(@Path("userId") userId: String, @Body body: TalkieBlockBody): ApiResponse<RelationPersonSettings>
+
+    /** Couper (ou non) les invitations « regarder ou écouter ensemble » de cette personne (#17023) ; elle n'en est pas prévenue. */
+    @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
+    suspend fun setTogetherBlocked(@Path("userId") userId: String, @Body body: TogetherBlockBody): ApiResponse<RelationPersonSettings>
 
     /** Accorder (ou retirer) « Ce que j'écoute » à cette personne (#16836) : refusé par défaut, l'autre n'en est pas prévenu. */
     @PUT(ApiRoutesRelations.BY_USER_ID_SETTINGS)
