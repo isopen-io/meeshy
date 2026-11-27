@@ -15,6 +15,12 @@ const itContactDiscovery = {
   'settings.notif.bring': 'Ricevere Bring',
   'settings.notif.bring.info':
     'Una persona vicina può far squillare il tuo telefono per un’emergenza estrema, anche in silenzioso. Disattivato, nessuno potrà più farti squillare.',
+  'settings.notif.together': 'Ricevere inviti «insieme»',
+  'settings.notif.together.info':
+    'Una persona vicina può invitarti a guardare o ascoltare insieme. Disattivato, non può più farlo.',
+  'settings.notif.talkie': 'Ricevere il walkie-talkie',
+  'settings.notif.talkie.info':
+    'Una persona vicina può parlarti in diretta, senza che tu risponda. Disattivato, non può più farlo.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default itContactDiscovery;

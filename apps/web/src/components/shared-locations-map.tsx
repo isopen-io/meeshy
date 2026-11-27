@@ -25,6 +25,7 @@ import { initialsOf } from '@/lib/view/conversation';
 
 import { SharedLocationCard } from './shared-location-card';
 import { SharedLocationsMapView, type SharedLocationPerson } from './shared-locations-map-view';
+import { useSharedLocationsMapTalkie } from './shared-locations-map-talkie';
 
 /**
  * **LA CARTE DES POSITIONS PARTAGÉES, SON HÔTE** (#16984) — l'état de la vue et le
@@ -48,6 +49,7 @@ import { SharedLocationsMapView, type SharedLocationPerson } from './shared-loca
  *   conversations), puis de la fiche publique de qui n'y figure pas (au plus quarante,
  *   comme l'onglet « Cercles ») — chacun tel que le serveur l'a servi, présence comprise
  *   (loi d'amitié) : rien n'est inventé, une personne inconnue est « Quelqu'un ».
+ * - **Le talkie** (#19888) : un émetteur pour toute la carte, emprunté par l'appui long sur un Proche ou un Sang.
  */
 
 const PROFILE_FETCH_CAP = 40;
@@ -110,6 +112,7 @@ export function SharedLocationsMap({
   focusUserId,
   viewerId,
   sharing,
+  talkieOptions,
 }: {
   readonly language: InterfaceLanguage;
   readonly store?: SharedLocationsStoreApi;
@@ -122,6 +125,8 @@ export function SharedLocationsMap({
   readonly viewerId?: string | null;
   /** Mon partage (par défaut celui du compte ouvert) ; `null` : aucun. */
   readonly sharing?: SharedLocationSharingCenter | null;
+  /** Le micro, l'encodeur et le copieur du talkie (#19888) ; ceux du navigateur par défaut. */
+  readonly talkieOptions?: Omit<Parameters<typeof useSharedLocationsMapTalkie>[0], 'language' | 'watch'>;
 }) {
   const ready = useCirclesCatalog(language);
   const online = useOnline();
@@ -153,6 +158,7 @@ export function SharedLocationsMap({
   }, [locations, size.width, size.height]);
 
   useSharedLocationsUpkeep({ store, watch });
+  const mapTalkie = useSharedLocationsMapTalkie({ language, watch, ...talkieOptions });
 
   const calmQuery = useCalm(bboxQuery(viewBbox({ ...view, ...size })), REQUEST_CALM_MS);
   const bbox = caughtUp ? bboxOfQuery(calmQuery) : WORLD;
@@ -195,6 +201,7 @@ export function SharedLocationsMap({
         onZoom={(delta) => setView((current) => zoomView({ ...current, ...size }, delta))}
         onPan={(dx, dy) => setView((current) => panView({ ...current, ...size }, dx, dy))}
         selectedUserId={selected}
+        talkie={mapTalkie.talkie}
         onSelect={(userId) => {
           setSelected(userId);
           setCardOpen(true);
@@ -213,6 +220,7 @@ export function SharedLocationsMap({
           ) : null
         }
       />
+      {mapTalkie.banner((userId) => personOf(userId).name ?? translateCircles(language, 'positions.someone'))}
     </div>
   );
 }
