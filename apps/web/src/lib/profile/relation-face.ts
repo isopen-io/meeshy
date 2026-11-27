@@ -68,6 +68,13 @@ export function relationActionsOf(view: ProfileCircleView | null): readonly Rela
   return write === null ? others : [write, ...others];
 }
 
+/**
+ * « Lui envoyer un contenu » (#20245) : offert quand le verdict servi ouvre `together` (Proche et au-delà).
+ * Sans verdict (passerelle plus ancienne), rien : une action neuve n'a pas d'ancien comportement à garder.
+ */
+export const sendContentOffered = (items: readonly RelationActionItem[] | null): boolean =>
+  items !== null && items.some((item) => item.id === 'together' && item.state === 'open');
+
 export type CircleLadder = {
   readonly level: RelationLevel;
   readonly grantedByViewer: RelationLevel;

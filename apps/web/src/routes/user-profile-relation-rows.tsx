@@ -2,7 +2,7 @@ import { Suspense, lazy } from 'react';
 
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import type { ProfileRelation } from '@/lib/profile/relation';
-import type { RelationActionId, RelationActionItem } from '@/lib/profile/relation-face';
+import { sendContentOffered, type RelationActionId, type RelationActionItem } from '@/lib/profile/relation-face';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { translate } from '@/lib/i18n-catalog';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
@@ -12,6 +12,7 @@ const ProfileCircleRow = lazy(() => import('@/routes/user-profile-circle').then(
 const ProfileBringRow = lazy(() => import('@/routes/user-profile-bring').then((m) => ({ default: m.ProfileBringRow })));
 const ProfileTalkieRow = lazy(() => import('@/routes/user-profile-talkie').then((m) => ({ default: m.ProfileTalkieRow })));
 const ProfileTogetherRow = lazy(() => import('@/routes/user-profile-together').then((m) => ({ default: m.ProfileTogetherRow })));
+const ProfileSendContentRow = lazy(() => import('@/routes/user-profile-send-content').then((m) => ({ default: m.ProfileSendContentRow })));
 const ProfileShareLocationRow = lazy(() => import('@/routes/user-profile-share-location').then((m) => ({ default: m.ProfileShareLocationRow })));
 const ProfileBatteryRow = lazy(() => import('@/components/battery-panel').then((m) => ({ default: m.ProfileBatteryRow })));
 const ProfilePhoneReachabilityRow = lazy(() => import('@/components/phone-reachability-panel').then((m) => ({ default: m.ProfilePhoneReachabilityRow })));
@@ -71,6 +72,9 @@ export function ProfileRelationRows({
       />
       {offered('talkie') ? <ProfileTalkieRow language={language} person={summary} onNotice={notice} /> : null}
       {offered('together') ? <ProfileTogetherRow language={language} person={summary} onNotice={notice} /> : null}
+      {sendContentOffered(items) ? (
+        <ProfileSendContentRow language={language} person={{ id: person.id, name: person.displayName ?? person.username }} viewerId={viewerId} onNotice={notice} />
+      ) : null}
       <ProfileFallRow language={language} person={named} />
       <ProfileInactivityRow language={language} person={named} />
       <ProfilePhoneCallRow language={language} person={named} />

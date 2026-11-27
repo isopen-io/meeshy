@@ -3,28 +3,9 @@ import { findCardPost } from '@/lib/api/card-caches';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { recordShareAction } from '@/lib/api/query';
 import { appQueryClient } from '@/lib/api/query-client';
-import { publicationShareUrl } from '@/lib/feed/share-url';
-import type { PublishFormat, SendPreview } from '@/lib/send/send-sheet-plan';
 import { openSendSheet, type SendSheetRequest } from '@/lib/send/send-sheet-store';
 
-const postTypeOf = (post: FeedPost | undefined): PublishFormat => (post?.type === 'REEL' || post?.type === 'STORY' ? post.type : 'POST');
-
-const thumbOf = (post: FeedPost | undefined): string | undefined => {
-  const first = post?.media?.[0];
-  if (first === undefined || first === null) return undefined;
-  if (typeof first.thumbnailUrl === 'string' && first.thumbnailUrl !== '') return first.thumbnailUrl;
-  return first.mimeType?.startsWith('image/') === true ? first.fileUrl : undefined;
-};
-
-const previewOf = (post: FeedPost | undefined): SendPreview => {
-  const text = post?.content?.trim();
-  const thumbUrl = thumbOf(post);
-  return {
-    kind: 'publication',
-    ...(text === undefined || text === '' ? {} : { text }),
-    ...(thumbUrl === undefined ? {} : { thumbUrl }),
-  };
-};
+import { publicationPayloadOf } from './publication-payload';
 
 /**
  * **« PARTAGER » UNE PUBLICATION OUVRE LA FEUILLE D'ENVOI** (#8884, directive
@@ -53,11 +34,11 @@ export function openPublicationShare(params: {
   const { postId } = params;
   const record = params.record ?? recordShareAction;
   const post = (params.lookup ?? ((id: string) => findCardPost(appQueryClient, id)))(postId);
-  const url = publicationShareUrl(postId);
+  const payload = publicationPayloadOf(postId, post);
   (params.open ?? openSendSheet)({
     intent: 'share',
-    payload: { kind: 'publication', postId, postType: postTypeOf(post), url, preview: previewOf(post) },
-    moreOptions: { url },
+    payload,
+    moreOptions: { url: payload.url },
     onShared: (destination) => {
       void record(postId);
       params.onShared?.(destination ?? 'other');
