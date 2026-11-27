@@ -20,6 +20,9 @@ struct ThreadView: View {
     @State private var isLoading = false
     @State private var isSending = false
     @State private var sendError: String?
+    /// La composition rendue au composeur après un échec : le nouvel appui
+    /// renvoie le MÊME message, sous la même clé (#6915).
+    @State private var retainedReplyKey: ComposedMessageKey?
 
     private var accentColor: String {
         parentMessage.senderColor ?? MeeshyColors.brandPrimaryHex
@@ -315,14 +318,16 @@ struct ThreadView: View {
     /// fil principal, et le fil de réponses dit pourquoi rien n'est parti.
     private func sendReply() {
         let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !isSending, !text.isEmpty else { return }
 
         let savedText = replyText
         replyText = ""
         isSending = true
         sendError = nil
 
-        let clientMessageId = ClientMessageId.generate()
+        let composed = ComposedMessageKey.resolve(for: text, retained: retainedReplyKey)
+        retainedReplyKey = nil
+        let clientMessageId = composed.clientMessageId
         let sealed = replyDispatcher.requiresSeal()
         if !sealed { replies.append(optimisticReply(text: text, clientMessageId: clientMessageId)) }
 
@@ -340,6 +345,7 @@ struct ThreadView: View {
                 }
             } catch {
                 replies.removeAll { $0.id == clientMessageId }
+                retainedReplyKey = composed
                 replyText = savedText
                 sendError = error.localizedDescription
                 isSending = false

@@ -181,7 +181,9 @@ public protocol MessageSocketProviding: Sendable {
     /// `sendViaSocketFallback` : une valeur par défaut sur l'implémentation
     /// concrète ne satisfait pas une exigence de protocole. Le shim sans
     /// `sticker` vit dans l'extension « Protocol Default-Arg Convenience ».
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?, sticker: MessageSticker?)
+    /// `clientMessageId` est OBLIGATOIRE (#6915) : la clé s'attribue à la
+    /// composition, un chemin d'émission n'en fabrique jamais.
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String, sticker: MessageSticker?)
     /// `location` fait partie de l'exigence : une valeur par défaut sur
     /// l'implémentation concrète ne satisfait PAS une exigence de protocole en
     /// Swift. Le shim de compatibilité source (sans `location`) vit dans
@@ -258,28 +260,6 @@ public extension MessageSocketProviding {
     func emitCallTranscriptionSegment(callId: String, segment: CallTranscriptionSegmentPayload) {}
     func emitCallTranscriptionActive(callId: String, active: Bool) {}
 
-    func sendWithAttachments(
-        conversationId: String,
-        content: String?,
-        attachmentIds: [String],
-        replyToId: String?,
-        storyReplyToId: String? = nil,
-        originalLanguage: String? = nil,
-        isEncrypted: Bool = false
-    ) {
-        sendWithAttachments(
-            conversationId: conversationId,
-            content: content,
-            attachmentIds: attachmentIds,
-            replyToId: replyToId,
-            storyReplyToId: storyReplyToId,
-            originalLanguage: originalLanguage,
-            isEncrypted: isEncrypted,
-            clientMessageId: nil,
-            sticker: nil
-        )
-    }
-
     /// Shim de compatibilité source pour les appelants antérieurs au sticker
     /// (#4823) : même signature qu'avant l'ajout de `sticker` à l'exigence de
     /// protocole, délègue avec `sticker: nil`.
@@ -291,7 +271,7 @@ public extension MessageSocketProviding {
         storyReplyToId: String?,
         originalLanguage: String?,
         isEncrypted: Bool,
-        clientMessageId: String?
+        clientMessageId: String
     ) {
         sendWithAttachments(
             conversationId: conversationId,

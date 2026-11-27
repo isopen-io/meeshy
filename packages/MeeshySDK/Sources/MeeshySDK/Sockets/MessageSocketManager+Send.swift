@@ -108,10 +108,10 @@ extension MessageSocketManager {
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
         isEncrypted: Bool = false,
-        clientMessageId: String? = nil,
+        clientMessageId: String,
         sticker: MessageSticker? = nil
     ) {
-        let cid = clientMessageId ?? ClientMessageId.generate()
+        let cid = clientMessageId
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
             replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
@@ -134,12 +134,12 @@ extension MessageSocketManager {
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
         isEncrypted: Bool = false,
-        clientMessageId: String? = nil,
+        clientMessageId: String,
         location: SharedPlace? = nil,
         sticker: MessageSticker? = nil
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
-        let cid = clientMessageId ?? ClientMessageId.generate()
+        let cid = clientMessageId
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
             replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
@@ -189,12 +189,12 @@ extension MessageSocketManager {
         effectFlags: UInt32? = nil,
         isViewOnce: Bool? = nil,
         maxViewOnceCount: Int? = nil,
-        clientMessageId: String? = nil,
+        clientMessageId: String,
         location: SharedPlace? = nil,
         timeoutSeconds: Double = 10
     ) async -> SendMessageAck? {
         guard let socket else { return nil }
-        let cid = clientMessageId ?? ClientMessageId.generate()
+        let cid = clientMessageId
         var payload: [String: Any] = [
             "conversationId": conversationId,
             "content": content ?? "",
