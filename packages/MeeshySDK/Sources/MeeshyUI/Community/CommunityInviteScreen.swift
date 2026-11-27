@@ -26,6 +26,9 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
 
                 VStack(spacing: 0) {
                     searchBar
+                    if let notice = viewModel.inviteNotice {
+                        CommunityInviteNoticeRow(text: notice.text)
+                    }
                     resultsList
                 }
             }
@@ -164,5 +167,30 @@ public struct CommunityInviteScreen<ViewModel: CommunityInviteModeling>: View {
         }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.smPlus)
+    }
+}
+
+/// La phrase d'une invitation refusée, sous la recherche : lue par VoiceOver dès
+/// qu'elle paraît, jamais en bandeau qui recouvre les résultats.
+struct CommunityInviteNoticeRow: View {
+    let text: String
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.sm) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(MeeshyColors.warning)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, design: .rounded))
+                .foregroundStyle(ThemePalette(colorScheme: colorScheme).textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("community.invite.notice")
+        .task(id: text) { AdaptiveAccessibility.announce(text) }
     }
 }

@@ -78,13 +78,32 @@ enum APIRetryPolicy {
         attempt: Int,
         retryPolicy: MeeshyEndpointRetryPolicy,
         hasDailyLimit: Bool,
-        hasSlowMode: Bool
+        hasSlowMode: Bool,
+        isNeverReplayed: Bool = false
     ) -> Bool {
         retryPolicy == .standard
             && !hasDailyLimit
             && !hasSlowMode
+            && !isNeverReplayed
             && retryableStatusCodes.contains(statusCode)
             && attempt < maxAttempts
+    }
+
+    /// Les 429 qui se DISENT à l'auteur sans être rejoués, lus par leur code
+    /// machine : le budget d'ajouts sans accord d'une communauté (#19812, #20664).
+    /// Rejouer n'y gagnerait rien — le `Retry-After` se compte en minutes — et
+    /// ferait attendre l'auteur jusqu'à une minute avant de lui dire non.
+    static let neverReplayed429Codes: Set<String> = [CommunityAdditionBudget.refusalCode]
+
+    static func neverReplayedCode(statusCode: Int, data: Data) -> String? {
+        guard statusCode == 429,
+              let code = (try? JSONDecoder().decode(APIRejectionEnvelope.self, from: data))?.code,
+              neverReplayed429Codes.contains(code) else { return nil }
+        return code
+    }
+
+    static func isNeverReplayed(statusCode: Int, data: Data) -> Bool {
+        neverReplayedCode(statusCode: statusCode, data: data) != nil
     }
 
     static func delay(statusCode: Int, attempt: Int, retryAfter: String?) -> TimeInterval? {
@@ -135,7 +154,8 @@ enum APIFailureVerdict {
             return .thrown(.forbidden(reason: message, body: data))
         }
         return .thrown(throttledOrServerError(
-            statusCode: statusCode, message: message, dailyLimit: dailyLimit, slowMode: slowMode
+            statusCode: statusCode, message: message, dailyLimit: dailyLimit, slowMode: slowMode,
+            neverReplayedCode: APIRetryPolicy.neverReplayedCode(statusCode: statusCode, data: data)
         ))
     }
 
@@ -180,7 +200,8 @@ enum APIFailureVerdict {
     }
 
     private static func throttledOrServerError(
-        statusCode: Int, message: String?, dailyLimit: DailyGestureLimit?, slowMode: NewcomerSlowMode?
+        statusCode: Int, message: String?, dailyLimit: DailyGestureLimit?, slowMode: NewcomerSlowMode?,
+        neverReplayedCode: String?
     ) -> MeeshyError {
         if let slowMode {
             return .rejected(slowMode.rejection(message: message))
@@ -189,6 +210,9 @@ enum APIFailureVerdict {
             return .rejected(APIRejection(
                 statusCode: 429, code: dailyLimit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
                 resetAt: dailyLimit.resetAt, limit: dailyLimit.limit))
+        }
+        if let neverReplayedCode {
+            return .rejected(APIRejection(statusCode: 429, code: neverReplayedCode, message: message ?? "Trop de requetes"))
         }
         if statusCode == 429 {
             return .server(statusCode: 429, message: "Trop de requetes")

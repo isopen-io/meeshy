@@ -14,6 +14,7 @@ final class CommunityInviteViewModel: ObservableObject, CommunityInviteModeling 
     @Published private(set) var invitedUserIds: Set<String> = []
     @Published private(set) var recentlyInvited: [UserSearchResult] = []
     @Published private(set) var invitingUserId: String?
+    @Published private(set) var inviteNotice: CommunityInviteNotice?
 
     let communityId: String
     private let communityService: CommunityServiceProviding
@@ -50,11 +51,13 @@ final class CommunityInviteViewModel: ObservableObject, CommunityInviteModeling 
 
         do {
             _ = try await communityService.invite(communityId: communityId, userId: userId)
+            inviteNotice = nil
             invitedUserIds.insert(userId)
             if let user = searchResults.first(where: { $0.id == userId }) {
                 recentlyInvited.append(user)
             }
         } catch {
+            inviteNotice = CommunityInviteNotice.of(error)
             log.error("[CommunityInviteVM] Invite error: \(error)")
         }
     }
