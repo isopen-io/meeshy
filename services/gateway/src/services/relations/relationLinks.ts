@@ -28,7 +28,7 @@ import { hasStandingRequest, raiseOutlookOf } from './relationRequestGate';
 import type { RelationLinkDetail } from '@meeshy/shared/types/relation-level-response';
 import { resolveRelationAccess } from '@meeshy/shared/utils/relation-access';
 import { isPlatformTeam } from '@meeshy/shared/types/role-types';
-import { ACCOUNT_STATE_SELECT, lawRoleOf } from './usableAccount';
+import { ACCOUNT_STATE_SELECT, USABLE_ACCOUNT_WHERE, isUsableAccount, lawRoleOf } from './usableAccount';
 
 export type { RelationLinkView };
 
@@ -86,6 +86,27 @@ const blockedView = (otherId: string): RelationLinkView => ({
   eligibleFor: null,
 });
 
+/**
+ * Les comptes UTILISABLES parmi `ids` (#19571) : un compte suspendu, désactivé ou
+ * supprimé en attente de purge garde ses lignes `UserRelation` — sa réactivation
+ * rend le niveau d'avant — mais aucune lecture de cercle ne le sert.
+ */
+async function usableAmong(prisma: RelationLinksDb, ids: readonly string[]): Promise<ReadonlySet<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await prisma.user.findMany({ where: { id: { in: [...ids] }, ...USABLE_ACCOUNT_WHERE }, select: { id: true } });
+  return new Set(rows.map((row) => row.id.toLowerCase()));
+}
+
+/**
+ * La vue SERVIE d'un lien : celle de `loadRelationLink`, fermée comme un inconnu
+ * quand l'autre compte n'est plus utilisable (#19571). Le lien réel reste celui que
+ * les effets d'une baisse lisent ; seule la réponse se ferme.
+ */
+export async function servedRelationLink(prisma: RelationLinksDb, link: RelationLinkView): Promise<RelationLinkView> {
+  const usable = await usableAmong(prisma, [link.userId]);
+  return usable.has(link.userId.toLowerCase()) ? link : blockedView(link.userId);
+}
+
 export async function loadRelationLink(
   prisma: RelationLinksDb,
   params: { viewerId: string; otherId: string; now: Date },
@@ -136,7 +157,8 @@ export async function loadRelationLinkDetail(
     userA: viewerId, userB: otherId, level, levelSince: link?.levelSince ?? null, now,
   });
 
-  const roleOf = (id: string) => lawRoleOf(people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase()));
+  const personOf = (id: string) => people.find((candidate) => candidate.id.toLowerCase() === id.toLowerCase());
+  const roleOf = (id: string) => lawRoleOf(personOf(id));
   const teamPair = isPlatformTeam(roleOf(viewerId)) && isPlatformTeam(roleOf(otherId));
   const accessLevel = resolveRelationAccess({
     viewerId,
@@ -153,6 +175,10 @@ export async function loadRelationLinkDetail(
     consent: 'granted',
   }).effectiveLevel;
 
+  // #19571 — un compte inutilisable se lit comme un inconnu : la même vue, aucun outil promis.
+  if (!isUsableAccount(personOf(otherId))) {
+    return { ...blockedView(otherId), canRaise: false, raiseBlockedUntil: null, accessLevel: 'PUBLIC' };
+  }
   if (blocked || relationLevelIfAtLeast(level, 'ACQUAINTANCE') === null) {
     return { ...blockedView(otherId), effectiveLevel: blocked ? 'PUBLIC' : level, canRaise: false, raiseBlockedUntil: null, accessLevel };
   }
@@ -166,7 +192,7 @@ export async function loadRelationLinkDetail(
 
 const otherOf = (row: UserRelationRow, viewerId: string): string => (row.userLowId === viewerId ? row.userHighId : row.userLowId);
 
-/** Mes cercles : les liens d'au moins Connaissance, sans les personnes bloquées. */
+/** Mes cercles : les liens d'au moins Connaissance, sans les personnes bloquées ni les comptes inutilisables (#19571). */
 export async function listRelationLinks(
   prisma: RelationLinksDb,
   params: { viewerId: string; now: Date },
@@ -192,7 +218,9 @@ export async function listRelationLinks(
     .filter((id) => !known.has(id))
     .map((otherId) => ({ otherId, row: null as LinkRow | null, level: 'FRIEND' as RelationLevel }));
 
-  const entries = [...belonging, ...awaiting].filter(({ otherId }) => !blocked.has(otherId));
+  const candidates = [...belonging, ...awaiting].filter(({ otherId }) => !blocked.has(otherId));
+  const usable = await usableAmong(prisma, candidates.map(({ otherId }) => otherId));
+  const entries = candidates.filter(({ otherId }) => usable.has(otherId.toLowerCase()));
   const targets: RelationProgressTarget[] = entries.map(({ otherId, row, level }) => ({
     otherId, level, levelSince: row?.levelSince ?? null,
   }));

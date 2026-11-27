@@ -955,6 +955,18 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts.
 - Reste : iOS n'a encore AUCUN consommateur des préférences de communauté (pas de lecture de `/user-preferences/communities`) — le canal est prêt pour lui. Les deux pièges `author` requis d'`APIPost` / `APIPostComment` (#18120) restent ouverts.
 
+## 2026-11-27 — réveil 13:01 UTC (bis)
+
+- Début du run : aucune PR de la routine ouverte ; #19812 fusionnée (`8861451f1`). Lot prévu #20464 CÉDÉ : une autre session a poussé `claude/communautes-budget-salon` à 13:03, avant mon premier push (« celui qui n'a rien écrit cède »). #19813 est une `décision-produit` : non prise.
+- Lot : #20657 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »), moitié web — le suivi client noté par #19812.
+- Défaut : un 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` tombait dans `failed` (`community-invite.ts`, `verdictOf`) : la feuille « Inviter » disait « L'invitation a échoué. Réessayez. » et relisait les membres alors que rien n'était écrit.
+- Web : verdict `throttled` (429 AVEC le code du budget seulement ; le 429 du plafond global par IP reste une panne) : la ligne optimiste repart, le compteur redescend, rien n'est relu. `InviteOutcome.throttled` ; `inviteStatusOf` dit « Trop d'ajouts pour l'instant. Réessayez plus tard. » (seule, ou après le nombre d'entrées), et l'emporte sur une panne voisine. Clé `community.invite.throttled`, sept langues. La phrase ne dit pas qui est saturé.
+- Témoins : `lib/api/community-invite.test.ts` (+2, 6 attendus étendus), `lib/communities/invite-status.test.ts` (6, neuf ; rouge prouvé : 9 échecs avant l'implémentation).
+- Gates locaux : `bun test src/lib/communities/ src/lib/api/community src/routes/community` 244 verts ; `src/lib/i18n src/lib/interface` 311 verts ; `tsc --noEmit` vert.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée.
+- Reste, suivi #20664 : iOS et Android disent le même refus, même clé.
+- PR #20666 en brouillon (CI des PR gelée), `ci.yml` lancé en `workflow_dispatch` sur la tête.
+
 ## 2026-11-27 — réveil 13:38 UTC
 
 - Début du run : #20681 (#20464) fusionnée dans `dev` (`0dc913924`) ; #20682 (publications Android) ouverte et poussée il y a moins d'une minute par une autre session : cédée. Aucune branche vivante sur `routes/communities/core.ts`, `settings.ts` ni `communitySalonAdoption.ts`.
