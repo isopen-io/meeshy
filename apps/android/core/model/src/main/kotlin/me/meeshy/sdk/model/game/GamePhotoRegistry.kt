@@ -161,7 +161,7 @@ private fun parsePhotoBaseline(obj: JsonObject): GamePhotoBaseline = GamePhotoBa
     levelRecord = obj.reqCount("levelRecord"),
     prestige = obj.reqCount("prestige"),
     minted = obj.reqCount("minted"),
-    treasuryTier = obj.nullableEnum("treasuryTier"),
+    treasuryTier = obj.nullableEnum<TreasuryTierKey>("treasuryTier"),
     flameRecord = obj.reqCount("flameRecord"),
     pastCycleRecords = obj.pastCycleRecords(),
 )
