@@ -526,7 +526,7 @@ export async function registerMembershipRoutes(
         return sendConflict(reply, 'User is already a member of this community');
       }
 
-      const ofTarget = await spendCommunityAdditionOfTarget(fastify, inviteeId);
+      const ofTarget = await spendCommunityAdditionOfTarget(fastify, id, inviteeId);
       if (!ofTarget.allowed) {
         return refuseCommunityAddition(reply, ofTarget.retryAfter);
       }

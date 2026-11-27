@@ -32,6 +32,7 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { communityAdmissionBudget, refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateParticipantsPresence } from './participants-presence';
@@ -217,9 +218,13 @@ export function registerCreateConversationRoute(
             isPrivate: hostCommunity.isPrivate,
             actorRole: hostCommunity.members[0]?.role ?? null,
             participantIds: uniqueParticipantIds,
+            budget: communityAdmissionBudget(fastify, userId, communityId),
           })
         : null;
       if (communityAdmission?.kind === 'refused') {
+        if (communityAdmission.reason === 'budget-exceeded') {
+          return refuseCommunityAddition(reply, communityAdmission.retryAfter);
+        }
         return communityAdmission.reason === 'invite-forbidden'
           ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
           : sendNotFound(reply, 'User to invite not found');

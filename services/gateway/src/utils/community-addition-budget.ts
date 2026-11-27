@@ -34,10 +34,18 @@
  * Redis en panne : `consume` rend `null` et le geste PASSE (fail-open), le même
  * choix que `middleware()` et `contact-identifier-budget.ts` — un débit est une
  * borne d'abus, pas une garde d'autorisation, et les refus d'accès restent en
- * amont. Ce que le module ne compte PAS, et qui est suivi ailleurs : l'entrée
- * des participants d'un salon créé dans une communauté (`planCommunityAdmission`,
- * jusqu'à 250 personnes par requête) et le cycle ajout/retrait qui remplit le
- * seau d'une cible — #20464.
+ * amont.
+ *
+ * Un troisième chemin débite les MÊMES seaux (#20464) : créer un salon dans une
+ * communauté y fait entrer ses participants (`planCommunityAdmission`, jusqu'à
+ * 250 personnes par requête). L'acteur y paie au nombre de personnes qui
+ * ENTRENT, et la cible une unité — `spendCommunityAdmissionBatch`.
+ *
+ * Le seau de la cible compte des COMMUNAUTÉS DISTINCTES dans la fenêtre, pas des
+ * ajouts : un administrateur qui ajoute puis retire dix fois la même personne
+ * ne lui ferme pas la porte des autres communautés pendant 24 h. La paire
+ * (communauté, cible) est marquée une fois par jour ; un ajout refusé démarque
+ * ce qu'il a marqué, sans quoi la paire entrerait gratuitement plus tard.
  *
  * Le refus est un 429 dans l'enveloppe `sendError`, `code`
  * `COMMUNITY_ADDITION_BUDGET_EXCEEDED`, avec `Retry-After`. Le même code sert
@@ -64,6 +72,7 @@ type Seaux = {
   readonly acteurHeure: RateLimiter;
   readonly acteurJour: RateLimiter;
   readonly cibleJour: RateLimiter;
+  readonly paireJour: RateLimiter;
 };
 
 /**
@@ -74,7 +83,8 @@ type Seaux = {
 const SEAUX = new WeakMap<object, Seaux>();
 
 function seaux(fastify: FastifyInstance): Seaux {
-  const existants = SEAUX.get(fastify.server);
+  const porteur: object = fastify.server ?? fastify;
+  const existants = SEAUX.get(porteur);
   if (existants) return existants;
   const redis = fastify.redis ?? undefined;
   const crees: Seaux = {
@@ -90,8 +100,12 @@ function seaux(fastify: FastifyInstance): Seaux {
       { max: COMMUNITY_ADDITION_BUDGET.targetPerDay, windowMs: JOUR_MS, keyPrefix: 'communities:additions:target:d' },
       redis
     ),
+    paireJour: createCustomRateLimiter(
+      { max: 1, windowMs: JOUR_MS, keyPrefix: 'communities:additions:pair:d' },
+      redis
+    ),
   };
-  SEAUX.set(fastify.server, crees);
+  SEAUX.set(porteur, crees);
   return crees;
 }
 
@@ -117,19 +131,71 @@ export async function spendCommunityAdditionByActor(
   return verdictOf(await Promise.all([acteurHeure.consume(cle, 1), acteurJour.consume(cle, 1)]));
 }
 
+const canonique = (id: string): string => id.trim().toLowerCase();
+
+type DebitCible = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };
+
 /**
- * Débite UN ajout qui va écrire sur le seau de la personne AJOUTÉE, tous acteurs
- * confondus. La clé est l'ObjectId CANONIQUE (minuscules) : la base décode
- * l'hexadécimal sans tenir compte de la casse, et une clé brute laissait chaque
- * variante de casse ouvrir un seau neuf pour la même personne.
+ * Débite UNE entrée dans une communauté sur le seau de la personne AJOUTÉE, tous
+ * acteurs confondus, une fois par communauté et par jour. Les clés sont des
+ * ObjectId CANONIQUES (minuscules) : la base décode l'hexadécimal sans tenir
+ * compte de la casse, et une clé brute laissait chaque variante de casse ouvrir
+ * un seau neuf pour la même personne.
  */
+async function debiterCible(fastify: FastifyInstance, communityId: string, targetId: string): Promise<DebitCible> {
+  const { cibleJour, paireJour } = seaux(fastify);
+  const cleCible = `user:${canonique(targetId)}`;
+  const clePaire = `${canonique(communityId)}:${canonique(targetId)}`;
+  const paire = await paireJour.consume(clePaire, 1);
+  if (paire?.retryAfter !== undefined) {
+    return { verdict: { allowed: true, retryAfter: 0 }, rendre: async () => paireJour.release(clePaire, 1) };
+  }
+  const cible = await cibleJour.consume(cleCible, 1);
+  const rendre = async () => {
+    await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
+  };
+  const verdict = verdictOf([cible]);
+  if (!verdict.allowed) await rendre();
+  return { verdict, rendre };
+}
+
+/** Débite UN ajout qui va écrire, pour les deux routes d'ajout unitaire. */
 export async function spendCommunityAdditionOfTarget(
   fastify: FastifyInstance,
+  communityId: string,
   targetId: string
 ): Promise<CommunityAdditionVerdict> {
-  const { cibleJour } = seaux(fastify);
-  return verdictOf([await cibleJour.consume(`user:${targetId.trim().toLowerCase()}`, 1)]);
+  return (await debiterCible(fastify, communityId, targetId)).verdict;
 }
+
+/**
+ * Le budget d'un LOT d'entrées (#20464), en deux temps, parce que la porte
+ * `isAddableUser` se tient entre les deux :
+ *  · `byActor` débite l'acteur au nombre de personnes qui entrent, AVANT la
+ *    porte (même raison que l'ajout unitaire : pas de sondage gratuit) ;
+ *  · `ofTargets` débite chaque cible pour un lot qui va écrire. Si une seule
+ *    est saturée, le lot est refusé ENTIER et les autres cibles sont rendues :
+ *    une personne saturée ne doit rien coûter à ses voisines du lot.
+ */
+export function communityAdmissionBudget(fastify: FastifyInstance, actorId: string, communityId: string) {
+  return {
+    async byActor(count: number): Promise<CommunityAdditionVerdict> {
+      if (count <= 0) return { allowed: true, retryAfter: 0 };
+      const { acteurHeure, acteurJour } = seaux(fastify);
+      const cle = `user:${actorId}`;
+      return verdictOf(await Promise.all([acteurHeure.consume(cle, count), acteurJour.consume(cle, count)]));
+    },
+    async ofTargets(targetIds: readonly string[]): Promise<CommunityAdditionVerdict> {
+      const debits = await Promise.all(targetIds.map((id) => debiterCible(fastify, communityId, id)));
+      const refus = debits.filter((d) => !d.verdict.allowed).map((d) => d.verdict.retryAfter);
+      if (refus.length === 0) return { allowed: true, retryAfter: 0 };
+      await Promise.all(debits.filter((d) => d.verdict.allowed).map((d) => d.rendre()));
+      return { allowed: false, retryAfter: Math.max(...refus) };
+    },
+  };
+}
+
+export type CommunityAdmissionBudget = ReturnType<typeof communityAdmissionBudget>;
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {
   reply.header('Retry-After', String(retryAfter));

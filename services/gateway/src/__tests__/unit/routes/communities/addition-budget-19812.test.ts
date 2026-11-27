@@ -112,10 +112,11 @@ async function build(fixture: Fixture = {}): Promise<Harness> {
   return { app, prisma, as: (userId) => { state.actor = userId; } };
 }
 
-const invite = (h: Harness, userId: string) =>
-  h.app.inject({ method: 'POST', url: `/communities/${COMM}/invite`, payload: { userId } });
-const add = (h: Harness, userId: string) =>
-  h.app.inject({ method: 'POST', url: `/communities/${COMM}/members`, payload: { userId } });
+const communityId = (n: number) => idOf('e6', n);
+const invite = (h: Harness, userId: string, community = COMM) =>
+  h.app.inject({ method: 'POST', url: `/communities/${community}/invite`, payload: { userId } });
+const add = (h: Harness, userId: string, community = COMM) =>
+  h.app.inject({ method: 'POST', url: `/communities/${community}/members`, payload: { userId } });
 
 const writes = (h: Harness) =>
   h.prisma.communityMember.create.mock.calls.length + h.prisma.communityMember.update.mock.calls.length;
@@ -207,17 +208,17 @@ describe('POST /communities/:id/invite et /members — budget de l’ACTEUR (#19
 });
 
 describe('POST /communities/:id/invite et /members — budget de la CIBLE (#19812)', () => {
-  it('borne les ajouts d’une MÊME personne tous acteurs confondus, sans écrire au-delà', async () => {
+  it('borne les ajouts d’une MÊME personne à des communautés distinctes, tous acteurs confondus, sans écrire au-delà', async () => {
     const h = await build();
     const victim = targetId(42);
     const codes = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay, (i) => {
       h.as(actorId(i));
-      return i % 2 === 0 ? invite(h, victim) : add(h, victim);
+      return i % 2 === 0 ? invite(h, victim, communityId(i)) : add(h, victim, communityId(i));
     });
     expect(codes.every((c) => c === 200)).toBe(true);
 
     h.as(actorId(500));
-    const refused = await invite(h, victim);
+    const refused = await invite(h, victim, communityId(500));
     expect(refused.statusCode).toBe(429);
     expect(refused.json().code).toBe(COMMUNITY_ADDITION_BUDGET_CODE);
     expect(writes(h)).toBe(COMMUNITY_ADDITION_BUDGET.targetPerDay);
@@ -228,13 +229,29 @@ describe('POST /communities/:id/invite et /members — budget de la CIBLE (#1981
     const victim = targetId(43);
     await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay, (i) => {
       h.as(actorId(i));
-      return invite(h, victim);
+      return invite(h, victim, communityId(i));
     });
 
     h.as(actorId(600));
-    expect((await invite(h, victim.toUpperCase())).statusCode).toBe(429);
+    expect((await invite(h, victim.toUpperCase(), communityId(600))).statusCode).toBe(429);
     h.as(actorId(601));
-    expect((await add(h, victim.toUpperCase())).statusCode).toBe(429);
+    expect((await add(h, victim.toUpperCase(), communityId(601))).statusCode).toBe(429);
+  });
+
+  it('#20464 — un cycle ajout/retrait dans la MÊME communauté ne remplit pas le seau de la cible', async () => {
+    const h = await build();
+    const victim = targetId(44);
+    const cycles = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay + 5, (i) => {
+      h.as(actorId(i));
+      return i % 2 === 0 ? invite(h, victim) : add(h, victim);
+    });
+    expect(cycles.every((c) => c === 200)).toBe(true);
+
+    const ailleurs = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay - 1, (i) => {
+      h.as(actorId(100 + i));
+      return invite(h, victim, communityId(i));
+    });
+    expect(ailleurs.every((c) => c === 200)).toBe(true);
   });
 
   it('un acteur déjà refusé n’entame pas le seau de sa cible', async () => {

@@ -352,7 +352,7 @@ const community = await fastify.prisma.community.findFirst({
       });
 
       if (!existingMember?.isActive) {
-        const ofTarget = await spendCommunityAdditionOfTarget(fastify, validatedData.userId);
+        const ofTarget = await spendCommunityAdditionOfTarget(fastify, id, validatedData.userId);
         if (!ofTarget.allowed) {
           return refuseCommunityAddition(reply, ofTarget.retryAfter);
         }

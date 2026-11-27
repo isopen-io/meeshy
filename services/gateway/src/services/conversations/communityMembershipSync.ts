@@ -21,7 +21,14 @@ export type CommunityAdmission =
       readonly reactivations: ReadonlyArray<CommunityEntrant & { readonly id: string }>;
       readonly creations: ReadonlyArray<CommunityEntrant>;
     }
-  | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' | 'not-addable' };
+  | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' | 'not-addable' }
+  | { readonly kind: 'refused'; readonly reason: 'budget-exceeded'; readonly retryAfter: number };
+
+/** Le budget des ajouts sans accord (#19812, #20464) : la forme de `communityAdmissionBudget`. */
+export type CommunityAdmissionBudgetPort = {
+  byActor(count: number): Promise<{ readonly allowed: boolean; readonly retryAfter: number }>;
+  ofTargets(targetIds: readonly string[]): Promise<{ readonly allowed: boolean; readonly retryAfter: number }>;
+};
 
 export type CommunityAdmissionRequest = {
   readonly communityId: string;
@@ -37,6 +44,12 @@ export type CommunityAdmissionRequest = {
    * quelqu'un à un salon existant — inviter ne réinscrit pas l'inviteur.
    */
   readonly admitActor?: boolean;
+  /**
+   * Faire entrer quelqu'un sans son accord débite le budget des ajouts (#20464) :
+   * l'acteur au nombre de personnes qui entrent, AVANT la porte d'ajout (pas de
+   * sondage gratuit), puis chaque cible pour un plan qui va écrire.
+   */
+  readonly budget?: CommunityAdmissionBudgetPort;
 };
 
 const NOTHING_TO_WRITE: CommunityAdmission = { kind: 'admitted', reactivations: [], creations: [] };
@@ -117,8 +130,16 @@ export async function planCommunityAdmission(
   if (entering.length > 0 && !mayAdmitOthers(request)) {
     return { kind: 'refused', reason: 'invite-forbidden' };
   }
+  const byActor = await request.budget?.byActor(entering.length);
+  if (byActor && !byActor.allowed) {
+    return { kind: 'refused', reason: 'budget-exceeded', retryAfter: byActor.retryAfter };
+  }
   if (!(await everyoneAddable(prisma, request.actorId, entering))) {
     return { kind: 'refused', reason: 'not-addable' };
+  }
+  const ofTargets = entering.length > 0 ? await request.budget?.ofTargets(entering) : undefined;
+  if (ofTargets && !ofTargets.allowed) {
+    return { kind: 'refused', reason: 'budget-exceeded', retryAfter: ofTargets.retryAfter };
   }
 
   const actorEntering = request.admitActor === false || rowOf.get(request.actorId)?.isActive === true
