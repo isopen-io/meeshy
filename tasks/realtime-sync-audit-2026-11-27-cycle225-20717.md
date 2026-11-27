@@ -213,6 +213,20 @@ la loi écrit `userRow?.blockedUserIds ?? []`.
 
 19 témoins neufs ; `tsc --noEmit` passerelle : 0.
 
+**Suite COMPLÈTE de la passerelle, sur l'arbre final** : **3054/3060 suites,
+45 546 témoins verts**. Les 6 rouges sont EXACTEMENT la famille
+HEIF/AVIF/ExifStrip, et elles sont étrangères au lot par DEUX mesures
+indépendantes — rouges sur l'arbre pré-lot (production revertie au commit
+`0a6a6ee7b`), et VERTES en CI, où `sharp`/libvips n'est pas celui de ce
+conteneur. **Aucun rouge attribuable au lot.**
+
+> C'est la seule preuve qui compte pour ce lot, et il a fallu la refaire trois
+> fois : le premier relevé (sous contention, sur un `packages/shared/dist`
+> périmé) rendait 38 rouges, le second 41, celui-ci 6. Les trois chiffres
+> décrivent le même dépôt — ce qui changeait était l'ARBRE et la CHARGE de la
+> machine. Un compte de rouges se mesure sur un arbre préparé et une machine
+> au repos, sinon il mesure l'instrument.
+
 | mutation | ce qui tombe |
 |---|---|
 | la garde retirée de `canUserConsumePost` | 10 |
