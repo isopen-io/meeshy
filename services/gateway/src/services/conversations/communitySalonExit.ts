@@ -104,6 +104,40 @@ export async function exitCommunitySalons(
   deps: SalonExitDeps,
   request: SalonExitRequest,
 ): Promise<SalonExit> {
+  return exitCommunitySalonsOf(deps, { communityId: request.communityId, userIds: [request.userId], now: request.now });
+}
+
+export type SalonExitBatchRequest = {
+  readonly communityId: string;
+  readonly userIds: readonly string[];
+  readonly now: Date;
+};
+
+/**
+ * La taille d'une tranche d'exclus (#16740) : une lecture de lignes
+ * `Participant` et une écriture groupée par tranche, jamais un `in` de dix
+ * mille identifiants ni dix mille lignes en mémoire d'un coup.
+ */
+export const SALON_EXIT_BATCH = 500;
+
+/**
+ * La sortie de #16704 pour PLUSIEURS personnes à la fois (#16740). Une
+ * communauté qui devient privée fait sortir tous ceux qui n'y peuvent pas
+ * entrer : sortie par sortie, chacune relisait tous les salons, soit ~3N
+ * requêtes attendues avant la réponse de `PUT /communities/:id`. Ici les
+ * salons se lisent UNE fois, les lignes des exclus par tranches de
+ * `SALON_EXIT_BATCH`, les lignes ordinaires se coupent en une écriture par
+ * tranche ; seule la succession d'un créateur reste par salon (c'est la loi
+ * unique de `creatorSuccession`, et un créateur ne fonde qu'une poignée de
+ * salons). Les annonces partent en arrière-plan, comme pour un seul départ.
+ *
+ * Même contrat que `exitCommunitySalons` : NE REJETTE JAMAIS, et une tranche
+ * perdue n'empêche pas les autres de sortir.
+ */
+export async function exitCommunitySalonsOf(
+  deps: SalonExitDeps,
+  request: SalonExitBatchRequest,
+): Promise<SalonExit> {
   try {
     return await exitEverySalon(deps, request);
   } catch (error) {
@@ -121,53 +155,50 @@ const NO_EXIT: SalonExit = { exitedConversationIds: [], announcements: Promise.r
 
 type Departure = { readonly row: DepartingRow; readonly successor: { readonly userId: string | null } | null };
 
-async function exitEverySalon(deps: SalonExitDeps, request: SalonExitRequest): Promise<SalonExit> {
+type SalonScope = {
+  readonly salonIds: readonly string[];
+  readonly liveSalons: ReadonlySet<string>;
+};
+
+const foundsLiveSalon = (scope: SalonScope, row: DepartingRow) =>
+  scope.liveSalons.has(row.conversationId) && isMemberCreator(row.role ?? 'member');
+
+function inBatches(userIds: readonly string[]): readonly (readonly string[])[] {
+  const unique = [...new Set(userIds)];
+  return Array.from({ length: Math.ceil(unique.length / SALON_EXIT_BATCH) }, (_, i) =>
+    unique.slice(i * SALON_EXIT_BATCH, (i + 1) * SALON_EXIT_BATCH));
+}
+
+async function exitEverySalon(deps: SalonExitDeps, request: SalonExitBatchRequest): Promise<SalonExit> {
   const { prisma } = deps;
+  const batches = inBatches(request.userIds);
+  if (batches.length === 0) return NO_EXIT;
   const salons = await prisma.conversation.findMany({
     where: { communityId: request.communityId },
     select: { id: true, isActive: true },
   });
   if (salons.length === 0) return NO_EXIT;
-  const liveSalons = new Set(salons.filter((salon) => salon.isActive !== false).map((salon) => salon.id));
-
-  const rows: DepartingRow[] = await prisma.participant.findMany({
-    where: {
-      userId: request.userId,
-      isActive: true,
-      conversationId: { in: salons.map((salon) => salon.id) },
-    },
-    select: { id: true, conversationId: true, userId: true, role: true, displayName: true },
-  });
-  if (rows.length === 0) return NO_EXIT;
-
-  const foundsLiveSalon = (row: DepartingRow) =>
-    liveSalons.has(row.conversationId) && isMemberCreator(row.role ?? 'member');
-  const plainRows = rows.filter((row) => !foundsLiveSalon(row));
-  const creatorRows = rows.filter(foundsLiveSalon);
+  const scope: SalonScope = {
+    salonIds: salons.map((salon) => salon.id),
+    liveSalons: new Set(salons.filter((salon) => salon.isActive !== false).map((salon) => salon.id)),
+  };
 
   const departures: Departure[] = [];
-  if (plainRows.length > 0) {
-    await prisma.participant.updateMany({
-      where: { id: { in: plainRows.map((row) => row.id) }, isActive: true },
-      data: { isActive: false, leftAt: request.now },
-    });
-    departures.push(...plainRows.map((row) => ({ row, successor: null })));
-  }
-  for (const row of creatorRows) {
+  for (const userIds of batches) {
     try {
-      departures.push({ row, successor: await writeCreatorDeparture(prisma, request, row) });
+      departures.push(...await exitBatch(prisma, scope, request.now, userIds));
     } catch (error) {
-      logger.error('Community salon exit failed', { conversationId: row.conversationId, error });
+      logger.error('Community salon exit batch failed', { communityId: request.communityId, error });
     }
   }
-  for (const { row } of departures) invalidateParticipantLookup(row.id, row.conversationId);
+  if (departures.length === 0) return NO_EXIT;
 
   const orphanedSalons = departures
-    .filter(({ row, successor }) => foundsLiveSalon(row) && successor === null)
+    .filter(({ row, successor }) => foundsLiveSalon(scope, row) && successor === null)
     .map(({ row }) => row.conversationId);
   const closedLinkIds = await closeOrphanedSalonLinks(prisma, orphanedSalons, request.now);
 
-  const announced = departures.filter(({ row }) => liveSalons.has(row.conversationId));
+  const announced = departures.filter(({ row }) => scope.liveSalons.has(row.conversationId));
   return {
     exitedConversationIds: departures.map(({ row }) => row.conversationId),
     announcements: announceEveryExit(deps, request, announced)
@@ -175,9 +206,51 @@ async function exitEverySalon(deps: SalonExitDeps, request: SalonExitRequest): P
   };
 }
 
+async function exitBatch(
+  prisma: PrismaClient,
+  scope: SalonScope,
+  now: Date,
+  userIds: readonly string[],
+): Promise<readonly Departure[]> {
+  const rows: DepartingRow[] = await prisma.participant.findMany({
+    where: {
+      userId: { in: [...userIds] },
+      isActive: true,
+      conversationId: { in: [...scope.salonIds] },
+    },
+    select: { id: true, conversationId: true, userId: true, role: true, displayName: true },
+  });
+  if (rows.length === 0) return [];
+
+  const plainRows = rows.filter((row) => !foundsLiveSalon(scope, row));
+  const creatorRows = rows.filter((row) => foundsLiveSalon(scope, row));
+
+  const departures: Departure[] = [];
+  if (plainRows.length > 0) {
+    try {
+      await prisma.participant.updateMany({
+        where: { id: { in: plainRows.map((row) => row.id) }, isActive: true },
+        data: { isActive: false, leftAt: now },
+      });
+      departures.push(...plainRows.map((row) => ({ row, successor: null })));
+    } catch (error) {
+      logger.error('Community salon exit write failed', { rows: plainRows.length, error });
+    }
+  }
+  for (const row of creatorRows) {
+    try {
+      departures.push({ row, successor: await writeCreatorDeparture(prisma, now, row) });
+    } catch (error) {
+      logger.error('Community salon exit failed', { conversationId: row.conversationId, error });
+    }
+  }
+  for (const { row } of departures) invalidateParticipantLookup(row.id, row.conversationId);
+  return departures;
+}
+
 async function revokeOrphanedSalonGuests(
   deps: SalonExitDeps,
-  request: SalonExitRequest,
+  request: SalonExitBatchRequest,
   shareLinkIds: readonly string[],
 ): Promise<void> {
   if (shareLinkIds.length === 0) return;
@@ -194,7 +267,7 @@ async function revokeOrphanedSalonGuests(
 
 function announceEveryExit(
   deps: SalonExitDeps,
-  request: SalonExitRequest,
+  request: SalonExitBatchRequest,
   departures: readonly Departure[],
 ): Promise<void> {
   if (departures.length === 0) return Promise.resolve();
@@ -212,7 +285,7 @@ function announceEveryExit(
   });
 }
 
-async function announceExit(deps: SalonExitDeps, request: SalonExitRequest, departure: Departure): Promise<void> {
+async function announceExit(deps: SalonExitDeps, request: SalonExitBatchRequest, departure: Departure): Promise<void> {
   const { prisma, socketIOHandler } = deps;
   const { row, successor } = departure;
   const { conversationId } = row;
@@ -250,7 +323,7 @@ async function announceExit(deps: SalonExitDeps, request: SalonExitRequest, depa
   if (successor?.userId) {
     announceParticipantRoleWithCapabilities(prisma, {
       io,
-      payload: { conversationId, userId: successor.userId, newRole: 'creator', updatedBy: request.userId },
+      payload: { conversationId, userId: successor.userId, newRole: 'creator', updatedBy: row.userId ?? row.id },
       onError: (error) => logger.warn('viewerCapabilities unreadable for the promoted successor', { conversationId, error }),
     }).catch((error: unknown) => logger.warn('participant:role-updated emission failed', { error }));
   }
@@ -260,13 +333,13 @@ async function announceExit(deps: SalonExitDeps, request: SalonExitRequest, depa
 
 async function writeCreatorDeparture(
   prisma: PrismaClient,
-  request: SalonExitRequest,
+  now: Date,
   row: DepartingRow,
 ): Promise<{ readonly userId: string | null } | null> {
-  const leaveSelf: LeaveSelf = { where: { id: row.id }, data: { isActive: false, leftAt: request.now } };
+  const leaveSelf: LeaveSelf = { where: { id: row.id }, data: { isActive: false, leftAt: now } };
   const succession = await resoudreSuccessionDuCreateur(prisma, {
     conversationId: row.conversationId,
-    sortantUserId: request.userId,
+    sortantUserId: row.userId ?? row.id,
   });
   if (succession.kind !== 'transfer') {
     await prisma.participant.update(leaveSelf);
