@@ -333,6 +333,39 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
     });
     expect(exitCommunitySalons).not.toHaveBeenCalled();
   });
+
+  // #20694 — la seconde passe paie le budget de la première : des ajouts au salon lancés
+  // pendant la bascule n'entrent pas en masse sans débit.
+  it('la seconde passe débite ses entrants au budget fourni', async () => {
+    const prisma = prismaDouble({ occupations: [{ conversationId: SALON_A, userId: OCCUPANT }] });
+    const spend = jest.fn<any>(async () => ({ allowed: true, retryAfter: 0 }));
+
+    await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE }, {
+      communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW, spend,
+    });
+
+    expect(spend).toHaveBeenCalledWith([OCCUPANT]);
+    expect(creations(prisma)).toEqual([{ communityId: COMMUNITY, userId: OCCUPANT, role: 'member' }]);
+  });
+
+  it("le budget refuse la seconde passe : personne n'entre, et les retardataires SORTENT (la bascule est écrite)", async () => {
+    const prisma = prismaDouble({
+      occupations: [
+        { conversationId: SALON_A, userId: OCCUPANT },
+        { conversationId: SALON_B, userId: ANCIEN },
+      ],
+      membres: [{ id: 'm-ancien', userId: ANCIEN, isActive: false }],
+    });
+    const spend = jest.fn<any>(async () => ({ allowed: false, retryAfter: 60 }));
+
+    await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE }, {
+      communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW, spend,
+    });
+
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+    expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
+    expect(exitCommunitySalons.mock.calls.map((c: any) => c[1].userId).sort()).toEqual([ANCIEN, OCCUPANT].sort());
+  });
 });
 
 describe("admitSalonOccupants — qui entre l'apprend (#18052)", () => {
