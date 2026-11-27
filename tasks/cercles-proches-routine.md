@@ -2020,3 +2020,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : web de #17990 (couper toutes les invitations « ensemble »)
+
+- Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées le 2026-11-23 ; aucune PR de la routine ouverte.
+  Les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) restent cédés : #20514 (autre session, ouverte
+  depuis le 2026-11-24) découpe `SharedLocationSharingCenter.swift` et ses voisins.
+- #18539 constaté réglé sur `dev` (échéance arrondie à la seconde, témoins à `t + 5 ms` et `t + 999 ms`, fiche sur une
+  horloge pilotée) : fermée avec la preuve.
+- Lot : `notification.togetherEnabled` (#17023, déjà obéi par `guestReceivesInvitesFrom`) entre dans le port des
+  réglages du web et dans « Notifications », juste après « Recevoir des Bring » : absent = reçues, écrit seul sous
+  `notification`, optimiste avec retour arrière, sept langues. Le libellé dit « vos Proches ne peuvent plus vous
+  inviter » et non « personne » : entre Sangs ayant donné l'accord du palier, la coupure ne ferme pas (#20361).
+- Audit adversarial : non requis (une préférence de réception déjà gardée côté serveur, aucun accès ni chiffrement).
+- Gates : web `bun test` 35 588 verts, 1 rouge hérité (`act-leak-guard`) ; `tsc` web 0. Les scripts Playwright du
+  gate ne se lancent pas en conteneur (navigateur d'une autre version) : la CI fait foi.
+- Reste : iOS #17988 et Android #17989 (même interrupteur) ; le talkie global (`talkieEnabled`) n'a pas d'interrupteur
+  web non plus.
+- Prochain lot : #17988 / #17989, ou les lots iOS de la position dès que #20514 est fusionnée.
