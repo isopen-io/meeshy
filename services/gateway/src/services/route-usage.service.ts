@@ -752,6 +752,10 @@ export const ROUTES_SURVEILLEES: readonly RouteSurveillee[] = Object.freeze([
   { method: 'POST', route: apiPath('/conversations/:conversationId/messages/:messageId/delivery-receipt'), issue: 4349 },
   { method: 'POST', route: apiPath('/conversations/:id/mark-read'), issue: 4349 },
 
+  // #4340 — les lectures historiques du fil convergent sur ?view= de la collection
+  { method: 'GET', route: apiPath('/conversations/:id/messages/search'), issue: 4340 },
+  { method: 'GET', route: apiPath('/conversations/:id/pinned-messages'), issue: 4340 },
+
   // #4350 — lire ses propres permissions n'est pas un geste d'administration
   { method: 'GET', route: apiPath('/admin/me/permissions'), issue: 4350 },
 

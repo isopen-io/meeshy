@@ -48,6 +48,8 @@ import { AT_REST_MESSAGE_SELECT, revealAtRestRows } from '../../services/messagi
 import { gatewayKeyring } from '../../services/messaging/atRestTranslationSource';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { depreciee, type AdresseDepreciee } from '../../utils/deprecation.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { announceConversationActivity } from '../../services/conversations/conversationActivity';
@@ -96,6 +98,16 @@ const admitPinGesture = (
     caller: authRequest.authContext,
     now: new Date(),
   });
+
+/**
+ * Alias de `GET /conversations/:id/messages?view=pinned` (#4340). Reste montée
+ * pour les binaires installés ; `ROUTES_SURVEILLEES` dira quand elle peut partir.
+ */
+const ANNONCE_EPINGLES: AdresseDepreciee = {
+  depuis: '2026-11-27',
+  successeur: (request) =>
+    `${apiPath('/conversations')}/${encodeURIComponent((request.params as { id: string }).id)}/messages?view=pinned`,
+};
 
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
@@ -524,6 +536,7 @@ export function registerMessagePinRoutes(
         500: errorResponseSchema
       }
     },
+    onRequest: depreciee(ANNONCE_EPINGLES),
     preValidation: [requiredAuth]
   }, async (request, reply) => {
     try {

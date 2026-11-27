@@ -40,12 +40,25 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
+import { apiPath } from '@meeshy/shared/api/prefix';
+import { depreciee, type AdresseDepreciee } from '../../utils/deprecation.js';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../../services/messaging/servedPostReply';
 import { keepAliveForReader, withInheritedExpiry } from '../../services/messaging/quoteCascade';
 import { readerParticipantIdOf } from './readerParticipant';
 import { appearsInSearch, SEARCH_EXIT_LAW_SELECT } from '../../services/messaging/searchExitLaw';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
+
+/**
+ * Alias de `GET /conversations/:id/messages?view=search` (#4340). Reste montée
+ * pour les binaires installés ; `ROUTES_SURVEILLEES` dira quand elle peut partir.
+ * Le successeur ne recopie pas `q` : un en-tête `Link` ne porte pas d'espace.
+ */
+const ANNONCE_RECHERCHE: AdresseDepreciee = {
+  depuis: '2026-11-27',
+  successeur: (request) =>
+    `${apiPath('/conversations')}/${encodeURIComponent((request.params as { id: string }).id)}/messages?view=search`,
+};
 
 /**
  * LES DEUX REFUS DE CETTE ROUTE NE SONT PAS LE MÊME REFUS (#4792).
@@ -119,6 +132,7 @@ export function registerMessageSearchRoute(
         500: errorResponseSchema
       }
     },
+    onRequest: depreciee(ANNONCE_RECHERCHE),
     preValidation: [optionalAuth]
   }, async (request, reply) => {
     try {
