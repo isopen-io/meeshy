@@ -107,8 +107,11 @@ final class ConversationSocketHandler {
     /// sur des singletons partagés → doit être appelé hors évaluation de body
     /// (le `.task` de la vue, via `ConversationViewModel.start()`, satisfait
     /// cette contrainte). Idempotent.
+    /// `consumes: false` ouvre EN REGARD (#18721) : la room et l'écran actif
+    /// sont posés, mais ni les notifications ni le compteur de la conversation
+    /// ne sont consommés avant `noteReadingStarted()`.
     @discardableResult
-    func activate() -> Bool {
+    func activate(consumes: Bool = true) -> Bool {
         guard !didActivate else { return false }
         didActivate = true
         // **L'oreille AVANT la question** (#5947). `joinConversation` pose au
@@ -130,9 +133,16 @@ final class ConversationSocketHandler {
         armSocketSubscriptions()
         messageSocket.joinConversation(conversationId)
         ConversationViewingReporter.shared.conversationOpened(conversationId)
-        NotificationToastManager.shared.onConversationOpened(conversationId)
-        NotificationCoordinator.shared.markConversationRead(conversationId)
+        NotificationToastManager.shared.onConversationOpened(conversationId, consumes: consumes)
+        if consumes { NotificationCoordinator.shared.markConversationRead(conversationId) }
         return true
+    }
+
+    /// Le premier acte qui compte met fin au regard (#18721) : les
+    /// notifications de la conversation et son compteur sont enfin consommés.
+    func noteReadingStarted() {
+        NotificationToastManager.shared.onConversationReadingStarted(conversationId)
+        NotificationCoordinator.shared.markConversationRead(conversationId)
     }
 
     /// Vrai entre `activate()` et `deactivate()` : la conversation est à l'écran.

@@ -90,6 +90,11 @@ public final class NotificationToastManager: ObservableObject {
     var openConversationStack: [String] = []
     var openConversationCounts: [String: Int] = [:]
 
+    /// Les conversations à l'écran EN REGARD (#18721) : ouvertes par la
+    /// bannière tirée, elles ne consomment pas leurs notifications tant que
+    /// l'utilisateur n'a pas agi dedans (`onConversationReadingStarted`).
+    var peekingConversationIds: Set<String> = []
+
     /// Vrai tant qu'au moins un écran affiche cette conversation, dans
     /// n'importe quelle fenêtre.
     public func isConversationOpen(_ conversationId: String) -> Bool {
@@ -102,6 +107,7 @@ public final class NotificationToastManager: ObservableObject {
     func forgetOpenConversations() {
         openConversationStack.removeAll()
         openConversationCounts.removeAll()
+        peekingConversationIds.removeAll()
         activeConversationId = nil
         MessageSocketManager.shared.activeConversationId = nil
         MessageSocketManager.shared.openConversationIds = []
@@ -331,6 +337,7 @@ public final class NotificationToastManager: ObservableObject {
         activeConversationId = nil
         openConversationStack.removeAll()
         openConversationCounts.removeAll()
+        peekingConversationIds.removeAll()
         activePostId = nil
         conversationReadTasks.values.forEach { $0.cancel() }
         conversationReadTasks = [:]

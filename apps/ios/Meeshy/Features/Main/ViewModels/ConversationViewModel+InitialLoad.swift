@@ -258,7 +258,7 @@ extension ConversationViewModel {
     /// L'écran revenu (`.task` rejoué) se rouvre ; ce qu'on y lit attend la prochaine sortie (#18556).
     func reopenScreen() {
         afterReadVisit.resume()
-        if socketHandler?.activate() == true { syncEngine.openConversation(conversationId) }
+        if socketHandler?.activate(consumes: startupDependencies.readGate.marksReading) == true { syncEngine.openConversation(conversationId) }
     }
 
     /// Le rattrapage `after` à partir d'un curseur : la reconnexion part de ce qui est détenu maintenant,

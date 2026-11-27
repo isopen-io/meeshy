@@ -80,7 +80,7 @@ extension NotificationToastManager {
         // la notification ne doit pas rester non lue : on la marque lue côté
         // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
         // localement (on sort avant `incrementInAppNotificationUnread`).
-        if let convId = event.conversationId, isConversationOpen(convId) || convId == activeConversationId {
+        if consumesOnArrival(event) {
             markConsumedOnArrival(event, isRewrite: isRewrite)
             return
         }
@@ -138,9 +138,22 @@ extension NotificationToastManager {
         // La batterie d'un proche ne se dit jamais en carte : app ouverte, c'est la SyncPill qui
         // l'annonce (`battery:changed`, #14147) — une carte en plus la dirait deux fois. Même règle pour le
         // téléphone injoignable (`phone:unreachable`, #18737).
-        if ![MeeshyNotificationType.deviceBattery, .deviceUnreachable].contains(event.notificationType), prefs.allowsInAppBanner(type: event.notificationType) {
+        if !arrivesDuringPeek(event), ![MeeshyNotificationType.deviceBattery, .deviceUnreachable].contains(event.notificationType), prefs.allowsInAppBanner(type: event.notificationType) {
             showToast(event)
         }
+    }
+
+    /// En REGARD (#18721), la conversation est à l'écran sans être lue : sa
+    /// notification suit le chemin nominal — persistée NON lue, comptée —
+    /// mais sans bannière par-dessus le fil.
+    func arrivesDuringPeek(_ event: SocketNotificationEvent) -> Bool {
+        event.conversationId.map(peekingConversationIds.contains) ?? false
+    }
+
+    /// La conversation visée est LUE à l'écran : la notification naît consommée.
+    func consumesOnArrival(_ event: SocketNotificationEvent) -> Bool {
+        guard let convId = event.conversationId, !arrivesDuringPeek(event) else { return false }
+        return isConversationOpen(convId) || convId == activeConversationId
     }
 
     /// Le contenu visé est DÉJÀ à l'écran : la notification naît consommée.

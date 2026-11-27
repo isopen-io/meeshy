@@ -268,7 +268,6 @@ extension ConversationViewModel {
         }
     }
 
-
     // MARK: - Edit Message
 
     func editMessage(messageId: String, newContent: String) async {

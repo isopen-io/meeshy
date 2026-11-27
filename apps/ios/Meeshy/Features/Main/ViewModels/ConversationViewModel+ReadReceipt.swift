@@ -51,5 +51,6 @@ extension ConversationViewModel {
     func noteUserActed(_ act: ConversationAct) {
         guard startupDependencies.readGate.noteActed(act) else { return }
         markAsRead()
+        socketHandler?.noteReadingStarted()
     }
 }

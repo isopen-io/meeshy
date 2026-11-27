@@ -179,7 +179,7 @@ extension ConversationViewModel {
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
         // re-evaluation never fire them (only the installed VM runs start()).
-        socketHandler?.activate()
+        socketHandler?.activate(consumes: startupDependencies.readGate.marksReading)
         // #7847 — les contacts de la liste `@` se lisent en CACHE (sans
         // réseau) dès l'ouverture : le `@` les sert ainsi à l'image près.
         Task { [weak self] in await self?.mentionController.primeContacts() }

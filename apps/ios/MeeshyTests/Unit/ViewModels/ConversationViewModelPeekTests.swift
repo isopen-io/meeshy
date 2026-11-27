@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import GRDB
 @testable import Meeshy
 import MeeshySDK
@@ -147,6 +148,74 @@ final class ConversationViewModelPeekTests: XCTestCase {
         _ = try makeSUT(conversationId: conversationId, peeking: false)
 
         XCTAssertFalse(ExplicitUnreadMarks.consume(conversationId))
+    }
+
+    // MARK: - Les notifications attendent le premier acte (#18902)
+
+    private func notificationReads(of conversationId: String, into bag: inout Set<AnyCancellable>) -> () -> Int {
+        var count = 0
+        NotificationToastManager.shared.conversationNotificationsRead
+            .filter { $0 == conversationId }
+            .sink { _ in count += 1 }
+            .store(in: &bag)
+        return { count }
+    }
+
+    func test_start_openedInPeek_consumesNoNotification() throws {
+        let conversationId = "00000000000000000000e012"
+        var bag = Set<AnyCancellable>()
+        let reads = notificationReads(of: conversationId, into: &bag)
+
+        let (sut, _) = try makeSUT(conversationId: conversationId, peeking: true)
+        defer { sut.noteScreenLeft() }
+
+        XCTAssertEqual(reads(), 0, "regarder ne marque pas la cloche lue, ni ne retire les bannières système")
+    }
+
+    func test_noteUserActed_sendingInPeek_consumesTheNotificationsOnce() throws {
+        let conversationId = "00000000000000000000e013"
+        var bag = Set<AnyCancellable>()
+        let reads = notificationReads(of: conversationId, into: &bag)
+        let (sut, _) = try makeSUT(conversationId: conversationId, peeking: true)
+        defer { sut.noteScreenLeft() }
+
+        sut.noteUserActed(.sendMessage)
+        sut.noteUserActed(.toggleReaction)
+
+        XCTAssertEqual(reads(), 1)
+    }
+
+    func test_start_openedNormally_consumesTheNotifications() throws {
+        let conversationId = "00000000000000000000e014"
+        var bag = Set<AnyCancellable>()
+        let reads = notificationReads(of: conversationId, into: &bag)
+
+        let (sut, _) = try makeSUT(conversationId: conversationId, peeking: false)
+        defer { sut.noteScreenLeft() }
+
+        XCTAssertEqual(reads(), 1)
+    }
+
+    func test_start_openedInPeek_keepsTheConversationUnreadCount() throws {
+        let conversationId = "00000000000000000000e015"
+        NotificationCoordinator.shared.applyConversationUnread(conversationId: conversationId, unreadCount: 3)
+        defer { NotificationCoordinator.shared.removeConversation(conversationId) }
+
+        let (sut, _) = try makeSUT(conversationId: conversationId, peeking: true)
+        defer { sut.noteScreenLeft() }
+
+        XCTAssertEqual(ConversationReadLedger.shared.state(for: conversationId)?.unreadCount, 3)
+    }
+
+    func test_start_openedNormally_readsTheConversationUnreadCount() throws {
+        let conversationId = "00000000000000000000e016"
+        NotificationCoordinator.shared.applyConversationUnread(conversationId: conversationId, unreadCount: 3)
+        defer { NotificationCoordinator.shared.removeConversation(conversationId) }
+
+        let (sut, _) = try makeSUT(conversationId: conversationId, peeking: false)
+        defer { sut.noteScreenLeft() }
+
+        XCTAssertEqual(ConversationReadLedger.shared.state(for: conversationId)?.unreadCount, 0)
     }
 
     // MARK: - Chaque chemin d'acte le signale

@@ -5,7 +5,10 @@ import os
 private let logger = MeeshyLog.logger(.notifications, subsystem: .sdk)
 
 extension NotificationToastManager {
-    public func onConversationOpened(_ conversationId: String) {
+    /// `consumes: false` ouvre EN REGARD (#18721) : la conversation est à
+    /// l'écran (pile, id actif, toasts tus) sans que ses notifications soient
+    /// consommées ; `onConversationReadingStarted` le fera au premier acte.
+    public func onConversationOpened(_ conversationId: String, consumes: Bool = true) {
         // Gate idempotent : un parent qui observe ce manager (RootView / iPadRootView)
         // se re-render à chaque mutation `@Published`, ce qui fait re-construire à
         // SwiftUI un `ConversationViewModel` jetable → un `ConversationSocketHandler`
@@ -23,6 +26,7 @@ extension NotificationToastManager {
         openConversationStack.removeAll { $0 == conversationId }
         openConversationStack.append(conversationId)
         MessageSocketManager.shared.openConversationIds = openConversationIds
+        if consumes { peekingConversationIds.remove(conversationId) } else { peekingConversationIds.insert(conversationId) }
         guard conversationId != activeConversationId else { return }
 
         activeConversationId = conversationId
@@ -32,6 +36,15 @@ extension NotificationToastManager {
             dismissToast()
         }
 
+        guard consumes else { return }
+        consumeConversationLocally(conversationId)
+    }
+
+    /// Le REGARD prend fin (#18721) : le premier acte qui compte (envoi,
+    /// pièce jointe, réaction) consomme enfin les notifications de la
+    /// conversation. Sans regard en cours, rien : l'ouverture a déjà consommé.
+    public func onConversationReadingStarted(_ conversationId: String) {
+        guard peekingConversationIds.remove(conversationId) != nil else { return }
         consumeConversationLocally(conversationId)
     }
 
@@ -243,6 +256,7 @@ extension NotificationToastManager {
             } else {
                 openConversationCounts.removeValue(forKey: conversationId)
                 openConversationStack.removeAll { $0 == conversationId }
+                peekingConversationIds.remove(conversationId)
             }
         }
         MessageSocketManager.shared.openConversationIds = openConversationIds
