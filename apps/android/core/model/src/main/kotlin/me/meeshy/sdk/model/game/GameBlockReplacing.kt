@@ -247,6 +247,7 @@ public fun GameBlock.replacing(
     prestige = if (wave2 != null) wave2.prestige else prestige,
     visibility = if (wave2 != null) wave2.visibility else visibility,
     achievementRarities = if (wave2 != null) wave2.achievementRarities else achievementRarities,
+    photo = photo,
 )
 
 public fun ApiEngagementProgress.Meesh.replacing(
