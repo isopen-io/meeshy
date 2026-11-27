@@ -110,6 +110,11 @@ async function buildApp(doubles: Doubles) {
       updateMany: communityMemberUpdateMany,
       count: jest.fn<any>().mockResolvedValue(0),
     },
+    communityJoinRequest: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }), findMany: jest.fn<any>().mockResolvedValue([]) },
+    user: {
+      findMany: jest.fn<any>(async (args: any) => ((args?.where?.id?.in as string[] | undefined) ?? []).map((id) => ({ id }))),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+    },
     conversation: {
       /**
        * Ce double APPLIQUE le `select` des participants, et c'est nécessaire,
@@ -146,6 +151,8 @@ async function buildApp(doubles: Doubles) {
 
   return { app, update, communityMemberFindMany, communityMemberCreateMany };
 }
+
+const ADMIS = (n: number) => `a1${n.toString(16).padStart(22, '0')}`;
 
 function appel(app: FastifyInstance) {
   return app.inject({
@@ -361,6 +368,37 @@ describe('#20136 — la participation VIVANTE, à la porte et dans ce qui écrit
       (call: any) => (call[0]?.where?.userId?.in as string[] | undefined) ?? []
     );
     expect(interroges).not.toContain(TIERS);
+    await app.close();
+  });
+});
+
+describe('#20464 — rattacher à une communauté PRIVÉE débite le budget des ajouts sans accord', () => {
+  const salon = (count: number) => [
+    { userId: APPELANT, role: 'admin', isActive: true, bannedAt: null },
+    ...Array.from({ length: count }, (_, n) => ({ userId: ADMIS(n), role: 'member', isActive: true, bannedAt: null })),
+  ];
+
+  it('un salon dont les participants dépassent le plafond horaire de l’acteur : 429 nommé, rien n’est rattaché ni admis', async () => {
+    const { app, update, communityMemberCreateMany } = await buildApp({ privee: true, participants: salon(31) });
+
+    const res = await appel(app);
+
+    expect(res.statusCode).toBe(429);
+    expect(res.json().code).toBe('COMMUNITY_ADDITION_BUDGET_EXCEEDED');
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(update).not.toHaveBeenCalled();
+    expect(communityMemberCreateMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('sous le plafond, le rattachement passe et admet ses participants — la mesure inverse', async () => {
+    const { app, update, communityMemberCreateMany } = await buildApp({ privee: true, participants: salon(30) });
+
+    const res = await appel(app);
+
+    expect(res.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(communityMemberCreateMany).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

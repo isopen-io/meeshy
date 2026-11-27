@@ -88,7 +88,9 @@ type Seaux = {
 const SEAUX = new WeakMap<object, Seaux>();
 
 function seaux(fastify: FastifyInstance): Seaux {
-  const existants = SEAUX.get(fastify.server);
+  // Un double de test sans `server` garde ses seaux sur l'instance elle-même.
+  const porteur: object = fastify.server ?? fastify;
+  const existants = SEAUX.get(porteur);
   if (existants) return existants;
   const redis = fastify.redis ?? undefined;
   const crees: Seaux = {
@@ -109,7 +111,7 @@ function seaux(fastify: FastifyInstance): Seaux {
       redis
     ),
   };
-  SEAUX.set(fastify.server, crees);
+  SEAUX.set(porteur, crees);
   return crees;
 }
 

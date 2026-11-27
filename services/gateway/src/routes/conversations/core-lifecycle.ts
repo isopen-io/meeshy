@@ -31,7 +31,8 @@ import {
 } from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
-import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { applyCommunityAdmission, invitedEntrants, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { refuseCommunityAddition, spendCommunityAdditionBatch, spendCommunityAdditionByActor } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateParticipantsPresence } from './participants-presence';
@@ -102,6 +103,7 @@ export function registerCreateConversationRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema,
         503: errorResponseSchema
       }
@@ -220,9 +222,29 @@ export function registerCreateConversationRoute(
           })
         : null;
       if (communityAdmission?.kind === 'refused') {
-        return communityAdmission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendNotFound(reply, 'User to invite not found');
+        if (communityAdmission.reason === 'invite-forbidden') {
+          return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+        }
+        // #20464 — une tentative vers un compte non ajoutable coûte une unité à
+        // l'acteur, comme sur `POST …/invite` : la porte n'est pas un sondage gratuit.
+        const probe = await spendCommunityAdditionByActor(fastify, userId);
+        return probe.allowed
+          ? sendNotFound(reply, 'User to invite not found')
+          : refuseCommunityAddition(reply, probe.retryAfter);
+      }
+      // #20464 — faire entrer des participants dans la communauté hôte débite
+      // le budget des ajouts sans accord (`POST …/invite` et `…/members`) :
+      // une unité par personne qui ENTRE à l'acteur, une à chacune. Refusé ⇒ 429,
+      // rien n'est créé.
+      if (communityAdmission?.kind === 'admitted' && communityId) {
+        const budget = await spendCommunityAdditionBatch(fastify, {
+          actorId: userId,
+          communityId,
+          targetIds: invitedEntrants(communityAdmission),
+        });
+        if (!budget.allowed) {
+          return refuseCommunityAddition(reply, budget.retryAfter);
+        }
       }
 
       // Block enforcement applies to DIRECT conversations only (group / community /

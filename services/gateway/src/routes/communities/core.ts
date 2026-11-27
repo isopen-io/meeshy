@@ -31,7 +31,8 @@ import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-type
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { CommunityEngagementOptions } from './types';
-import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { applyCommunityAdmission, invitedEntrants, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { refuseCommunityAddition, spendCommunityAdditionBatch, spendCommunityAdditionByActor } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 
@@ -699,6 +700,7 @@ const community = await fastify.prisma.community.findFirst({
         401: { description: 'User not authenticated', ...errorResponseSchema },
         403: { description: 'Insufficient permissions', ...errorResponseSchema },
         404: { description: 'Community or conversation not found', ...errorResponseSchema },
+        429: { description: 'Too many people added to communities', ...errorResponseSchema },
         500: { description: 'Internal server error', ...errorResponseSchema }
       }
     }
@@ -855,9 +857,26 @@ const community = await fastify.prisma.community.findFirst({
           })
         : null;
       if (admission?.kind === 'refused') {
-        return admission.reason === 'invite-forbidden'
-          ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
-          : sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' });
+        if (admission.reason === 'invite-forbidden') {
+          return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+        }
+        // #20464 — même loi que `POST …/invite` : sonder un compte non ajoutable coûte une unité.
+        const probe = await spendCommunityAdditionByActor(fastify, userId);
+        return probe.allowed
+          ? sendForbidden(reply, 'Some participants cannot join this private community', { code: 'COMMUNITY_PARTICIPANT_NOT_ADDABLE' })
+          : refuseCommunityAddition(reply, probe.retryAfter);
+      }
+      // #20464 — rattacher fait entrer ses participants sans leur accord : le
+      // lot débite le budget des ajouts, tout ou rien, avant toute écriture.
+      if (admission?.kind === 'admitted') {
+        const budget = await spendCommunityAdditionBatch(fastify, {
+          actorId: userId,
+          communityId: id,
+          targetIds: invitedEntrants(admission),
+        });
+        if (!budget.allowed) {
+          return refuseCommunityAddition(reply, budget.retryAfter);
+        }
       }
 
       // L'admission s'écrit AVANT le rattachement : si elle échoue, rien n'est

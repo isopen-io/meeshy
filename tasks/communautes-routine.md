@@ -931,3 +931,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `__tests__/unit/routes/communities/addition-budget-19812.test.ts` (10 ; rouge prouvé : 5 échecs 200 ≠ 429 avant le branchement, puis 1 sur la casse avant la normalisation).
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
+
+- 2026-11-23 03:28 : #20465 fusionnée dans `dev` (`8861451f1`) ; #19812 fermée.
+
+## 2026-11-27 — réveil 13:01 UTC
+
+- Début du run : aucune PR de la routine ouverte ; aucune branche vivante sur `community-addition-budget.ts`, `core-lifecycle.ts` ni `routes/communities/core.ts` (dernier commit de `dev` sur ces chemins : #19812).
+- Lot : #20464 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `spendCommunityAdditionBatch` (tout ou rien) — `POST /conversations` avec `communityId` et `POST /communities/:id/conversations/:conversationId` (communauté privée) débitent les MÊMES seaux que `…/invite` et `…/members` : une unité acteur par personne qui ENTRE (`invitedEntrants` : ni l'appelant qui revient, ni un membre actif), une unité par cible. Un lot refusé n'écrit rien, ne coûte à l'acteur qu'une tentative (une requête de 250 ne ferme pas sa journée) et rend aux cibles ce qu'il leur avait pris. Sonder un compte non ajoutable par ces deux portes coûte une unité. 429 déclaré aux deux schémas.
+- Seau de la cible : compte des PAIRES (communauté, personne) distinctes par jour (limiteur `pair:d`, plafond 1, clés canoniques) ; ajouter/retirer/rajouter à la même communauté ne compte qu'une fois ; une paire refusée n'est pas retenue comme comptée.
+- Témoins : `routes/conversations/community-salon-addition-budget-20464.test.ts` (9 ; rouge prouvé : 6 échecs sans le branchement, 1 sans le retour arrière des cibles), `communities-attach-conversation-authority.test.ts` (+2 ; rouge prouvé : 1 échec sans le branchement), `addition-budget-19812.test.ts` (+2 paires, 2 témoins de cible passés sur des communautés distinctes ; rouge prouvé sur les deux mutations de paire).
+- Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients).
+- Reste : l'ajout d'UNE personne à un salon d'une communauté privée (`…/participants`, invitation de conversation, levée d'un bannissement) — suivi #20675.

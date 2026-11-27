@@ -139,6 +139,17 @@ export async function planCommunityAdmission(
 }
 
 /**
+ * Les personnes qu'un plan admis fait entrer SANS LEUR ACCORD : ni l'appelant
+ * qui revient lui-même, ni un membre déjà actif (qui n'est pas dans le plan).
+ * C'est ce que le budget d'ajouts compte (#20464).
+ */
+export function invitedEntrants(admission: Extract<CommunityAdmission, { kind: 'admitted' }>): readonly string[] {
+  return [...admission.reactivations, ...admission.creations]
+    .filter((entrant) => entrant.via === 'invited')
+    .map((entrant) => entrant.userId);
+}
+
+/**
  * Écrit un plan admis par `planCommunityAdmission`, après la création de la
  * conversation, puis ANNONCE ce qui a été écrit (#19406) : chaque entrée part
  * en `community:member-joined` vers la communauté, comme une entrée par ses
