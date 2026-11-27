@@ -85,7 +85,7 @@ import {
  * diverge ENCORE. Une entrée réparée fait rougir la garde jusqu'à ce qu'on la
  * retire — c'est ce qui distingue un inventaire d'un baseline.
  */
-const INVENTAIRE: ReadonlyMap<string, string> = new Map<string, string>([]);
+const INVENTAIRE: ReadonlyMap<string, string> = new Map();
 
 const swift = readSwift();
 const contract = readContractPayloads();
