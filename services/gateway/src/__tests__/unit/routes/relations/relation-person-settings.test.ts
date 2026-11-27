@@ -42,6 +42,11 @@ jest.mock('../../../../services/PushNotificationService', () => ({
   }),
 }));
 
+const retraits: Array<Record<string, unknown>> = [];
+jest.mock('../../../../services/bloodLocation/bloodProximityRetraction', () => ({
+  bloodProximityRetractorOf: () => async (scope: Record<string, unknown>) => { retraits.push(scope); return 0; },
+}));
+
 import { relationsRoutes } from '../../../../routes/relations';
 import { RELATION_BLOOD_LOCKED_CODE } from '@meeshy/shared/types/relation-person-settings';
 import { BLOOD_BUNDLE_VERSION } from '@meeshy/shared/utils/blood-bundle';
@@ -57,7 +62,7 @@ const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): 
 const regler = (app: BringTestApp, body: unknown) => app.call('PUT', `/api/v1/relations/${MOI}/settings`, body, AUTRE);
 const lire = (app: BringTestApp) => app.call('GET', `/api/v1/relations/${MOI}/settings`, undefined, AUTRE);
 
-beforeEach(() => { cache.clear(); pushes.length = 0; freezeClock(NOW); });
+beforeEach(() => { cache.clear(); pushes.length = 0; retraits.length = 0; freezeClock(NOW); });
 afterEach(() => thawClock());
 
 describe('#13935 — talkieBlocked', () => {
@@ -360,4 +365,26 @@ describe('#20502 — un réglage écrit sur une paire bloquée répond EXACTEMEN
       expect(bloque.app.reglages.size).toBe(0);
     },
   );
+});
+
+describe('#20542 — retirer la proximité efface chez l\'autre les alertes qui me nomment', () => {
+  it('le retrait de proximityShared retire les alertes « tout près » qui me nomment chez lui, et seulement chez lui', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    const res = await regler(app, { proximityShared: false });
+    await app.close();
+
+    expect(res.body.data).toMatchObject({ proximityShared: false });
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
+  });
+
+  it('un autre retrait (position, historique) ou un blocage ne touche pas aux alertes', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    await regler(app, { locationShared: false, locationHistoryShared: false });
+    await regler(app, { bringBlocked: true });
+    await app.close();
+
+    expect(retraits).toEqual([]);
+  });
 });

@@ -4,7 +4,8 @@
  * de `CacheStore` (qui dirait « première alerte » à chaque instance). Sans Redis, ou en panne,
  * le geste LÈVE et l'alerte ne part pas. Le compteur d'évaluations par compte et par heure est un
  * `INCRBY` + `EXPIRE NX` sur le même client, strict lui aussi. La notification poussée de proximité
- * (#20540) passe par le service de notifications partagé ; sans lui, elle ne part pas.
+ * (#20540) passe par le service de notifications partagé ; sans lui, elle ne part pas. Son retrait
+ * (#20542) supprime les lignes en base et les annonce par ce même service.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../CacheStore';
@@ -12,6 +13,7 @@ import type { ServerEmitIO } from '../../socketio/serverEmit';
 import { bloodLocationEnabledFor } from './bloodLocationFlag';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { bloodProximityNotifierOf } from './bloodProximityNotice';
+import { bloodProximityRetractorOf } from './bloodProximityRetraction';
 import type { BloodLocationDeps } from './bloodLocationTypes';
 
 export function bloodLocationDepsOf(params: {
@@ -26,6 +28,7 @@ export function bloodLocationDepsOf(params: {
     enabledFor: (userId) => bloodLocationEnabledFor(userId),
     report: params.report,
     notifyProximity: bloodProximityNotifierOf({ prisma: params.prisma, notifications: getSharedNotificationService() ?? null }),
+    retractProximityNotices: bloodProximityRetractorOf(params.prisma),
     claimProximityCooldown: async (pairKey, ttlSeconds) => {
       const client = getCacheStore().getNativeClient();
       if (!client) throw new Error('blood proximity cooldown store unavailable');

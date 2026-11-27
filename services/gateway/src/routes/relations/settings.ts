@@ -26,6 +26,7 @@ import { bloodLockStateBetween, type BloodLockState } from '../../services/relat
 import { relationLevelIfAtLeast } from '@meeshy/shared/types/relation';
 import { bloodLockResponseProperties, sendBloodLocked } from './blood-lock';
 import { errorResponses, otherUserOf, relationLimiter, userIdParams } from './shared';
+import { bloodProximityRetractorOf } from '../../services/bloodLocation/bloodProximityRetraction';
 
 /**
  * BLOQUER le Bring, le talkie ou les invitations « ensemble » ne s'écrit que pour une personne qui EXISTE et avec qui un lien
@@ -286,6 +287,11 @@ export function registerRelationSettings(fastify: FastifyInstance): void {
       // #13934 — un accord fait remonter l'écoute en cours chez l'autre ; un retrait l'efface chez qui la voyait.
       if ((granting && close) || teamGrant || cutsListening) await refreshNowPlayingAfter(ecoute, { userA: ownerId, userB: userId, before: ecouteAvant });
       if ((blocking && !linked) || (granting && !close)) return sendNotFound(reply, 'Personne introuvable');
+      // #20542 — retirer la proximité à quelqu'un efface chez lui les alertes « tout près » qui me nomment.
+      if (requested.proximityShared === false) {
+        await bloodProximityRetractorOf(fastify.prisma)({ kind: 'at', ownerId, readerId: userId })
+          .catch((error: unknown) => logError(fastify.log, 'Blood proximity notices not retracted after withdrawal:', error));
+      }
       // #18738 — un consentement de POSITION changé re-juge la dernière position d'une alerte d'inactivité
       // en cours ; un autre réglage n'y touche pas (ni ré-émission, ni consultation notée au journal).
       if (shares.some((share) => share === 'locationShared' || share === 'locationHistoryShared')) await refreshInactivityServedAfter({ prisma: fastify.prisma, io: relationIoOf(fastify), report: (error) => logError(fastify.log, 'Inactivity not refreshed after relation settings:', error) }, ownerId);

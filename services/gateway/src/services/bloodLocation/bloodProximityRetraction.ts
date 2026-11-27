@@ -13,7 +13,7 @@
  * `delivery.pushSent`. L'expiration des 2 h, elle, est tenue par l'index TTL partiel de
  * `2026-11-27-notification-blood-proximity-ttl.mongodb.js`.
  */
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { BLOOD_PROXIMITY_NOTIFICATION_TYPE } from '@meeshy/shared/types/blood-location';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { retractedNotificationOf, type RetractedNotification } from '../notifications/retractedNotifications';
@@ -31,7 +31,7 @@ type RawRow = { readonly _id?: RawId; readonly userId?: RawId; readonly type?: u
 
 const idOf = (value: RawId): string | null => (typeof value === 'string' ? value : value?.$oid ?? null);
 
-export function bloodProximityRetractionFilter(scope: BloodProximityRetraction): Record<string, unknown> {
+export function bloodProximityRetractionFilter(scope: BloodProximityRetraction): Prisma.InputJsonObject {
   const type = BLOOD_PROXIMITY_NOTIFICATION_TYPE;
   if (scope.kind === 'at') return { type, userId: { $oid: scope.readerId }, 'actor.id': scope.ownerId };
   return { type, $or: [{ 'actor.id': scope.ownerId }, { userId: { $oid: scope.ownerId } }] };
