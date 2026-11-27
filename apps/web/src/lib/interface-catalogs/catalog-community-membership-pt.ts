@@ -61,6 +61,7 @@ const ptCommunityMembership = {
   'community.invite.done.other': '{count} pessoas entraram na comunidade.',
   'community.invite.partial': 'Algumas pessoas não puderam ser adicionadas.',
   'community.invite.failed': 'O convite falhou. Tente novamente.',
+  'community.invite.throttled': 'Demasiadas adições por agora. Tente mais tarde.',
   'community.invite.refused': 'Já não pode convidar para esta comunidade.',
   'community.create.members.title': 'Adicionar membros',
   'community.create.members.search': 'Pesquisar',
