@@ -213,8 +213,17 @@ la loi écrit `userRow?.blockedUserIds ?? []`.
 
 19 témoins neufs ; `tsc --noEmit` passerelle : 0.
 
-**Suite COMPLÈTE de la passerelle, sur l'arbre final** : **3054/3060 suites,
-45 546 témoins verts**. Les 6 rouges sont EXACTEMENT la famille
+**Suite COMPLÈTE de la passerelle, sur l'arbre FUSIONNÉ avec `dev`** (chiffre
+qui fait foi) : **3058/3064 suites, 45 572 témoins verts**. Avant la fusion :
+3054/3060, 45 546.
+
+**Et la fusion était le moment du risque, pas une formalité** : `dev` a apporté
+quatre suites de passerelle NEUVES (budget de rattachement de communauté,
+position d'un Sang, relations) plus trois helpers partagés. Une seule d'entre
+elles touchant un chemin gardé par `canUserConsumePost` sans délégué `user`
+aurait rougi — fermée sur l'échec, comme les trente du lot. **Aucune ne l'a
+fait**, et c'est une vérification, pas une chance : la question se pose à
+chaque fusion tant que des doubles Prisma sont écrits à la main. Les 6 rouges sont EXACTEMENT la famille
 HEIF/AVIF/ExifStrip, et elles sont étrangères au lot par DEUX mesures
 indépendantes — rouges sur l'arbre pré-lot (production revertie au commit
 `0a6a6ee7b`), et VERTES en CI, où `sharp`/libvips n'est pas celui de ce
