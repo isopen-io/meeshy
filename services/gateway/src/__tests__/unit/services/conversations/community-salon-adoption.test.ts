@@ -16,11 +16,16 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const exitCommunitySalons = jest.fn<any>(async () => ({ exitedConversationIds: [], announcements: Promise.resolve() }));
+const exitCommunitySalonsOf = jest.fn<any>(async () => ({ exitedConversationIds: [], announcements: Promise.resolve() }));
 jest.mock('../../../../services/conversations/communitySalonExit', () => {
   const actual = jest.requireActual<typeof import('../../../../services/conversations/communitySalonExit')>(
     '../../../../services/conversations/communitySalonExit',
   );
-  return { ...actual, exitCommunitySalons: (...args: unknown[]) => exitCommunitySalons(...args) };
+  return {
+    ...actual,
+    exitCommunitySalons: (...args: unknown[]) => exitCommunitySalons(...args),
+    exitCommunitySalonsOf: (...args: unknown[]) => exitCommunitySalonsOf(...args),
+  };
 });
 
 const scheduleCommunityAddedAnnouncement = jest.fn<any>();
@@ -37,8 +42,10 @@ import {
   closeSalonsAfterSwitch,
   exitSalonOutsiders,
   isBecomingPrivate,
+  SALON_OCCUPANT_PAGE,
 } from '../../../../services/conversations/communitySalonAdoption';
 import { findManyIn } from '../../../helpers/mongo-where';
+import { PARTICIPATION_VIVANTE } from '@meeshy/shared/utils/participation-vivante';
 
 const COMMUNITY = '507f1f77bcf86cd799439044';
 const CREATEUR = '507f1f77bcf86cd7994390c0';
@@ -88,10 +95,13 @@ function prismaDouble(monde: Monde = {}) {
     },
     participant: {
       findMany: jest.fn<any>(async (args: any) => occupations
+        .map((o, index) => ({ ...o, id: `p${index.toString(16).padStart(23, '0')}` }))
         .filter((o) => args.where.conversationId.in.includes(o.conversationId))
         .filter((o) => (o.isActive ?? true) === args.where.isActive)
         .filter((o) => (o.type ?? 'user') === args.where.type)
-        .map((o) => ({ userId: o.userId, isActive: o.isActive ?? true, bannedAt: o.bannedAt ?? null }))),
+        .filter((o) => args.cursor === undefined || o.id > args.cursor.id)
+        .slice(0, args.take ?? Number.MAX_SAFE_INTEGER)
+        .map((o) => ({ id: o.id, userId: o.userId, isActive: o.isActive ?? true, bannedAt: o.bannedAt ?? null }))),
     },
     communityMember: {
       findMany: jest.fn<any>(async (args: any) => membres
@@ -240,7 +250,7 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
     expect(exclus).toEqual([]);
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
     expect(prisma.participant.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { conversationId: { in: [SALON_A, SALON_B] }, isActive: true, type: 'user' },
+      where: { conversationId: { in: [SALON_A, SALON_B] }, type: 'user', ...PARTICIPATION_VIVANTE },
     }));
   });
 
@@ -276,23 +286,23 @@ describe('admitSalonOccupants — les occupants des salons entrent dans la commu
 });
 
 describe('exitSalonOutsiders — ceux qui ne peuvent pas entrer sortent des salons', () => {
-  it('chaque exclu sort par la loi de #16704, à la même date', async () => {
+  it('tous les exclus sortent par la loi de #16704, en UNE passe, à la même date (#16740)', async () => {
     const deps = { prisma: {} as never, socketIOHandler: null };
 
     await exitSalonOutsiders(deps, { communityId: COMMUNITY, userIds: [BLOQUE, MORT], now: NOW });
 
-    expect(exitCommunitySalons).toHaveBeenCalledTimes(2);
-    expect(exitCommunitySalons).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userId: BLOQUE, now: NOW });
-    expect(exitCommunitySalons).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userId: MORT, now: NOW });
+    expect(exitCommunitySalonsOf).toHaveBeenCalledTimes(1);
+    expect(exitCommunitySalonsOf).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userIds: [BLOQUE, MORT], now: NOW });
+    expect(exitCommunitySalons).not.toHaveBeenCalled();
   });
 
   it('ne rejette jamais : la bascule est déjà écrite', async () => {
-    exitCommunitySalons.mockRejectedValueOnce(new Error('panne'));
+    exitCommunitySalonsOf.mockRejectedValueOnce(new Error('panne'));
     const deps = { prisma: {} as never, socketIOHandler: null };
 
     await expect(exitSalonOutsiders(deps, { communityId: COMMUNITY, userIds: [BLOQUE, MORT], now: NOW }))
       .resolves.toBeUndefined();
-    expect(exitCommunitySalons).toHaveBeenCalledTimes(2);
+    expect(exitCommunitySalonsOf).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -312,7 +322,8 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
     });
 
     expect(creations(prisma)).toEqual([{ communityId: COMMUNITY, userId: OCCUPANT, role: 'member' }]);
-    expect(exitCommunitySalons.mock.calls.map((c: any) => c[1].userId).sort()).toEqual([BLOQUE, MORT].sort());
+    expect(exitCommunitySalonsOf).toHaveBeenCalledTimes(1);
+    expect([...exitCommunitySalonsOf.mock.calls[0][1].userIds].sort()).toEqual([BLOQUE, MORT].sort());
   });
 
   it('une seconde passe en panne ne rejette pas : les exclus de la première sortent quand même', async () => {
@@ -323,7 +334,7 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
     await expect(closeSalonsAfterSwitch(deps, {
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [MORT], now: NOW,
     })).resolves.toBeUndefined();
-    expect(exitCommunitySalons).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userId: MORT, now: NOW });
+    expect(exitCommunitySalonsOf).toHaveBeenCalledWith(deps, { communityId: COMMUNITY, userIds: [MORT], now: NOW });
   });
 
   it("personne à faire sortir : aucune sortie", async () => {
@@ -331,7 +342,7 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
     await closeSalonsAfterSwitch({ prisma: prisma as never, socketIOHandler: null, announce: NO_ANNOUNCE }, {
       communityId: COMMUNITY, createdBy: CREATEUR, outsiders: [], now: NOW,
     });
-    expect(exitCommunitySalons).not.toHaveBeenCalled();
+    expect(exitCommunitySalonsOf).not.toHaveBeenCalled();
   });
 
   // #20694 — la seconde passe paie le budget de la première : des ajouts au salon lancés
@@ -364,7 +375,8 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
 
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
     expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
-    expect(exitCommunitySalons.mock.calls.map((c: any) => c[1].userId).sort()).toEqual([ANCIEN, OCCUPANT].sort());
+    expect(exitCommunitySalonsOf).toHaveBeenCalledTimes(1);
+    expect([...exitCommunitySalonsOf.mock.calls[0][1].userIds].sort()).toEqual([ANCIEN, OCCUPANT].sort());
   });
 });
 
@@ -438,5 +450,27 @@ describe("admitSalonOccupants — l'entrée se voit chez les membres (#19406)", 
     );
 
     expect(announced).toEqual([{ kind: 'joined', communityId: COMMUNITY, userId: OCCUPANT, role: 'member', via: 'invited' }]);
+  });
+});
+
+describe('admitSalonOccupants — les occupants se lisent par pages bornées (#16740)', () => {
+  it("au-delà d'une page, la lecture se poursuit par curseur, et chaque occupant est jugé une fois", async () => {
+    const total = SALON_OCCUPANT_PAGE * 2 + 3;
+    const userIds = Array.from({ length: total }, (_, i) => `a${i.toString(16).padStart(23, '0')}`);
+    const prisma = prismaDouble({
+      occupations: [
+        ...userIds.map((userId) => ({ conversationId: SALON_A, userId })),
+        { conversationId: SALON_B, userId: userIds[0] },
+      ],
+    });
+
+    await admitSalonOccupants(prisma as never, { communityId: COMMUNITY, createdBy: CREATEUR }, NO_ANNOUNCE);
+
+    const lectures = prisma.participant.findMany.mock.calls.map((c: any) => c[0]);
+    expect(lectures).toHaveLength(3);
+    expect(lectures.every((l: any) => l.take === SALON_OCCUPANT_PAGE)).toBe(true);
+    expect(lectures[0].cursor).toBeUndefined();
+    expect(lectures[1]).toMatchObject({ cursor: { id: expect.any(String) }, skip: 1 });
+    expect(creations(prisma).map((c: any) => c.userId).sort()).toEqual([...userIds].sort());
   });
 });
