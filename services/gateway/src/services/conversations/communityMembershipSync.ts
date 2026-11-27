@@ -20,6 +20,8 @@ export type CommunityAdmission =
       readonly kind: 'admitted';
       readonly reactivations: ReadonlyArray<CommunityEntrant & { readonly id: string }>;
       readonly creations: ReadonlyArray<CommunityEntrant>;
+      /** Rend le budget pris par le plan (#20464), pour une route qui n'écrit finalement rien. */
+      readonly refund?: () => Promise<void>;
     }
   | { readonly kind: 'refused'; readonly reason: 'invite-forbidden' | 'not-addable' }
   | { readonly kind: 'refused'; readonly reason: 'budget-exceeded'; readonly retryAfter: number };
@@ -27,7 +29,7 @@ export type CommunityAdmission =
 /** Le budget des ajouts sans accord (#19812, #20464) : la forme de `communityAdmissionBudget`. */
 export type CommunityAdmissionBudgetPort = {
   byActor(count: number): Promise<{ readonly allowed: boolean; readonly retryAfter: number }>;
-  ofTargets(targetIds: readonly string[]): Promise<{ readonly allowed: boolean; readonly retryAfter: number }>;
+  ofTargets(targetIds: readonly string[]): Promise<{ readonly allowed: boolean; readonly retryAfter: number; refund(): Promise<void> }>;
 };
 
 export type CommunityAdmissionRequest = {
@@ -156,6 +158,7 @@ export async function planCommunityAdmission(
       return row ? [{ ...entrant, id: row.id }] : [];
     }),
     creations: admissions.filter(({ userId }) => !rowOf.has(userId)),
+    refund: ofTargets?.refund,
   };
 }
 

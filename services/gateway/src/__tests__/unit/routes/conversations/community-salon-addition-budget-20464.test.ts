@@ -73,7 +73,7 @@ const acteur = (n: number) => idOf('b2', n);
 const communaute = (n: number) => idOf('c3', n);
 const morts = (n: number) => idOf('d4', n);
 
-type Monde = { readonly isPrivate?: boolean; readonly role?: string };
+type Monde = { isPrivate?: boolean; role?: string };
 
 function prismaDouble(monde: Monde = {}) {
   return {
@@ -217,12 +217,33 @@ describe('#20464 — un salon créé dans une communauté débite le budget des 
   });
 
   it('un refus d’AUTORISATION passe avant le budget : 403, et le seau n’est pas entamé', async () => {
-    const { creer } = serveur({ isPrivate: true, role: 'member' });
+    const monde: Monde = { isPrivate: true, role: 'member' };
+    const { creer } = serveur(monde);
 
     const refus = await creer(acteur(1), range(COMMUNITY_ADDITION_BUDGET.actorPerHour + 5, personne));
-
     expect(refus.budgetRefuse).toBe(false);
     expect(sendForbidden).toHaveBeenCalledWith(expect.anything(), expect.any(String), { code: 'COMMUNITY_INVITE_FORBIDDEN' });
+
+    monde.isPrivate = false;
+    const ensuite = await creer(acteur(1), range(COMMUNITY_ADDITION_BUDGET.actorPerHour, personne));
+    expect(ensuite.cree).toBe(true);
+  });
+
+  it('une création qui échoue après le plan rend le budget des cibles : rien d’écrit, rien de pris', async () => {
+    const { creer, prisma } = serveur();
+    const cible = personne(7);
+    prisma.conversation.create.mockRejectedValue(new Error('panne'));
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.targetPerDay; i += 1) {
+      const echec = await creer(acteur(i + 1), [cible], communaute(i + 1));
+      expect(echec.cree).toBe(true);
+    }
+    prisma.conversation.create.mockImplementation(async () => ({ id: CONV_ID, type: 'group', title: 'Salon', createdAt: new Date(), participants: [] }));
+    prisma.communityMember.createMany.mockClear();
+
+    const reel = await creer(acteur(40), [cible], communaute(40));
+
+    expect(reel.budgetRefuse).toBe(false);
+    expect(prisma.communityMember.createMany).toHaveBeenCalled();
   });
 
   it('la cible a son plafond, tous acteurs confondus : dix communautés distinctes, la onzième est refusée', async () => {
@@ -239,14 +260,17 @@ describe('#20464 — un salon créé dans une communauté débite le budget des 
     expect(onzieme.cree).toBe(false);
   });
 
-  it('un cycle ajout/retrait dans la MÊME communauté ne remplit pas le seau de la cible', async () => {
+  it('un cycle ajout/retrait dans la MÊME communauté ne remplit pas le seau de la cible, et s’arrête au plafond de la paire', async () => {
     const { creer } = serveur();
     const cible = personne(7);
 
     const cycles = [];
-    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.targetPerDay + 5; i += 1) {
-      cycles.push(await creer(acteur(1), [cible], communaute(1)));
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.pairPerDay; i += 1) {
+      cycles.push(await creer(acteur(i + 1), [cible], communaute(1)));
     }
+    const deTrop = await creer(acteur(9), [cible], communaute(1));
+    expect(deTrop.budgetRefuse).toBe(true);
+    expect(deTrop.cree).toBe(false);
     const ailleurs = await Promise.all(
       range(COMMUNITY_ADDITION_BUDGET.targetPerDay - 1, (i) => String(i)).map((_, i) => creer(acteur(i + 2), [cible], communaute(i + 2))),
     );

@@ -109,6 +109,9 @@ export function registerCreateConversationRoute(
     },
     preValidation: [optionalAuth]
   }, async (request, reply) => {
+    // #20464 — le budget pris par le plan d'admission se rend si la requête
+    // sort sans écrire l'admission (DM existante, refus E2EE, exception).
+    let unwrittenAdmissionRefund: (() => Promise<void>) | undefined;
     try {
       // Valider les données avec Zod
       const validatedData = validateSchema(
@@ -229,6 +232,7 @@ export function registerCreateConversationRoute(
           ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
           : sendNotFound(reply, 'User to invite not found');
       }
+      unwrittenAdmissionRefund = communityAdmission?.refund;
 
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject
@@ -474,6 +478,7 @@ export function registerCreateConversationRoute(
       // Si la conversation est créée dans une communauté, ses participants y
       // entrent selon le plan admis plus haut (#16639, `planCommunityAdmission`).
       if (communityId && communityAdmission?.kind === 'admitted') {
+        unwrittenAdmissionRefund = undefined;
         await applyCommunityAdmission(prisma, communityId, communityAdmission, communityMemberAnnouncerFrom(fastify));
       }
 
@@ -596,6 +601,8 @@ export function registerCreateConversationRoute(
         return sendError(reply, 503, error.message, { code: error.code });
       }
       sendErrorResponse(reply, error as Error, 'create-conversation');
+    } finally {
+      await unwrittenAdmissionRefund?.().catch(() => undefined);
     }
   });
 }

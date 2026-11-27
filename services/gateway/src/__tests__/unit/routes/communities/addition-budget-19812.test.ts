@@ -241,7 +241,7 @@ describe('POST /communities/:id/invite et /members — budget de la CIBLE (#1981
   it('#20464 — un cycle ajout/retrait dans la MÊME communauté ne remplit pas le seau de la cible', async () => {
     const h = await build();
     const victim = targetId(44);
-    const cycles = await inSequence(COMMUNITY_ADDITION_BUDGET.targetPerDay + 5, (i) => {
+    const cycles = await inSequence(COMMUNITY_ADDITION_BUDGET.pairPerDay, (i) => {
       h.as(actorId(i));
       return i % 2 === 0 ? invite(h, victim) : add(h, victim);
     });
@@ -252,6 +252,22 @@ describe('POST /communities/:id/invite et /members — budget de la CIBLE (#1981
       return invite(h, victim, communityId(i));
     });
     expect(ailleurs.every((c) => c === 200)).toBe(true);
+  });
+
+  it('#20464 — réinviter sans fin une personne partie s’arrête au plafond de la paire, tous acteurs confondus', async () => {
+    const h = await build();
+    const victim = targetId(45);
+    await inSequence(COMMUNITY_ADDITION_BUDGET.pairPerDay, (i) => {
+      h.as(actorId(i));
+      return invite(h, victim);
+    });
+    (scheduleCommunityAddedAnnouncement as jest.Mock).mockClear();
+
+    h.as(actorId(700));
+    const refused = await invite(h, victim);
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().code).toBe(COMMUNITY_ADDITION_BUDGET_CODE);
+    expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
   });
 
   it('un acteur déjà refusé n’entame pas le seau de sa cible', async () => {

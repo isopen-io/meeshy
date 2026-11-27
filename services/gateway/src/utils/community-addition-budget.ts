@@ -44,8 +44,18 @@
  * Le seau de la cible compte des COMMUNAUTÉS DISTINCTES dans la fenêtre, pas des
  * ajouts : un administrateur qui ajoute puis retire dix fois la même personne
  * ne lui ferme pas la porte des autres communautés pendant 24 h. La paire
- * (communauté, cible) est marquée une fois par jour ; un ajout refusé démarque
- * ce qu'il a marqué, sans quoi la paire entrerait gratuitement plus tard.
+ * (communauté, cible) a son propre plafond, 3 entrées par jour : la première
+ * débite la cible, les deux suivantes sont gratuites pour elle, la quatrième est
+ * refusée — sans quoi les membres d'une communauté publique pourraient
+ * réinviter sans fin une personne qui en est partie, chaque ajout lui poussant
+ * une notification. Un ajout refusé, ou un lot qui n'écrit finalement rien,
+ * rend ce qu'il a pris.
+ *
+ * Ce que le module ne compte PAS encore, suivi par #20663 : rattacher une
+ * conversation à une communauté, ajouter quelqu'un à un salon existant, lever
+ * un bannissement qui réintègre. Limite connue : deux requêtes concurrentes sur
+ * la même paire peuvent laisser passer une entrée sans débit de la cible si
+ * l'une d'elles est ensuite refusée et rend la paire.
  *
  * Le refus est un 429 dans l'enveloppe `sendError`, `code`
  * `COMMUNITY_ADDITION_BUDGET_EXCEEDED`, avec `Retry-After`. Le même code sert
@@ -61,6 +71,7 @@ export const COMMUNITY_ADDITION_BUDGET = {
   actorPerHour: 30,
   actorPerDay: 100,
   targetPerDay: 10,
+  pairPerDay: 3,
 } as const;
 
 export const COMMUNITY_ADDITION_BUDGET_CODE = 'COMMUNITY_ADDITION_BUDGET_EXCEEDED';
@@ -101,7 +112,7 @@ function seaux(fastify: FastifyInstance): Seaux {
       redis
     ),
     paireJour: createCustomRateLimiter(
-      { max: 1, windowMs: JOUR_MS, keyPrefix: 'communities:additions:pair:d' },
+      { max: COMMUNITY_ADDITION_BUDGET.pairPerDay, windowMs: JOUR_MS, keyPrefix: 'communities:additions:pair:d' },
       redis
     ),
   };
@@ -111,6 +122,9 @@ function seaux(fastify: FastifyInstance): Seaux {
 
 /** `retryAfter` vaut 0 quand le geste passe (le gateway compile sans `strictNullChecks`). */
 export type CommunityAdditionVerdict = { readonly allowed: boolean; readonly retryAfter: number };
+
+/** Le débit des cibles d'un lot, et de quoi le RENDRE si le lot n'écrit finalement rien. */
+export type CommunityTargetsDebit = CommunityAdditionVerdict & { refund(): Promise<void> };
 
 function verdictOf(infos: ReadonlyArray<RateLimitInfo | null>): CommunityAdditionVerdict {
   const depasses = infos.flatMap((info) => (info?.retryAfter !== undefined ? [info.retryAfter] : []));
@@ -146,13 +160,18 @@ async function debiterCible(fastify: FastifyInstance, communityId: string, targe
   const { cibleJour, paireJour } = seaux(fastify);
   const cleCible = `user:${canonique(targetId)}`;
   const clePaire = `${canonique(communityId)}:${canonique(targetId)}`;
+  const rendrePaire = async () => paireJour.release(clePaire, 1);
   const paire = await paireJour.consume(clePaire, 1);
   if (paire?.retryAfter !== undefined) {
-    return { verdict: { allowed: true, retryAfter: 0 }, rendre: async () => paireJour.release(clePaire, 1) };
+    await rendrePaire();
+    return { verdict: { allowed: false, retryAfter: paire.retryAfter }, rendre: async () => undefined };
+  }
+  if (paire && paire.remaining < COMMUNITY_ADDITION_BUDGET.pairPerDay - 1) {
+    return { verdict: { allowed: true, retryAfter: 0 }, rendre: rendrePaire };
   }
   const cible = await cibleJour.consume(cleCible, 1);
   const rendre = async () => {
-    await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
+    await Promise.all([rendrePaire(), cibleJour.release(cleCible, 1)]);
   };
   const verdict = verdictOf([cible]);
   if (!verdict.allowed) await rendre();
@@ -185,12 +204,15 @@ export function communityAdmissionBudget(fastify: FastifyInstance, actorId: stri
       const cle = `user:${actorId}`;
       return verdictOf(await Promise.all([acteurHeure.consume(cle, count), acteurJour.consume(cle, count)]));
     },
-    async ofTargets(targetIds: readonly string[]): Promise<CommunityAdditionVerdict> {
+    async ofTargets(targetIds: readonly string[]): Promise<CommunityTargetsDebit> {
       const debits = await Promise.all(targetIds.map((id) => debiterCible(fastify, communityId, id)));
+      const rendreTout = async () => {
+        await Promise.all(debits.filter((d) => d.verdict.allowed).map((d) => d.rendre()));
+      };
       const refus = debits.filter((d) => !d.verdict.allowed).map((d) => d.verdict.retryAfter);
-      if (refus.length === 0) return { allowed: true, retryAfter: 0 };
-      await Promise.all(debits.filter((d) => d.verdict.allowed).map((d) => d.rendre()));
-      return { allowed: false, retryAfter: Math.max(...refus) };
+      if (refus.length === 0) return { allowed: true, retryAfter: 0, refund: rendreTout };
+      await rendreTout();
+      return { allowed: false, retryAfter: Math.max(...refus), refund: async () => undefined };
     },
   };
 }
