@@ -1,4 +1,5 @@
 import { useRef, type ReactNode } from 'react';
+import type { QueryClient } from '@tanstack/react-query';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
@@ -8,10 +9,14 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { SharedLocation } from '@/lib/api/shared-locations';
 import { spreadPins, type ScreenPoint } from '@/lib/map/fan';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
+import { appQueryClient } from '@/lib/api/query-client';
+import { pinLifeLabel, usePinLife } from '@/lib/shared-locations/pin-life';
 
 import { Avatar } from './avatar';
 import { MeeshyAvatarMorph } from './kit/meeshy-avatar-morph';
 import { MeeshyMapPin } from './kit/meeshy-map-pin';
+import { InactivityGlyph } from './inactivity-glyph';
+import { PhoneCallGlyph } from './phone-call-glyph';
 
 /**
  * **LA CARTE DES POSITIONS PARTAGÉES, SA VUE** (#16984) — le web REÇOIT les positions de
@@ -32,7 +37,11 @@ import { MeeshyMapPin } from './kit/meeshy-map-pin';
  * - **Personne ne cache personne** (#19883) : des épingles qui se recouvrent (toutes au même
  *   centre à la précision « ville ») s'ouvrent en éventail autour du point servi ; le flou
  *   reste centré sur ce point, et chaque épingle garde le cercle de SA personne.
- * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx`.
+ * - **Chaque épingle dit ce que vit la personne** (#19888, iso iOS #19885) : son écoute, sa batterie, son téléphone
+ *   injoignable, « En appel » et l'alerte d'inactivité, lus dans leur cache tels que servis à ce lecteur, et dits
+ *   dans le nom de l'épingle. Rien de servi : l'épingle d'avant.
+ * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx` ; la vie des personnes, par
+ *   les caches de leurs signaux, que la carte observe sans jamais rien demander.
  */
 
 export type SharedLocationPerson = {
@@ -61,6 +70,8 @@ export type SharedLocationsMapViewProps = {
   readonly onSelect?: (userId: string) => void;
   /** Ce qui se dit de la personne choisie, posé SOUS la carte et non par-dessus : la carte reste manipulable. */
   readonly detail?: ReactNode;
+  /** Le cache des signaux de vie (batterie, téléphone, appel, inactivité) ; celui de l'app par défaut. */
+  readonly client?: QueryClient;
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
@@ -90,6 +101,27 @@ export function rowText({ language, location, person, formatTime }: { readonly l
 
 const isOnMap = (at: ScreenPoint, view: MapView): boolean => at.x >= 0 && at.y >= 0 && at.x <= view.width && at.y <= view.height;
 
+const LIFE_GLYPH = 12;
+
+/** « En appel » et l'inactivité, posés en haut à gauche de l'épingle, hors de la découpe ronde de l'avatar ; muets, l'épingle les dit. */
+function PinLifeMarks({ call, inactivity }: { readonly call: boolean; readonly inactivity: boolean }) {
+  if (!call && !inactivity) return null;
+  return (
+    <span aria-hidden="true" className="pointer-events-none absolute left-0 top-0 flex gap-0.5" style={{ zIndex: 2 }}>
+      {inactivity ? (
+        <span data-pin-life="inactivity" className="grid place-items-center rounded-full p-0.5" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-error)' }}>
+          <InactivityGlyph responded={false} size={LIFE_GLYPH} />
+        </span>
+      ) : null}
+      {call ? (
+        <span data-pin-life="call" className="grid place-items-center rounded-full p-0.5" style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-ok)' }}>
+          <PhoneCallGlyph active size={LIFE_GLYPH} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function Pin({
   location,
   text,
@@ -98,7 +130,11 @@ function Pin({
   pinAt,
   selected,
   onSelect,
+  language,
+  client,
 }: {
+  readonly language: InterfaceLanguage;
+  readonly client: QueryClient;
   readonly location: SharedLocation;
   readonly text: string;
   readonly person: SharedLocationPerson;
@@ -108,6 +144,7 @@ function Pin({
   readonly selected: boolean;
   readonly onSelect: ((userId: string) => void) | undefined;
 }) {
+  const life = usePinLife(location.userId, language, client);
   const at = screenPoint(location, view);
   if (!isOnMap(at, view)) return null;
   const blur = Math.round(metersToPixels(location.radiusMeters, location.latitude, view.zoom) * 2);
@@ -135,8 +172,9 @@ function Pin({
         className="absolute grid place-items-center"
         style={{ left: pinAt.x - PIN_SIZE / 2, top: pinAt.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
       >
+        <PinLifeMarks call={life.call !== undefined} inactivity={life.inactivity !== undefined} />
         <MeeshyMapPin
-          label={text}
+          label={pinLifeLabel(text, life)}
           isSelected={selected}
           precision="exact"
           {...(location.circle === undefined
@@ -157,6 +195,9 @@ function Pin({
               color="var(--color-brand)"
               size={PIN_AVATAR}
               {...(person.presence === undefined ? {} : { presence: person.presence })}
+              {...(life.listening === undefined ? {} : { listening: life.listening })}
+              {...(life.battery === undefined ? {} : { battery: life.battery })}
+              {...(life.unreachable === undefined ? {} : { unreachable: life.unreachable })}
               {...(person.avatar === undefined ? {} : { src: person.avatar })}
               {...(person.name === null ? {} : { name: person.name })}
               redundant
@@ -168,7 +209,7 @@ function Pin({
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
@@ -244,7 +285,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           />
         ))}
         {rows.map(({ location, person, text }) => (
-          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} />
+          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} language={language} client={client} />
         ))}
         <div className="absolute right-2 top-2 grid gap-2" onPointerDown={keepsItsTouch}>
           {zoomButton(1, 'positions.zoomIn', '+')}
