@@ -99,12 +99,12 @@ export const SALON_OCCUPANT_PAGE = 1000;
  */
 async function readSalonOccupants(
   prisma: SalonAdoptionPrisma,
-  salonIds: readonly string[],
+  salonIds: string[],
   after?: string,
   seen: ReadonlySet<string> = new Set(),
 ): Promise<readonly string[]> {
   const page = await prisma.participant.findMany({
-    where: { conversationId: { in: [...salonIds] }, type: 'user', ...PARTICIPATION_VIVANTE },
+    where: { conversationId: { in: salonIds }, type: 'user', ...PARTICIPATION_VIVANTE },
     select: { id: true, userId: true, isActive: true, bannedAt: true },
     orderBy: { id: 'asc' },
     take: SALON_OCCUPANT_PAGE,

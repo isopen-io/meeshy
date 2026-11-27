@@ -156,14 +156,14 @@ const NO_EXIT: SalonExit = { exitedConversationIds: [], announcements: Promise.r
 type Departure = { readonly row: DepartingRow; readonly successor: { readonly userId: string | null } | null };
 
 type SalonScope = {
-  readonly salonIds: readonly string[];
+  readonly salonIds: string[];
   readonly liveSalons: ReadonlySet<string>;
 };
 
 const foundsLiveSalon = (scope: SalonScope, row: DepartingRow) =>
   scope.liveSalons.has(row.conversationId) && isMemberCreator(row.role ?? 'member');
 
-function inBatches(userIds: readonly string[]): readonly (readonly string[])[] {
+function inBatches(userIds: readonly string[]): readonly string[][] {
   const unique = [...new Set(userIds)];
   return Array.from({ length: Math.ceil(unique.length / SALON_EXIT_BATCH) }, (_, i) =>
     unique.slice(i * SALON_EXIT_BATCH, (i + 1) * SALON_EXIT_BATCH));
@@ -210,13 +210,13 @@ async function exitBatch(
   prisma: PrismaClient,
   scope: SalonScope,
   now: Date,
-  userIds: readonly string[],
+  userIds: string[],
 ): Promise<readonly Departure[]> {
   const rows: DepartingRow[] = await prisma.participant.findMany({
     where: {
-      userId: { in: [...userIds] },
+      userId: { in: userIds },
       isActive: true,
-      conversationId: { in: [...scope.salonIds] },
+      conversationId: { in: scope.salonIds },
     },
     select: { id: true, conversationId: true, userId: true, role: true, displayName: true },
   });
