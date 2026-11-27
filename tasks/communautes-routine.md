@@ -954,3 +954,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Mesure structurelle : pour N exclus, ~3N requêtes avant la réponse de `PUT /communities/:id` → 1 + 2·⌈N/500⌉ (10 000 exclus : ~30 000 → 41). Le p95 sur une vraie communauté de 10 000 occupants n'est PAS mesuré (aucune base ici) : suivi #20685.
 - Témoins : `community-salon-exit.test.ts` (+6), `community-salon-adoption.test.ts` (+1, 4 attentes réécrites : une passe au lieu d'une par exclu). Rouge prouvé : 9 + 1 échecs avant le code.
 - Revue adversariale : non bloquante ; corrigé dans le lot — une écriture groupée en échec emportait les créateurs de sa tranche. Restent (faibles) : un avis « X a quitté » possiblement doublé sur un départ concurrent ; les annonces relisent l'effectif par départ (hors réponse HTTP).
+
+## 2026-11-27 — réveil 13:01 UTC (bis, en parallèle du précédent)
+
+- Le réveil du 2026-11-25 s'est arrêté sur une erreur d'API avant d'écrire quoi que ce soit (aucune branche, aucune PR).
+- Début du run : aucune PR de la routine ouverte. #20464 est pris par deux branches poussées à 13:03 et 13:04 (`claude/communautes-budget-salon`, `claude/communautes-salon-budget`) : cédé. #19811 et #19813 sont `décision-produit` : non pris.
+- Lot : #16858 (jumelle de la partie communauté de #18120) — iOS jetait la portée COMMUNAUTÉ de `user:preferences-updated` (charge sans `conversationId` ni `category`, tombée dans le décodeur catégorie où `category` est requis ⇒ `decode DROP`).
+- SDK : `CommunityPreferencesUpdatedEvent` + `CommunityPreferencesChannel` (`Sockets/CommunityPreferencesChannel.swift`, hors de `MessageSocketManager` comme `CommunityUpdateChannel`) ; la route discrimine conversation → communauté → catégorie. Option « nom d'événement neuf » écartée : elle demande un double envoi côté passerelle pour les anciens clients, alors que discriminer sur `communityId` ne touche ni le fil ni la passerelle.
+- Témoin : `SocketInboundRouteTableTests.test_userPreferencesUpdated_communityScope_reachesTheCommunityPreferencesChannel` (charge réelle PUT et DELETE ; ni la portée catégorie ni la portée conversation ne reçoivent la trame, la catégorie n'atteint pas le canal communauté). iOS ne compile pas en conteneur : preuve par `sdk-tests.yml` / `ios.yml` sur la PR.
+- Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts.
+- Reste : iOS n'a encore AUCUN consommateur des préférences de communauté (pas de lecture de `/user-preferences/communities`) — le canal est prêt pour lui. Les deux pièges `author` requis d'`APIPost` / `APIPostComment` (#18120) restent ouverts.

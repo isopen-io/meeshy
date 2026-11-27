@@ -19,6 +19,7 @@ import me.meeshy.ui.theme.MeeshyTheme
 internal fun RelationReceptionSetting.titleRes(): Int = when (this) {
     RelationReceptionSetting.BRING -> R.string.circles_settings_block_bring
     RelationReceptionSetting.TALKIE -> R.string.circles_settings_block_talkie
+    RelationReceptionSetting.TOGETHER -> R.string.circles_settings_block_together
 }
 
 internal fun RelationReceptionSetting.detailRes(): Int? =

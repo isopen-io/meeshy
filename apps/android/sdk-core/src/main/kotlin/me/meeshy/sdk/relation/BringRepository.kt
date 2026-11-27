@@ -22,6 +22,7 @@ import me.meeshy.sdk.model.relation.ListeningCategoryShareBody
 import me.meeshy.sdk.model.relation.RelationReceptionSetting
 import me.meeshy.sdk.model.relation.RelationShareGrant
 import me.meeshy.sdk.model.relation.TalkieBlockBody
+import me.meeshy.sdk.model.relation.TogetherBlockBody
 import me.meeshy.sdk.model.relation.BringSent
 import me.meeshy.sdk.model.relation.BringStoppedEvent
 import me.meeshy.sdk.model.relation.RelationPersonSettings
@@ -146,6 +147,7 @@ class BringRepository internal constructor(
             when (setting) {
                 RelationReceptionSetting.BRING -> relations.setBringBlocked(userId, BringBlockBody(blocked))
                 RelationReceptionSetting.TALKIE -> relations.setTalkieBlocked(userId, TalkieBlockBody(blocked))
+                RelationReceptionSetting.TOGETHER -> relations.setTogetherBlocked(userId, TogetherBlockBody(blocked))
             }
         } as? NetworkResult.Success
         )?.data
