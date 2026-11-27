@@ -857,6 +857,88 @@ final class SharedLocationServedSourceTests: XCTestCase {
         XCTAssertNil(sut.center.entry(for: bob))
     }
 
+    // MARK: - Un refus certain garde le démarrage publié d'ici (#20416, point 2)
+
+    func test_aCertainRefusal_ofAnAnswerSentWithTheKey_keepsThePublishedStart() async {
+        let verdicts: [SharedLocationSendOutcome] = [.invalid, .fixedPoint, .startedElsewhere]
+        for outcome in verdicts {
+            let store = FakeSharedLocationRosterStore()
+            store.publishedStart = "S0"
+            let sut = makeSUT(store: store)
+            sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+            let asked = await question(sut)
+            sut.emitter.startVerdict = .refused(outcome)
+
+            _ = await confirm(sut, asked)
+
+            XCTAssertEqual(store.publishedStart, "S0", "\(outcome)")
+        }
+    }
+
+    func test_aDoubtfulRefusal_stillForgetsThePublishedStart() async {
+        let store = FakeSharedLocationRosterStore()
+        store.publishedStart = "S0"
+        let sut = makeSUT(store: store)
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1, acceptsExpectedStart: true)
+        let asked = await question(sut)
+        sut.emitter.startVerdict = .refused(.unavailable)
+
+        _ = await confirm(sut, asked)
+
+        XCTAssertNil(store.publishedStart)
+    }
+
+    // MARK: - La réponse se relit APRÈS le relevé (#20308)
+
+    func test_aPointRelaunchedElsewhereDuringTheFix_sendsNothing_andAsksAgain() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
+        let asked = await question(sut)
+        let relaunched = served([alice, carol], source: .manual, startedAt: s2)
+        sut.fixes.onCurrentFix = { [served = sut.served] in served.snapshot = relaunched }
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem?.pointReplacement, SharedLocationPointReplacement(startedAt: s2, recipientIds: [alice, carol]))
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_anAnswer_takesThePositionBeforeRereadingTheServedShare() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
+        let asked = await question(sut)
+        var readsAtFix: Int?
+        sut.fixes.onCurrentFix = { [served = sut.served] in readsAtFix = served.reads }
+        let readsBefore = sut.served.reads
+
+        _ = await confirm(sut, asked)
+
+        XCTAssertEqual(readsAtFix, readsBefore)
+        XCTAssertEqual(sut.served.reads, readsBefore + 1)
+    }
+
+    func test_anAnswer_whenTheLocationIsDenied_sendsNothing() async {
+        let sut = makeSUT()
+        sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
+        let asked = await question(sut)
+        sut.fixes.result = .denied
+
+        let problem = await confirm(sut, asked)
+
+        XCTAssertEqual(problem, .locationDenied)
+        XCTAssertTrue(sut.emitter.starts.isEmpty)
+    }
+
+    func test_theAudience_neverNamesAnEmptyName_andTrimsTheOthers() {
+        let asked = SharedLocationPointReplacement(startedAt: nil, recipientIds: [alice, bob])
+        let known = [(userId: alice, name: "  "), (userId: alice, name: " Alice "), (userId: bob, name: "")]
+
+        let audience = asked.audience(knownNames: known)
+
+        XCTAssertEqual(audience.named, ["Alice"])
+        XCTAssertEqual(audience.others, 1)
+    }
+
     func test_anInvalidWithoutTheKey_readsNothingMore() async {
         let sut = makeSUT()
         sut.served.snapshot = served([alice], source: .manual, startedAt: s1)
