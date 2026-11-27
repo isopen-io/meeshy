@@ -26,6 +26,8 @@ public data class NotebookRecipe(
     val frameId: String? = null,
     /** Selfie : oui ; galerie : non ; carte seule : rien. */
     val mirror: Boolean? = null,
+    /** Le lien d'invitation était sur la carte (iOS `showLink`). */
+    val showLink: Boolean? = null,
 )
 
 @Serializable

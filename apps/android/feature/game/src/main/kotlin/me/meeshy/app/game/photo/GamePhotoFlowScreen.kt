@@ -50,6 +50,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -62,6 +63,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -128,6 +130,9 @@ fun GamePhotoFlowDialog(moment: GamePhotoMoment, notebook: GamePhotoNotebooking,
     val haptics = rememberGameHaptics()
     val text = photoCanvasText(moment)
     val capture = remember(moment) { GamePhotoCanvasCapture() }
+    val referralLinks = rememberReferralLinks()
+    val referralText = rememberPhotoReferralText()
+    val rightToLeft = LocalLayoutDirection.current == LayoutDirection.Rtl
     val session = remember(moment) {
         GamePhotoSession(
             moment = moment,
@@ -137,9 +142,14 @@ fun GamePhotoFlowDialog(moment: GamePhotoMoment, notebook: GamePhotoNotebooking,
             notebook = notebook,
             gallery = MediaStoreCaptureGallery(context),
             onStrike = { haptics.play(GameHapticPattern.strikeInPlace) },
+            referralLinks = referralLinks,
+            referralText = referralText,
+            rightToLeft = rightToLeft,
         )
     }
     DisposableEffect(session) { onDispose { session.camera.stop() } }
+    // Le lien se lit dès l'ouverture, pour que la carte le porte quand la photo se frappe ; rien ne se crée ici.
+    LaunchedEffect(session) { session.prepareReferral() }
     val scope = rememberCoroutineScope()
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         scope.launch { session.chooseSelfie() }
@@ -161,7 +171,7 @@ fun GamePhotoFlowDialog(moment: GamePhotoMoment, notebook: GamePhotoNotebooking,
                 if (granted) scope.launch { session.chooseSelfie() } else permission.launch(Manifest.permission.CAMERA)
             },
             onGallery = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-            onShare = { bytes -> scope.launch { GamePhotoSharer.share(context, bytes, moment.id, context.getString(R.string.game_photo_share)) } },
+            onShare = { out -> scope.launch { GamePhotoSharer.share(context, out.bytes, moment.id, context.getString(R.string.game_photo_share), out.text) } },
         )
     }
 }
@@ -178,7 +188,7 @@ internal fun GamePhotoFlow(
     onClose: () -> Unit,
     onSelfie: () -> Unit,
     onGallery: () -> Unit,
-    onShare: (ByteArray) -> Unit,
+    onShare: (PhotoShareOut) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
     val state = session.state
@@ -386,7 +396,7 @@ private fun Striking(session: GamePhotoSession) {
 // 4. Le résultat
 
 @Composable
-private fun ResultStep(session: GamePhotoSession, kept: Boolean?, onShare: (ByteArray) -> Unit) {
+private fun ResultStep(session: GamePhotoSession, kept: Boolean?, onShare: (PhotoShareOut) -> Unit) {
     val scope = rememberCoroutineScope()
     val composed = session.composed
     val preview = stringResource(R.string.game_photo_preview, session.text.title)
@@ -403,6 +413,9 @@ private fun ResultStep(session: GamePhotoSession, kept: Boolean?, onShare: (Byte
                 modifier = Modifier.weight(1f).padding(horizontal = MeeshySpacing.lg).clip(RoundedCornerShape(MeeshyRadius.lg)),
             )
             FormatPicker(session.squareFormat, session::chooseFormat)
+            if (session.offersLinkChoice) {
+                PhotoLinkToggle(session.linkOnCard) { shown -> scope.launch { session.setLinkOnCard(shown) } }
+            }
         }
         session.notice?.let { notice ->
             Text(
@@ -433,7 +446,7 @@ private fun ResultStep(session: GamePhotoSession, kept: Boolean?, onShare: (Byte
                 }
             }
             ResultButton(stringResource(R.string.game_photo_share), MeeshyIcons.Share, PHOTO_SHARE_TAG, Modifier.weight(1f)) {
-                session.shareBytes()?.let(onShare)
+                scope.launch { session.prepareShare()?.let(onShare) }
             }
             ResultButton(
                 stringResource(if (kept == true) R.string.game_photo_kept else R.string.game_photo_keep),
@@ -518,7 +531,7 @@ private val PhotoNotice.text: Int
  * `shared-media/` servi par le `FileProvider` de l'application ; le fichier précédent est remplacé, jamais accumulé.
  */
 internal object GamePhotoSharer {
-    suspend fun share(context: Context, bytes: ByteArray, momentId: String, chooserTitle: String) {
+    suspend fun share(context: Context, bytes: ByteArray, momentId: String, chooserTitle: String, text: String? = null) {
         val file = withContext(Dispatchers.IO) {
             val directory = File(context.cacheDir, "shared-media").apply { mkdirs() }
             directory.listFiles()?.forEach { it.delete() }
@@ -527,6 +540,8 @@ internal object GamePhotoSharer {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val send = Intent(Intent.ACTION_SEND).setType("image/jpeg").putExtra(Intent.EXTRA_STREAM, uri)
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        // Le lien en clair, pour qu'il se copie (iOS `shareItems`) : seulement quand la carte le porte.
+        if (text != null) send.putExtra(Intent.EXTRA_TEXT, text)
         runCatching {
             context.startActivity(
                 Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION),
