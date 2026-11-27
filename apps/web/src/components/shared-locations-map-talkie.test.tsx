@@ -178,7 +178,8 @@ describe('appui long sur l’épingle d’un Proche ou d’un Sang ⇒ talkie (#
     expect(selected).toEqual([]);
   });
 
-  test.each([['FRIEND' as const], [undefined]])('sous Proche (%p), l’appui long ne fait rien et rien ne le propose', (circle) => {
+  ([['Ami', 'FRIEND'], ['sans cercle servi', undefined]] as const).forEach(([title, circle]) =>
+    test(`sous Proche (${title}), l’appui long ne fait rien et rien ne le propose`, () => {
     const talkie = recorder();
     const selected: string[] = [];
     const button = buttonOf(mapOf({ talkie: talkie.talkie, ...(circle === undefined ? {} : { circle }), selected }));
@@ -189,6 +190,15 @@ describe('appui long sur l’épingle d’un Proche ou d’un Sang ⇒ talkie (#
     expect(talkie.timers.pending).toEqual([]);
     expect(talkie.pressed).toEqual([]);
     expect(selected).toEqual([ADA]);
+    expect(button.textContent).not.toContain(translateCircles('fr', 'talkie.send.hold.a11y', { name: 'Ada' }));
+    }),
+  );
+
+  test('une personne refusée par le serveur ne se propose plus', () => {
+    const talkie = recorder();
+    const button = buttonOf(mapOf({ talkie: { ...talkie.talkie, offers: () => false }, circle: 'CLOSE', selected: [] }));
+    pointer(button, 'pointerdown');
+    expect(talkie.timers.pending).toEqual([]);
     expect(button.textContent).not.toContain(translateCircles('fr', 'talkie.send.hold.a11y', { name: 'Ada' }));
   });
 

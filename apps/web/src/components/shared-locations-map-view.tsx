@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 
 import type { UserPresenceStatus } from '@meeshy/shared/utils/user-presence';
@@ -11,6 +11,10 @@ import { spreadPins, type ScreenPoint } from '@/lib/map/fan';
 import { metersToPixels, screenPoint, tilesCovering, TILE_SIZE, type MapView } from '@/lib/map/slippy';
 import { appQueryClient } from '@/lib/api/query-client';
 import { pinLifeLabel, usePinLife } from '@/lib/shared-locations/pin-life';
+import { usePhoneUnreachableLasting } from '@/lib/phone-reachability/use-phone-reachability';
+import { createLongHold, type HoldSchedule, type LongHold } from '@/lib/talkie/talkie-long-hold';
+import type { TalkiePressMode } from '@/lib/talkie/talkie-sender';
+import { talkieOfferedAt } from '@/routes/user-profile-talkie';
 
 import { Avatar } from './avatar';
 import { MeeshyAvatarMorph } from './kit/meeshy-avatar-morph';
@@ -40,6 +44,10 @@ import { PhoneCallGlyph } from './phone-call-glyph';
  * - **Chaque épingle dit ce que vit la personne** (#19888, iso iOS #19885) : son écoute, sa batterie, son téléphone
  *   injoignable, « En appel » et l'alerte d'inactivité, lus dans leur cache tels que servis à ce lecteur, et dits
  *   dans le nom de l'épingle. Rien de servi : l'épingle d'avant.
+ * - **Appui long sur un Proche ou un Sang ⇒ talkie** (#19888, iso `TalkieLongHoldModifier` iOS #19885) : un toucher
+ *   choisit toujours la personne ; tenu au-delà de 350 ms, l'appui ouvre la voix, qui part tant que le doigt (ou
+ *   Espace) reste posé, et le relâcher ne choisit personne. Le cercle est celui que le SERVEUR a jugé pour moi ; sous
+ *   Proche, sans cercle servi ou sans talkie tenu par l'hôte, l'épingle d'avant. Le serveur rejuge à chaque appui.
  * - **Pure** : l'état (vue, positions, noms) est tenu par `shared-locations-map.tsx` ; la vie des personnes, par
  *   les caches de leurs signaux, que la carte observe sans jamais rien demander.
  */
@@ -72,6 +80,17 @@ export type SharedLocationsMapViewProps = {
   readonly detail?: ReactNode;
   /** Le cache des signaux de vie (batterie, téléphone, appel, inactivité) ; celui de l'app par défaut. */
   readonly client?: QueryClient;
+  /** Le talkie que tient l'hôte (#19888) ; absent, l'appui long ne fait rien. */
+  readonly talkie?: SharedLocationsMapTalkie | undefined;
+};
+
+/** Ce qu'une épingle demande au talkie de l'hôte : parler à quelqu'un, se taire. `schedule` : le minuteur du seuil. */
+export type SharedLocationsMapTalkie = {
+  readonly press: (userId: string, mode: TalkiePressMode) => void;
+  readonly release: () => void;
+  /** Le talkie a été refusé à cette personne (`TALKIE_NOT_ALLOWED`) : son épingle ne le propose plus. */
+  readonly offers?: (userId: string) => boolean;
+  readonly schedule?: HoldSchedule;
 };
 
 const TILE_URL = (z: number, x: number, y: number): string => `https://tile.openstreetmap.org/${z}/${x}/${y}.png`;
@@ -122,6 +141,53 @@ function PinLifeMarks({ call, inactivity }: { readonly call: boolean; readonly i
   );
 }
 
+const HOLD_KEY = ' ';
+
+/** L'appui long de l'épingle : un minuteur par épingle, fermé quand elle s'en va. */
+function usePinHold(talkie: SharedLocationsMapTalkie | undefined, userId: string, mode: TalkiePressMode): { readonly hold: LongHold; readonly holding: boolean } {
+  const [holding, setHolding] = useState(false);
+  const latest = useRef({ talkie, userId, mode });
+  latest.current = { talkie, userId, mode };
+  const schedule = talkie?.schedule;
+  const hold = useMemo(
+    () =>
+      createLongHold({
+        onHold: () => {
+          setHolding(true);
+          latest.current.talkie?.press(latest.current.userId, latest.current.mode);
+        },
+        onRelease: () => {
+          setHolding(false);
+          latest.current.talkie?.release();
+        },
+        ...(schedule === undefined ? {} : { schedule }),
+      }),
+    [schedule],
+  );
+  useEffect(() => () => hold.cancel(), [hold]);
+  return { hold, holding };
+}
+
+/** Les gestes du talkie, posés sur le conteneur de l'épingle : le bouton garde son toucher, que l'appui long avale. */
+const holdHandlers = (hold: LongHold) => ({
+  onPointerUp: () => void hold.up(),
+  onPointerCancel: () => hold.cancel(),
+  onPointerLeave: () => hold.cancel(),
+  onBlur: () => hold.cancel(),
+  onKeyDown: (event: { readonly key: string; readonly repeat: boolean }) => {
+    if (event.key === HOLD_KEY && !event.repeat) hold.down();
+  },
+  onKeyUp: (event: { readonly key: string }) => {
+    if (event.key === HOLD_KEY) void hold.up();
+  },
+  onClickCapture: (event: { stopPropagation(): void; preventDefault(): void }) => {
+    if (!hold.swallowsTap()) return;
+    event.stopPropagation();
+    event.preventDefault();
+  },
+  onContextMenu: (event: { preventDefault(): void }) => event.preventDefault(),
+});
+
 function Pin({
   location,
   text,
@@ -132,9 +198,11 @@ function Pin({
   onSelect,
   language,
   client,
+  talkie,
 }: {
   readonly language: InterfaceLanguage;
   readonly client: QueryClient;
+  readonly talkie: SharedLocationsMapTalkie | undefined;
   readonly location: SharedLocation;
   readonly text: string;
   readonly person: SharedLocationPerson;
@@ -145,6 +213,9 @@ function Pin({
   readonly onSelect: ((userId: string) => void) | undefined;
 }) {
   const life = usePinLife(location.userId, language, client);
+  const mode: TalkiePressMode = usePhoneUnreachableLasting(location.userId, client) ? 'voice-message' : 'talkie';
+  const talks = talkie !== undefined && onSelect !== undefined && talkieOfferedAt(location.circle) && (talkie.offers?.(location.userId) ?? true);
+  const { hold, holding } = usePinHold(talks ? talkie : undefined, location.userId, mode);
   const at = screenPoint(location, view);
   if (!isOnMap(at, view)) return null;
   const blur = Math.round(metersToPixels(location.radiusMeters, location.latitude, view.zoom) * 2);
@@ -168,13 +239,30 @@ function Pin({
       ) : null}
       <span
         data-shared-location-pin={location.userId}
-        onPointerDown={keepsItsTouch}
-        className="absolute grid place-items-center"
-        style={{ left: pinAt.x - PIN_SIZE / 2, top: pinAt.y - PIN_SIZE / 2, width: PIN_SIZE, height: PIN_SIZE, zIndex: selected ? 1 : 0 }}
+        data-talkie-holding={holding ? '' : undefined}
+        onPointerDown={(event) => {
+          keepsItsTouch(event);
+          if (talks) hold.down();
+        }}
+        {...(talks ? holdHandlers(hold) : {})}
+        className="absolute grid place-items-center transition-transform duration-150 motion-reduce:transition-none"
+        style={{
+          left: pinAt.x - PIN_SIZE / 2,
+          top: pinAt.y - PIN_SIZE / 2,
+          width: PIN_SIZE,
+          height: PIN_SIZE,
+          zIndex: selected || holding ? 1 : 0,
+          transform: holding ? 'scale(1.12)' : undefined,
+          touchAction: talks ? 'none' : undefined,
+          WebkitTouchCallout: talks ? 'none' : undefined,
+        }}
       >
         <PinLifeMarks call={life.call !== undefined} inactivity={life.inactivity !== undefined} />
         <MeeshyMapPin
           label={pinLifeLabel(text, life)}
+          {...(talks
+            ? { hint: translateCircles(language, mode === 'voice-message' ? 'talkie.send.leaveVoice.a11y' : 'talkie.send.hold.a11y', { name: person.name ?? translateCircles(language, 'positions.someone') }) }
+            : {})}
           isSelected={selected}
           precision="exact"
           {...(location.circle === undefined
@@ -219,7 +307,7 @@ function Row({ userId, text, language, client }: { readonly userId: string; read
   );
 }
 
-export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient }: SharedLocationsMapViewProps) {
+export function SharedLocationsMapView({ language, locations, view, personOf, formatTime, online, status, onRetry, onZoom, onPan, selectedUserId = null, onSelect, detail = null, client = appQueryClient, talkie }: SharedLocationsMapViewProps) {
   const t = (key: PlainKey): string => translateCircles(language, key);
   const drag = useRef<{ readonly x: number; readonly y: number } | null>(null);
   const rows = locations.map((location) => ({ location, person: personOf(location.userId) })).map((row) => ({ ...row, text: rowText({ language, ...row, formatTime }) }));
@@ -295,7 +383,7 @@ export function SharedLocationsMapView({ language, locations, view, personOf, fo
           />
         ))}
         {rows.map(({ location, person, text }) => (
-          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} language={language} client={client} />
+          <Pin key={location.userId} location={location} text={text} person={person} view={view} pinAt={placed.get(location.userId) ?? screenPoint(location, view)} selected={selectedUserId === location.userId} onSelect={onSelect} language={language} client={client} talkie={talkie} />
         ))}
         <div className="absolute right-2 top-2 grid gap-2" onPointerDown={keepsItsTouch}>
           {zoomButton(1, 'positions.zoomIn', '+')}
