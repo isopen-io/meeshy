@@ -28,6 +28,7 @@ const cached: AppPreferences = {
   contactActivityEnabled: true,
   bringEnabled: true,
   bloodProximityEnabled: true,
+  togetherEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -90,6 +91,17 @@ describe('performPreferenceEdit', () => {
       answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
     });
     expect(await performPreferenceEdit({ patch: { showReadReceipts: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(read()).toEqual(cached);
+  });
+
+  test('« Recevoir les invitations ensemble » refusé : la bascule revient, et seule SA clé est partie (#17990)', async () => {
+    const { deps, calls, read } = depsWith({
+      online: true,
+      seed: cached,
+      answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
+    });
+    expect(await performPreferenceEdit({ patch: { togetherEnabled: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(calls[0]?.body).toEqual({ notification: { togetherEnabled: false } });
     expect(read()).toEqual(cached);
   });
 
