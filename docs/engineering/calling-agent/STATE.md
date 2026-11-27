@@ -2842,3 +2842,34 @@ socket jusqu'au client.
 0. Si la PR #20710 n'est pas fusionnée : lire la relance de `Tests · web` sur le run 46036890384. Si elle est verte, ou si `dev` est revenue au vert entre-temps, fusionner `dev` dans la branche, puis la PR.
 1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20715** (SDK), **#20335** (iOS, à coordonner avec la routine iOS).
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 82 — 2026-11-27
+
+- **Base** : `origin/dev` @ `467263ce2`. La PR #20710 du cycle 80 (#20459) était ouverte, bloquée par un rouge de `dev` (`Tests · shared`, `swift-socket-payload-shape-gate`).
+- **Branche** : `claude/determined-volta-gjaeas`, **PR #20727, fusionnée** (`a6d6fc9da1`).
+- **Objectif** : **#20715**. La pilule de verre du kit iOS mesure la grâce de son retrait sur l'horloge monotone. C'est le jumeau SDK du lot #20300.
+- **Coordination** : aucune branche vivante n'écrivait `MeeshyGlassPill*`.
+- **Livré** (`packages/MeeshySDK/` seulement, 3 fichiers, +69/−10) :
+  - `MeeshyGlassPillStow.swift` : `stowedAt` et `clock` deviennent des `ContinuousClock.Instant`. Plus aucun `Date()`. Durée, animations, `hidden()`, `onRevive`, hit-testing et accessibilité sont inchangés.
+  - `MeeshyGlassPillPresenceRule` : rangée, la pilule n'accepte un toucher que si `0 ≤ stowedFor < durée`. Un intervalle négatif ou NaN vaut donc un retrait achevé. Nouvelle fonction pure `stowedFor(since:now:)`, qui rend ∞ quand la pilule n'est pas rangée.
+  - Aucun appelant existant ne change de résultat. Le chrome d'appel de l'application avait déjà son garde `>= 0` (#20300). Les vecteurs K10 (`docs/product/kit/K10-MeeshyGlassPill.vectors.json`) ne sont lus que par iOS, et restent vrais.
+- **Tests** (Swift Testing, `MeeshyGlassPillTests`) :
+  - `presence_acceptsTouches_unreliableInterval` : négatif, ±∞, NaN et bornes, avec ou sans « réduire les animations ».
+  - `presence_stowedFor_monotonic` : `nil`, 0, +100 ms, +250 ms et −50 ms.
+  - `source_stowReadsTheMonotonicClock` : garde de texte.
+  - Garde existante renforcée.
+  - Le rouge se raisonne par mutation (7 mutations recensées). Le conteneur n'a pas de Swift.
+  - **`sdk-tests.yml` run 46065301468 sur `7e4cb886ac` : vert** (build, 6 tranches, 7 717 tests passés, 0 échec). Les témoins ne sont pas nommés dans la console, qui tourne en `-quiet`, et le proxy refuse l'artefact xcresult. Leur passage se déduit de la sélection de la tranche 6 et de son zéro échec.
+  - Gardes iOS sur les arbres fusionnés : house rules (42), cohésion, inscription (2 076) et couleurs, toutes ok.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves. Les réserves sont la compilation, prouvée depuis par la CI, et une source double, ouverte dans **#20726**. Elle a vérifié la disponibilité sur iOS 16, l'isolation Swift 6 et l'inventaire des appelants.
+- **PR #20710 (cycle 80)** :
+  - `dev` (`7e0ba3f7c0`, qui contient le correctif #20691 de la garde shared) a été fusionnée dans la branche, ce qui donne `4e42d0f96f`.
+  - En local : les 3 suites du lot passent (36 tests sur 36), et `tsc` sort en 0.
+  - `ci.yml` run 46067733063 : encore en cours à l'échéance, sans aucun rouge. Les tranches passerelle 1 à 3, `shared`, web et Trivy sont vertes.
+- **Limites** : rien n'a été vérifié sur appareil. Les files de runners imposent toujours plus d'une heure par run.
+
+### Cycle suivant : par où reprendre
+
+0. **PR #20710** : lire le Verdict du run 46067733063. S'il est vert, fusionner `origin/dev` dans la branche (règle #18654 ; les commits récents ne touchent pas les fichiers d'appel), puis fusionner la PR. S'il est rouge, comparer avec la tête de `dev`.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20726** (une seule source de la grâce), **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
