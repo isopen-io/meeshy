@@ -91,7 +91,7 @@ describe('ajouter des membres à la création', () => {
 
 describe('ce que la création remet au détail', () => {
   test('la phrase de l’invitation est remise UNE fois, puis oubliée', () => {
-    handInviteStatus('c-new', inviteStatusOf('fr', { status: 'done', invited: 2, already: 0, refused: 1, failed: 0 }));
+    handInviteStatus('c-new', inviteStatusOf('fr', { status: 'done', invited: 2, already: 0, refused: 1, failed: 0, throttled: 0 }));
     expect(takeInviteStatus('c-new')).toBe('2 personnes ont rejoint la communauté. Certaines personnes n’ont pas pu être ajoutées.');
     expect(takeInviteStatus('c-new')).toBeNull();
   });
