@@ -6,6 +6,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
 import type { CommunityMemberAnnounce } from '../community-member-broadcast';
 import { USABLE_ACCOUNT_WHERE } from '../relations/usableAccount';
+import type { CommunityAdditionVerdict } from '../../utils/community-addition-budget';
 
 const logger = enhancedLogger.child({ module: 'CommunitySalonAdoption' });
 
@@ -55,11 +56,38 @@ export async function admitSalonOccupants(
   request: SalonAdoptionRequest,
   announce: CommunityMemberAnnounce,
 ): Promise<readonly string[]> {
+  const admission = await admitSalonOccupantsUnderBudget(prisma, request, announce, async () => ALLOWED);
+  return admission.kind === 'admitted' ? admission.outsiders : [];
+}
+
+/** Ce que la bascule fait de ses occupants : ils entrent (et les autres sortiront), ou le budget refuse tout. */
+export type SalonOccupantAdmission =
+  | { readonly kind: 'admitted'; readonly outsiders: readonly string[] }
+  | { readonly kind: 'refused'; readonly verdict: CommunityAdditionVerdict };
+
+/** Débite les personnes que la bascule va faire entrer, AVANT toute écriture. */
+export type SalonOccupantBudget = (entrants: readonly string[]) => Promise<CommunityAdditionVerdict>;
+
+const ALLOWED: CommunityAdditionVerdict = { allowed: true, retryAfter: 0 };
+
+/**
+ * `admitSalonOccupants` sous le budget des ajouts sans accord (#20694) : faire
+ * entrer les occupants des salons, c'est les ajouter à la communauté. Le budget
+ * se paie au nombre d'ENTRANTS (un ancien membre ne revient pas, un compte non
+ * ajoutable sort : ni l'un ni l'autre n'est ajouté) ; refusé, rien n'est écrit
+ * et la bascule ne se fait pas.
+ */
+export async function admitSalonOccupantsUnderBudget(
+  prisma: SalonAdoptionPrisma,
+  request: SalonAdoptionRequest,
+  announce: CommunityMemberAnnounce,
+  spend: SalonOccupantBudget,
+): Promise<SalonOccupantAdmission> {
   const salons = await prisma.conversation.findMany({
     where: { communityId: request.communityId },
     select: { id: true },
   });
-  if (salons.length === 0) return [];
+  if (salons.length === 0) return { kind: 'admitted', outsiders: [] };
 
   const occupations = await prisma.participant.findMany({
     where: { conversationId: { in: salons.map((salon) => salon.id) }, isActive: true, type: 'user' },
@@ -69,7 +97,7 @@ export async function admitSalonOccupants(
     .filter((o) => participationEstVivante(o))
     .flatMap((o) => (o.userId ? [o.userId] : [])))]
     .filter((userId) => userId !== request.createdBy);
-  if (occupants.length === 0) return [];
+  if (occupants.length === 0) return { kind: 'admitted', outsiders: [] };
 
   const rows = await prisma.communityMember.findMany({
     where: { communityId: request.communityId, userId: { in: occupants } },
@@ -80,10 +108,12 @@ export async function admitSalonOccupants(
   );
   const former = occupants.filter((userId) => rowOf.has(userId) && rowOf.get(userId)?.isActive !== true);
   const strangers = occupants.filter((userId) => !rowOf.has(userId));
-  if (strangers.length === 0) return former;
+  if (strangers.length === 0) return { kind: 'admitted', outsiders: former };
 
   const addable = await addableUnderCreator(prisma, request.createdBy, strangers);
   const admitted = strangers.filter((userId) => addable.has(userId));
+  const verdict = admitted.length > 0 ? await spend(admitted) : ALLOWED;
+  if (!verdict.allowed) return { kind: 'refused', verdict };
   await applyCommunityAdmission(prisma, request.communityId, {
     kind: 'admitted',
     reactivations: [],
@@ -91,7 +121,7 @@ export async function admitSalonOccupants(
   }, announce);
   // #18052 — qui entre l'apprend, au nom du créateur dont l'autorité l'a fait entrer.
   scheduleCommunityAddedAnnouncement(prisma, { communityId: request.communityId, actorId: request.createdBy, recipientIds: admitted });
-  return [...former, ...strangers.filter((userId) => !addable.has(userId))];
+  return { kind: 'admitted', outsiders: [...former, ...strangers.filter((userId) => !addable.has(userId))] };
 }
 
 /**
