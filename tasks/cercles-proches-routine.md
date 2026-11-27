@@ -2040,6 +2040,15 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
   dès que #20514 est fusionnée ou abandonnée.
 
+## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
+
+- Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
+  (867e62f8b, plus complet : appel et inactivité en plus). Selon la règle « celui qui a payé le second cède », ce run
+  a repris la version de `dev` et n'a gardé que ce qu'elle ne faisait pas.
+- Lot : #20658. La ligne de la liste des positions dit la même vie que le nom de l'épingle (`usePinLife` /
+  `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
+- Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.
+
 ## 2026-11-27 — réveil de 14 h : une alerte de proximité entre Sangs ne survit pas (#20542)
 
 - Reprise : #20417 (iOS de #20249) fusionnée le 23/11, #20463 (Android de #19883) aussi. Aucune PR de la routine
@@ -2051,5 +2060,6 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   titulaire. Lignes supprimées puis annoncées (`notification:deleted`, révocation push). Index TTL PARTIEL sur
   `Notification.expiresAt` au seul type `blood_proximity` (`2026-11-27-notification-blood-proximity-ttl.mongodb.js`) :
   à jouer sur le staging ; en production, feu vert du porteur et sauvegarde vérifiée d'abord.
+- PR : #20698 (vers `dev`). Suivis de l'audit : #20697.
 - Prochain lot : #20514 fusionnée ou abandonnée ⇒ iOS de #20416 / #20308, #20054, #20056 ; sinon un lot web/serveur
   du jalon 2 (#20540 suites, #19888).
