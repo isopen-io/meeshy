@@ -43,8 +43,13 @@ jest.mock('../../../../services/PushNotificationService', () => ({
 }));
 
 const retraits: Array<Record<string, unknown>> = [];
+const retraitEnPanne = { active: false };
 jest.mock('../../../../services/bloodLocation/bloodProximityRetraction', () => ({
-  bloodProximityRetractorOf: () => async (scope: Record<string, unknown>) => { retraits.push(scope); return 0; },
+  bloodProximityRetractorOf: () => async (scope: Record<string, unknown>) => {
+    if (retraitEnPanne.active) throw new Error('mongo injoignable');
+    retraits.push(scope);
+    return 0;
+  },
 }));
 
 import { relationsRoutes } from '../../../../routes/relations';
@@ -62,7 +67,7 @@ const appli = (options: BringAppOptions = { liens: [lien('CLOSE', 'CLOSE')] }): 
 const regler = (app: BringTestApp, body: unknown) => app.call('PUT', `/api/v1/relations/${MOI}/settings`, body, AUTRE);
 const lire = (app: BringTestApp) => app.call('GET', `/api/v1/relations/${MOI}/settings`, undefined, AUTRE);
 
-beforeEach(() => { cache.clear(); pushes.length = 0; retraits.length = 0; freezeClock(NOW); });
+beforeEach(() => { cache.clear(); pushes.length = 0; retraits.length = 0; retraitEnPanne.active = false; freezeClock(NOW); });
 afterEach(() => thawClock());
 
 describe('#13935 — talkieBlocked', () => {
@@ -395,6 +400,20 @@ describe('#20542 — retirer la proximité efface chez l\'autre les alertes qui 
     await app.close();
 
     expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ proximityShared: false });
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
+  });
+
+  it('un retrait en panne répond en erreur, et le rejeu, qui redemande le retrait, le solde', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    retraitEnPanne.active = true;
+    const enPanne = await regler(app, { proximityShared: false });
+    retraitEnPanne.active = false;
+    const rejeu = await regler(app, { proximityShared: false });
+    await app.close();
+
+    expect(enPanne.status).toBeGreaterThanOrEqual(500);
+    expect(rejeu.status).toBe(200);
     expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
   });
 
