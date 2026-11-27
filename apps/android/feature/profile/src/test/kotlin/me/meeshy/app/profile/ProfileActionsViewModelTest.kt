@@ -446,7 +446,7 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.circle).isNull()
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test
@@ -474,7 +474,7 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.FRIEND)
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test
@@ -507,7 +507,7 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.circle).isNull()
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test
@@ -524,10 +524,10 @@ class ProfileActionsViewModelTest {
         assertThat(vm.state.value.circle?.level).isEqualTo(RelationLevel.ACQUAINTANCE)
         assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
         reply.complete(NetworkResult.Success(circleLink("u2", RelationLevel.ACQUAINTANCE)))
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test
@@ -542,7 +542,7 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test
@@ -557,7 +557,7 @@ class ProfileActionsViewModelTest {
 
         assertThat(vm.state.value.toolLevel).isEqualTo(RelationLevel.BLOOD)
         assertThat(vm.state.value.receptionsOnProfile)
-            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE).inOrder()
+            .containsExactly(RelationReceptionSetting.BRING, RelationReceptionSetting.TALKIE, RelationReceptionSetting.TOGETHER).inOrder()
     }
 
     @Test

@@ -512,6 +512,9 @@ const NOTIFICATION_TOGGLES = [
   /* « Recevoir les invitations « ensemble » » (#17990) — l'interrupteur GLOBAL que la passerelle
      lit avant d'inviter à regarder ou écouter ensemble ; la coupure par personne reste sur la fiche. */
   { key: 'togetherEnabled', label: 'settings.notif.together', caption: 'settings.notif.together.info', icon: { set: 'socle', name: 'users' }, tint: 'var(--color-ios-brand)' },
+  /* « Recevoir le talkie » (#20700) — l'interrupteur GLOBAL que la passerelle lit avant
+     d'ouvrir une prise de parole ; la coupure par personne reste sur la fiche. */
+  { key: 'talkieEnabled', label: 'settings.notif.talkie', caption: 'settings.notif.talkie.info', icon: { set: 'socle', name: 'microphone' }, tint: 'var(--color-ios-brand)' },
 ] as const satisfies readonly ToggleSpec[];
 
 type PreferenceSectionProps = {

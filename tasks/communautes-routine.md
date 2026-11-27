@@ -945,6 +945,16 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi #20694 (même milestone) : rattacher un salon à une communauté privée et passer une communauté en privée font entrer tous les occupants sans débit ; entrées une par une (`memberAdmission`, débannissement, partage, lien, appel) ; budget non rendu si la création échoue plus loin.
 - Prochain lot recommandé : #20694, puis #19813.
 
+## 2026-11-27 — réveil 13:01 UTC (bis, en parallèle du précédent)
+
+- Le réveil du 2026-11-25 s'est arrêté sur une erreur d'API avant d'écrire quoi que ce soit (aucune branche, aucune PR).
+- Début du run : aucune PR de la routine ouverte. #20464 est pris par deux branches poussées à 13:03 et 13:04 (`claude/communautes-budget-salon`, `claude/communautes-salon-budget`) : cédé. #19811 et #19813 sont `décision-produit` : non pris.
+- Lot : #16858 (jumelle de la partie communauté de #18120) — iOS jetait la portée COMMUNAUTÉ de `user:preferences-updated` (charge sans `conversationId` ni `category`, tombée dans le décodeur catégorie où `category` est requis ⇒ `decode DROP`).
+- SDK : `CommunityPreferencesUpdatedEvent` + `CommunityPreferencesChannel` (`Sockets/CommunityPreferencesChannel.swift`, hors de `MessageSocketManager` comme `CommunityUpdateChannel`) ; la route discrimine conversation → communauté → catégorie. Option « nom d'événement neuf » écartée : elle demande un double envoi côté passerelle pour les anciens clients, alors que discriminer sur `communityId` ne touche ni le fil ni la passerelle.
+- Témoin : `SocketInboundRouteTableTests.test_userPreferencesUpdated_communityScope_reachesTheCommunityPreferencesChannel` (charge réelle PUT et DELETE ; ni la portée catégorie ni la portée conversation ne reçoivent la trame, la catégorie n'atteint pas le canal communauté). iOS ne compile pas en conteneur : preuve par `sdk-tests.yml` / `ios.yml` sur la PR.
+- Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts.
+- Reste : iOS n'a encore AUCUN consommateur des préférences de communauté (pas de lecture de `/user-preferences/communities`) — le canal est prêt pour lui. Les deux pièges `author` requis d'`APIPost` / `APIPostComment` (#18120) restent ouverts.
+
 ## 2026-11-27 — réveil 13:38 UTC
 
 - Début du run : #20681 (#20464) fusionnée dans `dev` (`0dc913924`) ; #20682 (publications Android) ouverte et poussée il y a moins d'une minute par une autre session : cédée. Aucune branche vivante sur `routes/communities/core.ts`, `settings.ts` ni `communitySalonAdoption.ts`.

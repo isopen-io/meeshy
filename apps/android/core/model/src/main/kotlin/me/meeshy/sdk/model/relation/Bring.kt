@@ -66,7 +66,7 @@ public data class BringStoppedEvent(
 
 /**
  * `GET|PUT /relations/:userId/settings` — les réglages que JE pose pour l'autre. Deux familles sont lues : les préférences de
- * RÉCEPTION (`bringBlocked`, #13936 ; `talkieBlocked`, #13935), ouvertes par défaut, et le partage de MON écoute
+ * RÉCEPTION (`bringBlocked`, #13936 ; `talkieBlocked`, #13935 ; `togetherBlocked`, #17023), ouvertes par défaut, et le partage de MON écoute
  * (`listeningCategoryShared`, #16836), REFUSÉ par défaut. Un champ absent (serveur plus ancien) vaut son défaut. Iso
  * `RelationPersonSettings` du SDK iOS.
  */
@@ -75,11 +75,13 @@ public data class RelationPersonSettings(
     val userId: String,
     val bringBlocked: Boolean = false,
     val talkieBlocked: Boolean = false,
+    val togetherBlocked: Boolean = false,
     val listeningCategoryShared: Boolean = false,
 ) {
     public fun isBlocked(setting: RelationReceptionSetting): Boolean = when (setting) {
         RelationReceptionSetting.BRING -> bringBlocked
         RelationReceptionSetting.TALKIE -> talkieBlocked
+        RelationReceptionSetting.TOGETHER -> togetherBlocked
     }
 
     public fun isGranted(grant: RelationShareGrant): Boolean = when (grant) {
@@ -90,9 +92,9 @@ public data class RelationPersonSettings(
 /**
  * Une préférence de RÉCEPTION posée pour une personne (iso `RelationReceptionSetting`, SDK iOS) : ouverte par défaut, son
  * réglage est un BLOCAGE de ce que JE reçois d'elle, qui n'en est pas prévenue. « Bloquer ses Bring » dès Ami, « Couper son
- * talkie » dès Proche.
+ * talkie » et « Couper ses invitations « ensemble » » (#17989) dès Proche.
  */
-public enum class RelationReceptionSetting { BRING, TALKIE }
+public enum class RelationReceptionSetting { BRING, TALKIE, TOGETHER }
 
 /**
  * Un partage de MON activité que J'ACCORDE à une personne, hors rituel (iso `RelationShareGrant`, SDK iOS) : refusé par
@@ -124,6 +126,10 @@ public data class BringBlockBody(val bringBlocked: Boolean)
 /** Le corps de `PUT /relations/:userId/settings` pour le talkie : écriture partielle et stricte, un seul champ. */
 @Serializable
 public data class TalkieBlockBody(val talkieBlocked: Boolean)
+
+/** Le corps de `PUT /relations/:userId/settings` pour les invitations « ensemble » (#17023) : un seul champ. */
+@Serializable
+public data class TogetherBlockBody(val togetherBlocked: Boolean)
 
 /** Le corps de `PUT /relations/:userId/settings` pour « Ce que j'écoute » (#16836) : écriture partielle et stricte, un seul champ. */
 @Serializable

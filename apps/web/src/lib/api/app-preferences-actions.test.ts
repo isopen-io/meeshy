@@ -29,6 +29,7 @@ const cached: AppPreferences = {
   bringEnabled: true,
   bloodProximityEnabled: true,
   togetherEnabled: true,
+  talkieEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -102,6 +103,17 @@ describe('performPreferenceEdit', () => {
     });
     expect(await performPreferenceEdit({ patch: { togetherEnabled: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
     expect(calls[0]?.body).toEqual({ notification: { togetherEnabled: false } });
+    expect(read()).toEqual(cached);
+  });
+
+  test('« Recevoir le talkie » refusé : la bascule revient, et seule SA clé est partie (#20700)', async () => {
+    const { deps, calls, read } = depsWith({
+      online: true,
+      seed: cached,
+      answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
+    });
+    expect(await performPreferenceEdit({ patch: { talkieEnabled: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(calls[0]?.body).toEqual({ notification: { talkieEnabled: false } });
     expect(read()).toEqual(cached);
   });
 

@@ -189,6 +189,7 @@ internal fun CircleLinkSheet(
 private fun CirclePersonSetting.titleRes(): Int = when (this) {
     CirclePersonSetting.BLOCK_BRING -> RelationReceptionSetting.BRING.titleRes()
     CirclePersonSetting.TALKIE -> RelationReceptionSetting.TALKIE.titleRes()
+    CirclePersonSetting.TOGETHER -> RelationReceptionSetting.TOGETHER.titleRes()
     CirclePersonSetting.LISTENING -> R.string.circles_settings_listening
     CirclePersonSetting.LIVE_LOCATION -> R.string.circles_settings_location
 }
