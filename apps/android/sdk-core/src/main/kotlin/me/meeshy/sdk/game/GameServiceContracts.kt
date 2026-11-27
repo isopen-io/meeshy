@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.game.LeagueFriendsResponse
 import me.meeshy.sdk.model.game.LeaguePseudonymResponse
 import me.meeshy.sdk.model.game.LeagueWeekResponse
 import me.meeshy.sdk.model.game.MissionRerollResponse
+import me.meeshy.sdk.model.game.PhotoMomentsPresentedResponse
 import me.meeshy.sdk.model.game.PrestigeResponse
 import me.meeshy.sdk.model.game.SeasonClaimResponse
 import me.meeshy.sdk.model.game.SeasonSealResponse
@@ -102,4 +103,15 @@ interface GameArchiveServiceProviding {
     suspend fun fetchSeasonArchive(number: Int): GameServiceResult<GameSeasonArchive>
     suspend fun fetchLeagueWeekArchive(weekKey: String): GameServiceResult<GameLeagueWeekArchive>
     suspend fun fetchSeasonCalendar(ifNoneMatch: String? = null): GameServiceResult<GameSeasonCalendarRead>
+}
+
+/**
+ * L'accusé d'une invitation à immortaliser (#20651, `photoMomentsPresentedRequestSchema`) — port de
+ * `GamePhotoRegistryProviding` (iOS). Un contrat à part : les doubles de test existants n'ont pas à le connaître. Le
+ * `requestId` naît UNE fois par intention ; un rejeu rend la date de la PREMIÈRE présentation. Une présentation accusée
+ * sur un appareil ne repart ni sur un autre, ni en push.
+ */
+interface GamePhotoRegistryServiceProviding {
+    /** Un lot de `GamePhotoRegistry.presentedBatches`. */
+    suspend fun acknowledgePhotoMomentsPresented(stepIds: List<String>, requestId: String): GameServiceResult<PhotoMomentsPresentedResponse>
 }

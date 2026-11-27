@@ -932,7 +932,20 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Clients : aucun changement requis (un 429 tombe dans le chemin d'erreur existant des trois clients) ; les phrases localisées du refus sont un suivi client, pas ouvert ce run.
 - Prochain lot recommandé : #20464 (même milestone), puis #19813.
 
-## 2026-11-27 — réveil 13:01 UTC
+## 2026-11-27 — réveil 13:02 UTC
+
+- Début du run : aucune PR de la routine ouverte ; #19812 fusionnée (`8861451f1`) ; le réveil du 2026-11-26 01:37 s'est interrompu sans rien pousser. Aucune branche vivante sur `core-lifecycle.ts` ni `community-addition-budget.ts`.
+- Lot : #20464 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `POST /conversations` avec `communityId` paie le budget de #19812 (`services/conversations/communitySalonAdmissionBudget.ts`) — l'acteur au nombre d'ENTRANTS invités (un membre déjà actif et l'appelant qui revient ne coûtent rien), puis chaque entrant sur son seau ; une tentative vers un compte non ajoutable se paie (`attempted` porté par le refus `not-addable` du plan) ; un refus d'autorisation (403) ne débite rien. Au-delà : 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` + `Retry-After` avant toute écriture (ni salon, ni ligne de membre) ; 429 déclaré au schéma.
+- Sous-plafond par paire (acteur, cible) : 3/jour, débité AVANT le seau de la cible et sans le toucher quand il refuse — un ajout/retrait répété par un même administrateur n'épuise plus le quota de sa cible. Vaut pour les trois chemins.
+- Redis en panne : fail-open, comme les autres budgets (témoin `consume → null`).
+- Témoins : `__tests__/unit/routes/conversations/community-salon-addition-budget-20464.test.ts` (8 ; rouge prouvé : 5 échecs avant le branchement), `addition-budget-19812.test.ts` (+1 ; rouge prouvé sous la mutation qui retire le sous-plafond).
+- Gates locaux : `tsc --noEmit` passerelle exit 0 ; suites `routes/`, `services/conversations`, `utils` : 17 965 verts, 1 rouge hors lot (`tus-handler-heif-conversion`, rouge AUSSI sur `dev` sans le lot : décodeur HEIC du conteneur) ; le budget de taille des routes (#4284) a rougi sur `core-lifecycle.ts` (1008 lignes), ramené à 998 dans le lot.
+- Revue adversariale (bloquante, corrigée dans le lot) : (1) un geste refusé débitait le seau des cibles placées AVANT le refus — glisser une cible saturée derrière une victime entamait la victime sans l'ajouter ; tout débit de cible refusé est désormais rendu (`RateLimiter.release`) et un refus rend les débits déjà pris. (2) Un salon refusé débitait l'acteur de tout son poids (250 personnes = porte fermée 24 h) : un geste refusé ne coûte plus qu'UNE unité. (3) Le témoin « refus d'autorisation ne débite rien » ne pouvait pas tomber : il finit désormais par un geste au plafond. Témoins (1) et (2) rouges prouvés sur le code d'avant. Relecture du correctif : constats fermés ; écart résiduel (un geste refusé par une CIBLE gardait le poids entier sur l'acteur) corrigé aussi, témoin rouge prouvé.
+- Suivi #20694 (même milestone) : rattacher un salon à une communauté privée et passer une communauté en privée font entrer tous les occupants sans débit ; entrées une par une (`memberAdmission`, débannissement, partage, lien, appel) ; budget non rendu si la création échoue plus loin.
+- Prochain lot recommandé : #20694, puis #19813.
+
+## 2026-11-27 — réveil 13:01 UTC (bis)
 
 - Début du run : aucune PR de la routine ouverte ; #19812 fusionnée (`8861451f1`). Lot prévu #20464 CÉDÉ : une autre session a poussé `claude/communautes-budget-salon` à 13:03, avant mon premier push (« celui qui n'a rien écrit cède »). #19813 est une `décision-produit` : non prise.
 - Lot : #20657 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »), moitié web — le suivi client noté par #19812.
@@ -941,4 +954,5 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `lib/api/community-invite.test.ts` (+2, 6 attendus étendus), `lib/communities/invite-status.test.ts` (6, neuf ; rouge prouvé : 9 échecs avant l'implémentation).
 - Gates locaux : `bun test src/lib/communities/ src/lib/api/community src/routes/community` 244 verts ; `src/lib/i18n src/lib/interface` 311 verts ; `tsc --noEmit` vert.
 - Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée.
-- Reste : iOS et Android disent le même refus (suivi à ouvrir, même clé).
+- Reste, suivi #20664 : iOS et Android disent le même refus, même clé.
+- PR #20666 en brouillon (CI des PR gelée), `ci.yml` lancé en `workflow_dispatch` sur la tête.

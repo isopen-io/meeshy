@@ -301,7 +301,7 @@
       "firstScreen": 27
     },
     "settings": {
-      "total": 307,
+      "total": 330,
       "firstScreen": 61
     },
     "settings-appareils-chiffres": {
@@ -640,15 +640,15 @@
     },
     "settings": {
       "de": {
-        "total": 284,
-        "firstScreen": 61
-      },
-      "a": {
         "total": 307,
         "firstScreen": 61
       },
-      "motif": "La rangée « Un de mes Sangs tout près » (#20540) — la porte du push de proximité d'un Sang, rangée avec les autres cercles — porte sa légende visible, même convention que ses deux voisines « Retour d'un contact » et « Recevoir des Bring »",
-      "issue": 20544
+      "a": {
+        "total": 330,
+        "firstScreen": 61
+      },
+      "motif": "La rangée « Recevoir les invitations « ensemble » » (#17990) — l'interrupteur global des invitations à regarder ou écouter ensemble, rangé sous « Recevoir des Bring » — porte sa légende visible, même convention que ses voisines « Un de mes Sangs tout près » et « Recevoir des Bring »",
+      "issue": 17990
     }
   }
 }
