@@ -140,6 +140,17 @@ export async function spendCommunityAdditionByActor(
   return verdict;
 }
 
+/** Rend `units` débits pris sur l'acteur par un geste que la suite a refusé (#20464). */
+export async function refundCommunityAdditionByActor(
+  fastify: FastifyInstance,
+  actorId: string,
+  units: number
+): Promise<void> {
+  const { acteurHeure, acteurJour } = seaux(fastify);
+  const cle = `user:${actorId}`;
+  await Promise.all([acteurHeure.release(cle, units), acteurJour.release(cle, units)]);
+}
+
 const canonique = (id: string) => id.trim().toLowerCase();
 
 type DebitCible = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };

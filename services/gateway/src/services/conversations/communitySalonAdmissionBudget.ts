@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import {
+  refundCommunityAdditionByActor,
   spendCommunityAdditionByActor,
   spendCommunityAdditionOfTargets,
   type CommunityAdditionVerdict,
@@ -15,7 +16,8 @@ const ALLOWED: CommunityAdditionVerdict = { allowed: true, retryAfter: 0 };
  * non ajoutable paie ses tentatives sur le seau de l'acteur ; un plan admis paie
  * ses entrants INVITÉS — jamais l'appelant qui revient, jamais un membre déjà
  * actif — puis débite le seau de chacun, sans entamer celui des cibles quand
- * l'acteur est déjà refusé.
+ * l'acteur est déjà refusé. Refusé par une cible, le geste ne coûte à l'acteur
+ * qu'une unité, comme tout geste refusé.
  */
 export async function spendCommunitySalonAdmission(
   fastify: FastifyInstance,
@@ -32,5 +34,7 @@ export async function spendCommunitySalonAdmission(
   if (invited.length === 0) return ALLOWED;
   const byActor = await spendCommunityAdditionByActor(fastify, actorId, invited.length);
   if (!byActor.allowed) return byActor;
-  return spendCommunityAdditionOfTargets(fastify, invited, actorId);
+  const ofTargets = await spendCommunityAdditionOfTargets(fastify, invited, actorId);
+  if (!ofTargets.allowed) await refundCommunityAdditionByActor(fastify, actorId, invited.length - 1);
+  return ofTargets;
 }

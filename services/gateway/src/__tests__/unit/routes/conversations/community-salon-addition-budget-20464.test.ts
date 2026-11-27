@@ -243,6 +243,17 @@ describe('#20464 — POST /conversations dans une communauté débite le budget 
     expect((await b.creer(moi, personnes(300, COMMUNITY_ADDITION_BUDGET.actorPerHour - 1))).status).not.toBe(429);
   });
 
+  it('refusé par une cible saturée, le geste ne coûte qu’UNE unité à l’acteur', async () => {
+    const b = banc();
+    const saturee = personne(70);
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.targetPerDay; i += 1) {
+      await b.creer(acteur(600 + i), [saturee]);
+    }
+    const moi = acteur(9);
+    expect((await b.creer(moi, [...personnes(700, COMMUNITY_ADDITION_BUDGET.actorPerHour - 1), saturee])).status).toBe(429);
+    expect((await b.creer(moi, personnes(800, COMMUNITY_ADDITION_BUDGET.actorPerHour - 1))).status).not.toBe(429);
+  });
+
   it('un 429 sur une cible saturée REND les débits pris sur les précédentes : la victime n’est pas entamée en silence', async () => {
     const b = banc();
     const saturee = personne(60);
