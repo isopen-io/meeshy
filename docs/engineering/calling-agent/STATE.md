@@ -2760,3 +2760,44 @@ socket jusqu'au client.
 0. Si la PR de ce cycle n'est pas fusionnée : lire son `ci.yml`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
 1. **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**, **#20459**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 80 — 2026-11-27
+
+- **Base** : `origin/dev` @ `424ee1aef`. Aucune PR d'appel n'était ouverte : le lot du cycle 79 est fusionné.
+- **Branche** : `claude/determined-volta-4f5f06`.
+- **Objectif** : **#20459**. Un `call:quality-report` reçu juste après le raccroché est persisté au lieu d'être ignoré sans bruit.
+- **Livré** (`services/gateway/` seulement, commit `3069e9e8c`) :
+  - `call-participants.ts` : `resolveQualityReporter(deps, userId, callId, { now })` et `QUALITY_REPORT_GRACE_MS = 30_000`.
+    - Une ligne active prime.
+    - Sinon, la sortie la plus récente est retenue si elle date de 30 s au plus. On obtient alors `departed: true`.
+    - Une sortie datée du futur ou illisible, un non-participant, ou une erreur de `getCallSession` rendent `null` (fail-closed).
+  - `CallEventsHandler.ts`, handler QUALITY_REPORT seulement, avec un solde de -1 ligne :
+    - un relevé `departed` persiste ses stats ;
+    - il efface la série dégradée ;
+    - il n'émet jamais `QUALITY_ALERT`.
+  - Le heartbeat, les bascules et les autres usages de `resolveActiveCallParticipant` ne changent pas.
+  - Aucun payload, événement, schéma ni champ ne change.
+- **Tests** :
+  - 11 tests de la fonction pure, horloge injectée : bornes à 30 s exactement et à 30 s + 1 ms, futur, illisible, deux lignes, invité anonyme, échec.
+  - 6 tests du handler.
+  - 2 tests existants adaptés au changement voulu : `leftAt` passé à -31 s, et nouveau libellé du log.
+  - Rouge constaté : 15 échecs sur 18.
+  - Relancés par l'orchestrateur : 18 pass sur 18.
+  - QA : suites d'appel 180/180 (2 130 tests), `tsc` 0, et 7 mutations détectées sur 7.
+- **QA** (`auditeur-adversarial`) : favorable avec réserves.
+  - `userId` vient de l'authentification du socket.
+  - `leftAt` n'est écrit que sur des lignes actives, donc aucune fenêtre ne se rouvre.
+  - Les octets ne font que grandir (CAS `planCallByteWrite`), donc aucun rejeu ne les fait régresser.
+  - R1 : la bulle de résumé, figée à `call:end`, ne reçoit pas le relevé tardif. Seul l'historique d'appels le reçoit. Ouvert dans **#20709**.
+  - R2 : `networkQuality` est à dernier-écrivain-gagnant. Rattaché à #20709.
+  - R3 : un décalage d'horloge entre instances de la passerelle peut rejeter un relevé (fail-closed).
+  - R4 : une course préexistante peut émettre une alerte quelques millisecondes après la fin. Le lot ne l'aggrave pas.
+- **Limites** :
+  - Personne n'a mesuré si les clients envoient leur dernier relevé dans les 30 s : à confirmer en recette staging.
+  - Rien n'a été testé contre un MongoDB réel.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de ce cycle n'est pas fusionnée : lire sa CI, fusionner `dev` dans la branche, puis fusionner la PR.
+1. **#20709** (la bulle de résumé reçoit le relevé tardif), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
