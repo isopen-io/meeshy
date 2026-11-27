@@ -86,14 +86,16 @@ import {
  * retire — c'est ce qui distingue un inventaire d'un baseline.
  */
 const INVENTAIRE: ReadonlyMap<string, string> = new Map([
-  [
-    'user:preferences-updated',
-    "#18120 — l'aiguillage `.raw` n'implémente que la moitié de son discriminant : il teste " +
-      '`conversationId` et jamais `communityId`, donc la portée COMMUNAUTÉ tombe dans la branche ' +
-      "« sinon », qui décode `UserPreferencesUpdatedEvent` — dont `category` est requis et que cette " +
-      "portée ne porte pas. Épingler, masquer ou mettre en sourdine une communauté depuis un autre " +
-      'appareil ne se propage pas sur iOS.',
-  ],
+  /* VIDE, et c'est un état à défendre, pas un état atteint.
+     `user:preferences-updated` (#18120) en est SORTI le 2026-11-27 : l'aiguillage
+     `.raw` d'iOS décode désormais ses TROIS portées (mesuré — `candidates = 3`,
+     `variantCount = 3`), donc la divergence est réparée et le second sens du
+     cliquet l'a forcée dehors. C'est exactement ce que ce sens existe pour
+     faire, et il a rougi sur `dev` pendant que la table disait encore le
+     contraire du dépôt.
+     Quand ce cliquet tombe : la réparation est de retirer l'entrée RÉPARÉE, ou
+     d'en ajouter une qui diverge VRAIMENT avec son issue — jamais de ranger ici
+     ce qu'on ne veut plus voir. */
 ]);
 
 const swift = readSwift();
