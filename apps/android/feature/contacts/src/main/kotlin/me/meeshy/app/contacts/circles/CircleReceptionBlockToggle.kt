@@ -32,13 +32,14 @@ import me.meeshy.ui.theme.MeeshyTheme
 
 internal const val CIRCLE_BLOCK_BRING_TAG = "circles.settings.blockBring"
 internal const val CIRCLE_BLOCK_TALKIE_TAG = "circles.settings.blockTalkie"
+internal const val CIRCLE_BLOCK_TOGETHER_TAG = "circles.settings.blockTogether"
 internal const val CIRCLE_SHARE_LISTENING_TAG = "circles.settings.listening"
 
 private const val FAILURE_VISIBLE_MS = 4_000L
 
 /**
  * L'interrupteur ACTIF d'un réglage par personne sur la fiche d'un lien — « Bloquer ses Bring » (#16617), « Couper son
- * talkie » (#16675) et « Ce que j'écoute » (#16836) —, iso `CircleReceptionBlockToggle.swift`. La ligne entière bascule (48 dp), annoncée comme un
+ * talkie » (#16675), « Couper ses invitations « ensemble » » (#17989) et « Ce que j'écoute » (#16836) —, iso `CircleReceptionBlockToggle.swift`. La ligne entière bascule (48 dp), annoncée comme un
  * interrupteur par TalkBack, avec son explication quand elle en a une.
  */
 @Composable
@@ -99,6 +100,7 @@ private fun RelationPersonSwitch.tag(): String = when (this) {
     is RelationPersonSwitch.Reception -> when (setting) {
         RelationReceptionSetting.BRING -> CIRCLE_BLOCK_BRING_TAG
         RelationReceptionSetting.TALKIE -> CIRCLE_BLOCK_TALKIE_TAG
+        RelationReceptionSetting.TOGETHER -> CIRCLE_BLOCK_TOGETHER_TAG
     }
     is RelationPersonSwitch.Share -> when (grant) {
         RelationShareGrant.LISTENING_CATEGORY -> CIRCLE_SHARE_LISTENING_TAG

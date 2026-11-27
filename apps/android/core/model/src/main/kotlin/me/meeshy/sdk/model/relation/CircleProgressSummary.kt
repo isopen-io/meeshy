@@ -107,6 +107,7 @@ public object CirclesLayout {
 public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
     BLOCK_BRING(RelationLevel.FRIEND),
     TALKIE(RelationLevel.CLOSE),
+    TOGETHER(RelationLevel.CLOSE),
     LISTENING(RelationLevel.CLOSE),
     LIVE_LOCATION(RelationLevel.BLOOD),
     ;
@@ -116,6 +117,7 @@ public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
         get() = when (this) {
             BLOCK_BRING -> RelationReceptionSetting.BRING
             TALKIE -> RelationReceptionSetting.TALKIE
+            TOGETHER -> RelationReceptionSetting.TOGETHER
             LISTENING, LIVE_LOCATION -> null
         }
 
@@ -127,13 +129,13 @@ public enum class CirclePersonSetting(public val opensAt: RelationLevel) {
         get() = when (this) {
             LISTENING -> RelationPersonSwitch.Share(RelationShareGrant.LISTENING_CATEGORY)
             LIVE_LOCATION -> null
-            BLOCK_BRING, TALKIE -> reception?.let { RelationPersonSwitch.Reception(it) }
+            BLOCK_BRING, TALKIE, TOGETHER -> reception?.let { RelationPersonSwitch.Reception(it) }
         }
 
     public companion object {
         public fun offered(level: RelationLevel): List<CirclePersonSetting> = entries.filter { level >= it.opensAt }
 
-        /** Les blocages de réception ouverts à ce niveau d'outils (#16643) : le Bring dès Ami, le talkie dès Proche. */
+        /** Les blocages de réception ouverts à ce niveau d'outils (#16643) : le Bring dès Ami, le talkie et « ensemble » dès Proche. */
         public fun receptionAt(level: RelationLevel): List<RelationReceptionSetting> = offered(level).mapNotNull { it.reception }
     }
 }

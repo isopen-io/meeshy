@@ -251,6 +251,19 @@ describe('#19375 — GET /relations/summary : les autres cercles et les demandes
     expect(parNiveau).toBe(1);
   });
 
+  it.each([
+    ['suspendu', { isActive: false, deactivatedAt: NOW }],
+    ['supprimé en attente de purge', { isActive: false, deletedAt: NOW }],
+  ])('#19571 — un Ami au compte %s ne se compte plus, comme GET /relations ne le liste plus', async (_cas, etat) => {
+    const app = await appli({ comptes: [compte(AMI, etat)], liens: [lienAmi(MOI, AMI)] });
+    const liste = await app.call(PREFIXE);
+    const res = await app.call(`${PREFIXE}/summary`);
+    await app.close();
+
+    expect(liste.body.data).toEqual([]);
+    expect(res.body.data.counts.FRIEND).toBe(0);
+  });
+
   it('pendingRequests compte les demandes REÇUES en attente, hors blocage — ni envoyées, ni tranchées', async () => {
     const res = await resume({
       comptes: [compte(MOI, { blockedUserIds: [voisin(4)] }), compte(voisin(1)), compte(voisin(2)), compte(voisin(3)), compte(voisin(4))],
