@@ -2020,3 +2020,21 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : iOS de #20416 (point 2) et de #20308
+
+- Reprise : #20417 (iOS de #20249) et #20463 (Android de #19883) fusionnées le 2026-11-23. Le réveil du 2026-11-23
+  au soir s'est arrêté sur une erreur d'API avant d'écrire quoi que ce soit. Une branche `claude/cercles-20542-purge-
+  alerte-sang` existe au niveau de `dev`, sans commit : #20542 est réservée par une autre session, ce réveil n'y touche
+  pas. Aucune branche n'écrit les chemins iOS de la position.
+- Lot : iOS de #20416, point 2, iso #20431 (web) et #20441 (Android). Un refus certain (`invalid`, `fixedPoint`,
+  `startedElsewhere`) ne fait plus oublier `publishedStart` ; un refus douteux l'oublie encore. iOS de #20308 : une
+  réponse à « Montrer ta position réelle ? » prend le relevé AVANT de relire le partage servi, donc un point relancé
+  ailleurs pendant le GPS fait reposer la question sans rien envoyer ; un nom vide ou blanc ne se nomme plus.
+- Changement assumé : `test_confirming_afterSomeoneWasAddedElsewhere…` attendait zéro relevé. Il en attend un, car une
+  réponse prend désormais le relevé avant la relecture (le critère de fin de #20308 le demande).
+- Audit adversarial : non requis (aucun accès, aucun chiffrement ; l'ordre relevé → relecture resserre le consentement).
+- Gates : pas de compilateur Swift en conteneur, la CI iOS de la PR fait foi. `check_house_rules.sh` 42 règles tenues,
+  `check_cohesion_budget.sh` vert, `check_test_registration.sh` (aucun fichier neuf), `check-accent-color-hardcoding`
+  conforme.
+- Prochain lot : #20054, #20056 ; puis #20542 si sa réservation tombe.
