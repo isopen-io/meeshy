@@ -2020,3 +2020,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : couper toutes les invitations « ensemble » sur le web (#17990)
+
+- Reprise : le run du 2026-11-25 s'est arrêté sur une erreur d'API avant toute écriture ; aucune PR de la routine
+  ouverte. #20417, #20441, #20449 et #20463 sont fusionnées. Les lots iOS restants de la position (#20416 point 2,
+  #20308, #20054, #20056) cèdent à la PR #20514 (découpe de `SharedLocationSharingCenter.swift` et du magasin de
+  liste), ouverte depuis le 2026-11-24 : « celui qui n'a rien écrit cède ».
+- Lot : #17990. Dans les réglages de notification du web, « Recevoir les invitations « ensemble » », juste après
+  « Recevoir des Bring » : lit et écrit la seule clé `notification.togetherEnabled` (#17023), absente = reçue,
+  optimiste avec retour arrière sur refus, sept langues. Rien ne change côté passerelle.
+- Audit adversarial : non requis (réglage de réception déjà servi et gardé par la passerelle, aucun accès ni
+  chiffrement touché).
+- Reste : iOS de #20416 / #20308 / #20054 / #20056 après la fusion de #20514 ; #18817 (l'offre « Regarder ensemble »
+  du web lit `accessLevel`), #19888 (carte des cercles du web), #18822 (bandeau du talkie sur le web).
+- Prochain lot : si #20514 est fusionnée, iOS de #20416 et #20308 ; sinon #18817 sur le web.

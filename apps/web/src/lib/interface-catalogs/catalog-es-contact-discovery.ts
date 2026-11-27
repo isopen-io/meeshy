@@ -15,6 +15,9 @@ const esContactDiscovery = {
   'settings.notif.bring': 'Recibir Brings',
   'settings.notif.bring.info':
     'Un allegado puede hacer sonar tu teléfono en una emergencia extrema, incluso en silencio. Desactivado, nadie podrá hacerte sonar.',
+  'settings.notif.together': 'Recibir invitaciones «juntos»',
+  'settings.notif.together.info':
+    'Un allegado puede invitarte a ver o escuchar juntos. Desactivado, nadie podrá invitarte; una sesión a la que ya te uniste continúa.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default esContactDiscovery;

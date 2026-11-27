@@ -28,6 +28,7 @@ const cached: AppPreferences = {
   contactActivityEnabled: true,
   bringEnabled: true,
   bloodProximityEnabled: true,
+  togetherEnabled: true,
   gameEnabled: true,
   gamePhotoEnabled: true,
   saveMediaToGallery: false,
@@ -90,6 +91,25 @@ describe('performPreferenceEdit', () => {
       answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }),
     });
     expect(await performPreferenceEdit({ patch: { showReadReceipts: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
+    expect(read()).toEqual(cached);
+  });
+
+  /* #17990 — « Recevoir les invitations ensemble » : optimiste, seule SA clé part, un refus rend l'instantané. */
+  test('« Recevoir les invitations ensemble » coupé : le cache change avant la réponse et seule sa clé part', async () => {
+    const answer = deferred();
+    const { deps, read, calls } = depsWith({ online: true, answer: answer.promise, seed: cached });
+    const pending = performPreferenceEdit({ patch: { togetherEnabled: false }, deps });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(read()?.togetherEnabled).toBe(false);
+    expect(calls[0]?.body).toEqual({ notification: { togetherEnabled: false } });
+    answer.resolve({ ok: true, data: { notification: { pushEnabled: true, soundEnabled: true, contactActivityEnabled: true, togetherEnabled: false } } });
+    expect(await pending).toEqual({ status: 'saved' });
+    expect(read()).toEqual({ ...cached, togetherEnabled: false });
+  });
+
+  test('« Recevoir les invitations ensemble » refusé : il revient reçu, et le refus se dit', async () => {
+    const { deps, read } = depsWith({ online: true, seed: cached, answer: Promise.resolve({ ok: false, status: 500, error: 'Erreur 500' }) });
+    expect(await performPreferenceEdit({ patch: { togetherEnabled: false }, deps })).toEqual({ status: 'refused', error: 'Erreur 500' });
     expect(read()).toEqual(cached);
   });
 

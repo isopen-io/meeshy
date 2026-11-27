@@ -15,6 +15,9 @@ const deContactDiscovery = {
   'settings.notif.bring': 'Brings empfangen',
   'settings.notif.bring.info':
     'Eine nahestehende Person kann dein Telefon bei einem extremen Notfall klingeln lassen, auch im Lautlosmodus. Aus: Niemand kann dich mehr klingeln lassen.',
+  'settings.notif.together': '„Gemeinsam“-Einladungen empfangen',
+  'settings.notif.together.info':
+    'Eine nahestehende Person kann dich einladen, gemeinsam zu schauen oder zu hören. Aus: Niemand kann dich mehr einladen; eine bereits beigetretene Sitzung läuft weiter.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default deContactDiscovery;
