@@ -17,6 +17,7 @@ from collections import defaultdict
 # Import local
 from ..zmq_models import TranslationTask
 from ..task_privacy import is_live_call_caption
+from utils.translator_metrics import PROCESS_TRANSLATOR_METRICS, TranslatorMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,8 @@ class ConnectionManager:
         normal_pool_size: int = 10000,
         any_pool_size: int = 10000,
         fast_pool_size: int = 5000,
-        on_tasks_rejected: Optional[RejectedTasksHandler] = None
+        on_tasks_rejected: Optional[RejectedTasksHandler] = None,
+        metrics: TranslatorMetrics = PROCESS_TRANSLATOR_METRICS
     ):
         """
         Initialize connection manager
@@ -213,6 +215,11 @@ class ConnectionManager:
         self.normal_pool = SignalingQueue(normal_pool_size, self.work_arrived)
         self.any_pool = SignalingQueue(any_pool_size, self.work_arrived)
         self.fast_pool = SignalingQueue(fast_pool_size, self.work_arrived)
+        # #3649 — rejets et profondeur des files sur `GET /metrics`
+        self.metrics = metrics
+        metrics.watch_queue_depth("normal", self.normal_pool.qsize)
+        metrics.watch_queue_depth("any", self.any_pool.qsize)
+        metrics.watch_queue_depth("fast", self.fast_pool.qsize)
 
         # Configuration batch accumulation
         self.enable_batching = os.getenv("TRANSLATOR_BATCH_ENABLED", "true").lower() == "true"
@@ -455,6 +462,7 @@ class ConnectionManager:
             if self.any_pool.full():
                 logger.warning(f"Any pool full, rejecting task {task.task_id}")
                 self.stats['pool_full_rejections'] += 1
+                self.metrics.count_rejections("any", 1)
                 return False
 
             await self.any_pool.put(task)
@@ -466,6 +474,7 @@ class ConnectionManager:
             if self.normal_pool.full():
                 logger.warning(f"Normal pool full, rejecting task {task.task_id}")
                 self.stats['pool_full_rejections'] += 1
+                self.metrics.count_rejections("normal", 1)
                 return False
 
             await self.normal_pool.put(task)
@@ -507,6 +516,7 @@ class ConnectionManager:
         pool = self.any_pool if pool_name == "any" else self.normal_pool
         if pool.full():
             self.stats['pool_full_rejections'] += len(tasks)
+            self.metrics.count_rejections(pool_name, len(tasks))
             logger.warning(
                 f"[TRANSLATOR] {pool_name} pool full, rejecting batch of "
                 f"{summarize_task_ids(tasks)}"

@@ -25,6 +25,7 @@ from datetime import datetime
 
 from services.task_privacy import cache_allowed, current_message_id, is_live_call_caption
 from utils.voice_cache_guard import guard_voice_cache_id
+from utils.translator_metrics import PROCESS_TRANSLATOR_METRICS, TranslatorMetrics
 
 logger = logging.getLogger(__name__)
 
@@ -462,9 +463,10 @@ class TranslationCacheService:
     - Fonctionne aussi au niveau segment (chaque segment est caché individuellement)
     """
 
-    def __init__(self, redis_service: RedisService, settings=None):
+    def __init__(self, redis_service: RedisService, settings=None, metrics: TranslatorMetrics = PROCESS_TRANSLATOR_METRICS):
         self.redis = redis_service
         self.settings = settings
+        self.metrics = metrics
 
         # Pattern de clé - basé uniquement sur le hash du contenu. Le segment de
         # révision change quand le PIPELINE change ce qu'il rend pour un même texte :
@@ -516,9 +518,19 @@ class TranslationCacheService:
 
         # Vérifier par hash du texte
         cache_hash = self._compute_hash(text, source_lang, target_lang, model_type)
-        key = self.key_pattern.format(hash=cache_hash)
+        cached = await self._read_translation(cache_hash, text, source_lang, target_lang, model_type)
+        self.metrics.count_cache("miss" if cached is None else "hit")
+        return cached
 
-        data = await self.redis.get(key)
+    async def _read_translation(
+        self,
+        cache_hash: str,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+        model_type: str
+    ) -> Optional[Dict[str, Any]]:
+        data = await self.redis.get(self.key_pattern.format(hash=cache_hash))
         if data:
             logger.debug(f"[CACHE] ✅ Hit: {source_lang}→{target_lang} (hash={cache_hash[:8]})")
             return json.loads(data)
