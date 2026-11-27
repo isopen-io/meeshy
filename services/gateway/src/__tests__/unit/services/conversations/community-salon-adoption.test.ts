@@ -375,7 +375,8 @@ describe('closeSalonsAfterSwitch — la bascule écrite, rattraper puis faire so
 
     expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
     expect(scheduleCommunityAddedAnnouncement).not.toHaveBeenCalled();
-    expect(exitCommunitySalons.mock.calls.map((c: any) => c[1].userId).sort()).toEqual([ANCIEN, OCCUPANT].sort());
+    expect(exitCommunitySalonsOf).toHaveBeenCalledTimes(1);
+    expect([...exitCommunitySalonsOf.mock.calls[0][1].userIds].sort()).toEqual([ANCIEN, OCCUPANT].sort());
   });
 });
 
