@@ -61,7 +61,7 @@ normal.
 | **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
 | **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
 | **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | [#20607](https://github.com/isopen-io/meeshy/pull/20607) → `dev` | ✅ mergé |
-| **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | → `dev` | ⏳ ouverte |
+| **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | [#20648](https://github.com/isopen-io/meeshy/pull/20648) → `dev` | ⏳ ouverte |
 
 **97w** — cohérence de positionnement (dim. 6) / maintenabilité site-unique (dim. 11)
 / parité iOS (**suite surgicale de 96w, moitié EXPORT de #20606**) : **jumelle
