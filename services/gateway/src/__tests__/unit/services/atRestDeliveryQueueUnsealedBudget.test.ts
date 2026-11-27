@@ -45,6 +45,9 @@ const bareErrorSealer: DeliveryQueueSealer = {
   open: async (sealed) => sealed,
 };
 
+/** #19947 — le budget se mesure sous une instance unique attestée, la seule où l'on garde. */
+const ATTESTED = { isSoleInstance: () => true };
+
 const counted = async (registry: Registry, disposition: string): Promise<number> => {
   const metric = await registry.getSingleMetric('delivery_queue_unsealed_entries_total')?.get();
   return metric?.values.find((value) => value.labels.disposition === disposition)?.value ?? 0;
@@ -52,7 +55,7 @@ const counted = async (registry: Registry, disposition: string): Promise<number>
 
 const queueWith = (unsealedBudget: { maxEntries: number; maxBytes: number }) => {
   const metrics = deliveryQueueSealMetrics({ registry: new Registry() });
-  const queue = new RedisDeliveryQueue(healthyRedis(), bareErrorSealer, { metrics, unsealedBudget });
+  const queue = new RedisDeliveryQueue(healthyRedis(), bareErrorSealer, { metrics, unsealedBudget, soleInstance: ATTESTED });
   return { queue, registry: metrics.registry };
 };
 
@@ -72,7 +75,7 @@ describe('#19945 — le clair gardé faute de sceau se compte', () => {
     const queue = new RedisDeliveryQueue(healthyRedis(), {
       seal: async () => { throw new ServerAtRestUnavailableError('missing'); },
       open: async (sealed) => sealed,
-    }, { metrics });
+    }, { metrics, soleInstance: ATTESTED });
 
     await queue.enqueue('u-1', entry(1), { sealAtRest: true });
 
@@ -122,7 +125,7 @@ describe('#19945 — au-delà du budget, on cesse de garder (fail-closed sur le 
   it('une entrée d’une conversation ORDINAIRE repliée dans le tas ne consomme pas le budget', async () => {
     const metrics = deliveryQueueSealMetrics({ registry: new Registry() });
     const redisDown = { getNativeClient: () => null } as unknown as CacheStore;
-    const queue = new RedisDeliveryQueue(redisDown, bareErrorSealer, { metrics, unsealedBudget: { maxEntries: 1, maxBytes: 1_000_000 } });
+    const queue = new RedisDeliveryQueue(redisDown, bareErrorSealer, { metrics, unsealedBudget: { maxEntries: 1, maxBytes: 1_000_000 }, soleInstance: ATTESTED });
 
     await queue.enqueue('u-0', entry(0));
     await queue.enqueue('u-1', entry(1), { sealAtRest: true });

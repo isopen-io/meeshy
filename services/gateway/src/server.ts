@@ -80,6 +80,7 @@ import { EmailService } from './services/EmailService';
 import { RedisDeliveryQueue } from './services/RedisDeliveryQueue';
 import { setSharedDeliveryQueue } from './services/delivery-queue-registry';
 import { gatewayDeliveryQueueSealer } from './services/deliveryQueueSealing';
+import { startGatewayInstanceCensus } from './services/gatewayInstanceCensus';
 import { TusCleanupService } from './services/TusCleanupService';
 import { ExpiredMessagesCleanupService } from './services/ExpiredMessagesCleanupService';
 import { EphemeralRecipientExpiryService } from './services/EphemeralRecipientExpiryService';
@@ -272,14 +273,13 @@ class MeeshyServer {
     this.callCleanupService = new CallCleanupService(this.prisma);
 
     // Initialiser la delivery queue Redis
-    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma));
-    // #16706 — l'instance VIVANTE est celle-ci : c'est elle que
-    // `manager.setDeliveryQueue` fait descendre jusqu'aux quatre handlers qui
-    // enfilent, donc la seule dont la tranche MÉMOIRE porte des entrées de
-    // message. Les sites qui détruisent un contenu la retrouvent par le registre
-    // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun d'eux ne
-    // reçoit la file en paramètre, et une purge qu'un appelant peut omettre
-    // n'est pas une purge.
+    // #19947 — le recensement atteste l'instance unique sans laquelle la file ne garde aucun clair dans le tas.
+    this.deliveryQueue = new RedisDeliveryQueue(getCacheStore(), gatewayDeliveryQueueSealer(this.prisma), { soleInstance: startGatewayInstanceCensus(getCacheStore()) });
+    // #16706 — l'instance VIVANTE est celle-ci : `manager.setDeliveryQueue` la fait descendre
+    // jusqu'aux quatre handlers qui enfilent, donc la seule dont la tranche MÉMOIRE porte des
+    // entrées de message. Les sites qui détruisent un contenu la retrouvent par le registre
+    // (`applyMessageRemovalEffects`, la purge de vue unique) : aucun ne reçoit la file en
+    // paramètre, et une purge qu'un appelant peut omettre n'est pas une purge.
     //
     // #18616 — cette phrase a été FAUSSE pendant tout ce temps :
     // `MeeshySocketIOHandler.startMediaPipelines` construisait une seconde

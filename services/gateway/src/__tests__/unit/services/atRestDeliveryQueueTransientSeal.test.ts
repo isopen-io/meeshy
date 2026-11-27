@@ -84,6 +84,14 @@ const fakeRedis = () => {
   return { stored, cacheStore: { getNativeClient: () => client } as unknown as CacheStore };
 };
 
+/**
+ * #19947 — garder en clair dans le tas exige une instance unique ATTESTÉE. Ces
+ * témoins portent sur la classification du refus : ils se placent donc sous
+ * une instance unique attestée, la seule où la rétention a un sens.
+ */
+const attestedQueue = (store: CacheStore, sealer: DeliveryQueueSealer | null = null) =>
+  new RedisDeliveryQueue(store, sealer, { soleInstance: { isSoleInstance: () => true } });
+
 /** Un sceau qui refuse toujours, de la cause exacte qu'on lui donne. */
 const refusingSealer = (error: unknown): DeliveryQueueSealer => ({
   seal: async () => { throw error; },
@@ -93,7 +101,7 @@ const refusingSealer = (error: unknown): DeliveryQueueSealer => ({
 describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’entrée', () => {
   it('la clé de la conversation n’a pas pu être CRÉÉE : l’entrée survit et se rejoue', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       refusingSealer(new ConversationKeyGenerationFailedError(CONV, new Error('mongo down'))),
     );
@@ -106,7 +114,7 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
 
   it('la base des clés est injoignable (`key-unavailable`) : l’entrée survit', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('key-unavailable')));
+    const queue = attestedQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('key-unavailable')));
 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
@@ -115,7 +123,7 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
 
   it('une cause INCONNUE est transitoire : on ne détruit pas une livraison sur une erreur qu’on ne sait pas lire', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore, refusingSealer(new Error('etimedout')));
+    const queue = attestedQueue(redis.cacheStore, refusingSealer(new Error('etimedout')));
 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
@@ -124,7 +132,7 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
 
   it('l’entrée gardée faute de sceau ne part JAMAIS vers Redis, même Redis en pleine santé', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       refusingSealer(new ConversationKeyGenerationFailedError(CONV, new Error('mongo down'))),
     );
@@ -159,12 +167,12 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
       seal: async (e) => ({ ...e, payload: {}, sealedPayload: { ciphertext: 'x', keyId: 'k', iv: 'i', authTag: 'a', aad: 'delivery-queue:v2' } }),
       open: async () => { throw new ServerAtRestUnreadableError('data-key-unavailable'); },
     };
-    const writer = new RedisDeliveryQueue(redis.cacheStore, sealedButUnopenable);
+    const writer = attestedQueue(redis.cacheStore, sealedButUnopenable);
     await writer.enqueue('u-1', entry({ messageId: 'm-sealed', dedupKey: 'd-sealed' }), { sealAtRest: true });
 
     // Le MÊME magasin Redis, un sceau qui refuse désormais pour une cause
     // transitoire : l'entrée en clair rejoint le tas, la scellée reste en Redis.
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       {
         seal: async () => { throw new ConversationKeyGenerationFailedError(CONV, new Error('mongo down')); },
@@ -184,7 +192,7 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
 
   it('l’entrée gardée reste soumise au plafond du tas et à la fenêtre de rétention', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       refusingSealer(new ConversationKeyGenerationFailedError(CONV, new Error('mongo down'))),
     );
@@ -210,7 +218,7 @@ describe('#19827 — un refus de scellement TRANSITOIRE ne détruit plus l’ent
 describe('#19827 — un refus PERMANENT détruit l’entrée, comme avant', () => {
   it('aucune clé maîtresse : le remède est une configuration et un redémarrage, qui vide le tas', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('missing')));
+    const queue = attestedQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('missing')));
 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
@@ -220,7 +228,7 @@ describe('#19827 — un refus PERMANENT détruit l’entrée, comme avant', () =
 
   it('clé maîtresse ERRONÉE (`key-unwrap-failed`) : même remède, même verdict', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('key-unwrap-failed')));
+    const queue = attestedQueue(redis.cacheStore, refusingSealer(new ServerAtRestUnavailableError('key-unwrap-failed')));
 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
@@ -229,7 +237,7 @@ describe('#19827 — un refus PERMANENT détruit l’entrée, comme avant', () =
 
   it('une file construite SANS sceau ne gardera jamais rien en clair', async () => {
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(redis.cacheStore);
+    const queue = attestedQueue(redis.cacheStore);
 
     await queue.enqueue('u-1', entry(), { sealAtRest: true });
 
@@ -241,7 +249,7 @@ describe('#19827 — un refus PERMANENT détruit l’entrée, comme avant', () =
     const redis = fakeRedis();
     const circular: Record<string, unknown> = { id: MSG };
     circular.self = circular;
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       deliveryQueueSealer(async () => new EncryptionService(((): PrismaClient => {
         process.env.ENCRYPTION_MASTER_KEY = MASTER;
@@ -278,7 +286,7 @@ describe('#19827 — la cause transitoire REMONTE du vrai sceau, pas seulement d
       },
     } as unknown as PrismaClient;
     const redis = fakeRedis();
-    const queue = new RedisDeliveryQueue(
+    const queue = attestedQueue(
       redis.cacheStore,
       deliveryQueueSealer(async () => new EncryptionService(prisma)),
     );

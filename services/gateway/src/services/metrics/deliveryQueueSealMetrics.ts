@@ -10,14 +10,16 @@
  * - `delivery_queue_unsealed_entries_total{disposition}` — `kept_in_memory`
  *   (gardée en clair dans le tas), `dropped_unsealable` (rien ne la scellera
  *   jamais dans ce processus), `dropped_volume_cap` (le budget du clair gardé
- *   est plein : garder protège UNE livraison, pas la flotte).
+ *   est plein : garder protège UNE livraison, pas la flotte),
+ *   `dropped_multi_instance` (#19947 : l'instance unique n'est pas attestée,
+ *   une autre réplique servirait la reconnexion).
  *
  * Étiquette BORNÉE, nommée ici : aucun identifiant, aucun texte n'entre dans la série.
  */
 import { Counter, Registry } from 'prom-client';
 import { processMediaStageMetrics } from './mediaStageMetrics';
 
-export const UNSEALED_DISPOSITIONS = ['kept_in_memory', 'dropped_unsealable', 'dropped_volume_cap'] as const;
+export const UNSEALED_DISPOSITIONS = ['kept_in_memory', 'dropped_unsealable', 'dropped_volume_cap', 'dropped_multi_instance'] as const;
 export type UnsealedDisposition = (typeof UNSEALED_DISPOSITIONS)[number];
 
 export type DeliveryQueueSealMetrics = {

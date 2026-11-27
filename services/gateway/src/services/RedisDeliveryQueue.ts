@@ -13,6 +13,8 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import type { DeliveryQueueSealer } from './deliveryQueueSealing';
 import { ServerAtRestUnavailableError, ServerAtRestUnreadableError } from './messaging/serverAtRest';
 import { DEFAULT_UNSEALED_BUDGET, UnsealedRetentionBudget, type UnsealedBudgetLimits } from './deliveryQueueUnsealedBudget';
+import { admittedToHeap, type HeapAdmission } from './deliveryQueueHeapAdmission';
+import { UNVERIFIED_SOLE_INSTANCE, type SoleInstanceWitness } from './gatewayInstanceCensus';
 import { processDeliveryQueueSealMetrics, type DeliveryQueueSealMetrics } from './metrics/deliveryQueueSealMetrics';
 
 const logger = enhancedLogger.child({ module: 'RedisDeliveryQueue' });
@@ -445,16 +447,17 @@ type ReplayPlan = { readonly replay: QueuedMessagePayload[]; readonly retry: Que
 /** #12822 — `sealAtRest` : la charge appartient à une conversation chiffrée au repos. */
 export type DeliveryQueueEnqueueOptions = { readonly sealAtRest?: boolean };
 
-/** #19945 — la série et le budget du clair gardé faute de sceau. */
+/** #19945 — la série et le budget du clair gardé ; #19947 — le témoin d'instance unique (défaut : non attestée). */
 export type RedisDeliveryQueueOptions = {
   readonly metrics?: Pick<DeliveryQueueSealMetrics, 'unsealed'>;
   readonly unsealedBudget?: UnsealedBudgetLimits;
+  readonly soleInstance?: SoleInstanceWitness;
 };
 
 export class RedisDeliveryQueue {
   private memoryQueue: Map<string, QueuedMessagePayload[]> = new Map();
   private readonly metrics: Pick<DeliveryQueueSealMetrics, 'unsealed'>;
-  private readonly unsealedBudget: UnsealedRetentionBudget;
+  private readonly heapAdmission: HeapAdmission;
 
   constructor(
     private cacheStore: CacheStore,
@@ -462,10 +465,8 @@ export class RedisDeliveryQueue {
     options: RedisDeliveryQueueOptions = {},
   ) {
     this.metrics = options.metrics ?? processDeliveryQueueSealMetrics;
-    this.unsealedBudget = new UnsealedRetentionBudget(
-      options.unsealedBudget ?? DEFAULT_UNSEALED_BUDGET,
-      () => this.memoryQueue.values(),
-    );
+    const budget = new UnsealedRetentionBudget(options.unsealedBudget ?? DEFAULT_UNSEALED_BUDGET, () => this.memoryQueue.values());
+    this.heapAdmission = { soleInstance: options.soleInstance ?? UNVERIFIED_SOLE_INSTANCE, budget, metrics: this.metrics };
   }
 
   private getRedis(): Redis | null {
@@ -506,7 +507,9 @@ export class RedisDeliveryQueue {
    * - `keep` — on n'a pas PU, maintenant : clé de conversation pas encore
    *   créée, base des clés injoignable, cause inconnue. L'entrée est gardée
    *   dans la tranche MÉMOIRE, telle quelle, et `enqueue` ne la pousse pas vers
-   *   Redis.
+   *   Redis. #19947 — seulement sous une instance unique ATTESTÉE : la garder
+   *   suppose que la reconnexion tombe sur CE processus, et qu'il ne redémarre
+   *   pas (`deliveryQueueHeapAdmission.ts`, `gatewayInstanceCensus.ts`).
    *
    * La classification est volontairement PLUS LARGE côté `drop` que celle du
    * drain (`isPermanentlyUnreadable`) : là-bas, garder ne coûte rien, l'entrée
@@ -532,31 +535,6 @@ export class RedisDeliveryQueue {
     } catch (error) {
       return refuse(error instanceof Error && 'code' in error ? String(error.code) : 'seal-failed', error);
     }
-  }
-
-  /**
-   * #19945 — une entrée `keep` n'entre dans le tas que si le budget du clair
-   * gardé l'admet (`deliveryQueueUnsealedBudget.ts`). Appelée SANS `await`
-   * entre l'admission et l'écriture dans la tranche mémoire : deux enfilages
-   * concurrents ne peuvent pas se rapprocher du tas l'un au milieu de l'autre.
-   */
-  private admittedUnsealed(userId: string, entry: QueuedMessagePayload, reason: string, serialized: string): boolean {
-    const admitted = this.unsealedBudget.admit(entry, Buffer.byteLength(serialized, 'utf8'));
-    const context = {
-      userId, conversationId: entry.conversationId, messageId: entry.messageId, eventType: normalizedEventType(entry),
-    };
-    if (!admitted) {
-      logger.error('Offline entry of an at-rest conversation DROPPED: the unsealed retention budget is full', {
-        ...context, reason: 'volume-cap', sealReason: reason, disposition: 'dropped',
-      });
-      this.metrics.unsealed('dropped_volume_cap');
-      return false;
-    }
-    logger.error('Offline entry of an at-rest conversation kept unsealed in memory: it cannot be sealed right now', {
-      ...context, reason, disposition: 'kept-in-memory',
-    });
-    this.metrics.unsealed('kept_in_memory');
-    return true;
   }
 
   /**
@@ -674,7 +652,9 @@ export class RedisDeliveryQueue {
     const heapOnly = verdict.outcome === 'keep';
     const redis = heapOnly ? null : this.getRedis();
     const serialized = JSON.stringify(entry);
-    if (verdict.outcome === 'keep' && !this.admittedUnsealed(userId, entry, verdict.reason, serialized)) return;
+    if (verdict.outcome === 'keep' && !admittedToHeap(this.heapAdmission, {
+      userId, entry, sealReason: verdict.reason, bytes: Buffer.byteLength(serialized, 'utf8'),
+    })) return;
     const dedupId = entry.dedupKey ?? entry.messageId;
 
     if (redis) {
