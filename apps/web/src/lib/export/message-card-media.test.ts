@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { layoutMessageCard, type CardMediaOp, type CardOp, type Measure, type MessageCardInput } from './message-card-layout';
 import { CARD_MEDIA_ARRANGEMENTS, CARD_MEDIA_LAYOUTS } from './message-card-arrangement';
 import { CARD_AUDIO_STYLES, formatDuration, normalizePeaks, shortName, type CardMedia } from './message-card-media';
+import { formatMediaTime } from '@/lib/view/seek-track';
 
 const measure: Measure = (text, font) => {
   const size = Number(/(\d+)px/.exec(font)?.[1] ?? '10');
@@ -85,6 +86,34 @@ describe('les médias d’une carte', () => {
   test('en arabe, la vague part de la DROITE', () => {
     const tiles = mediaOps(layoutMessageCard(input([photo(), photo()], { mediaArrangement: 'wave', reply: { author: 'ج', text: 'انظر' } }), measure).ops);
     expect((tiles[0]?.x ?? 0) > (tiles[1]?.x ?? 0)).toBe(true);
+  });
+
+  describe('formatDuration — même horloge plancher que le socle (parité iOS, #20606)', () => {
+    test('plancher, jamais arrondi au supérieur : une fraction ≥ .5 s ne gagne pas une seconde', () => {
+      expect(formatDuration(1_500)).toBe('0:01');
+      expect(formatDuration(4_600)).toBe('0:04');
+      expect(formatDuration(90_500)).toBe('1:30');
+      expect(formatDuration(59_900)).toBe('0:59');
+    });
+
+    test('accord byte-à-byte avec le socle formatMediaTime sur tout l’échantillon', () => {
+      for (const ms of [0, 400, 500, 999, 1_000, 1_500, 4_400, 4_600, 59_999, 60_000, 90_500, 125_000]) {
+        expect(formatDuration(ms)).toBe(formatMediaTime(ms / 1000));
+      }
+    });
+
+    test('durée non finie ou négative rend « 0:00 », jamais « NaN:NaN »', () => {
+      expect(formatDuration(Number.NaN)).toBe('0:00');
+      expect(formatDuration(Number.POSITIVE_INFINITY)).toBe('0:00');
+      expect(formatDuration(-1_000)).toBe('0:00');
+      expect(formatDuration(0)).toBe('0:00');
+    });
+
+    test('minutes sans plafond, secondes toujours sur deux chiffres', () => {
+      expect(formatDuration(67_000)).toBe('1:07');
+      expect(formatDuration(4_400)).toBe('0:04');
+      expect(formatDuration(600_000)).toBe('10:00');
+    });
   });
 
   test('outils : durée lisible, onde normalisée, nom raccourci au milieu', () => {
