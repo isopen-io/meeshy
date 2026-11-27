@@ -26,10 +26,15 @@ struct PublishedPostReply: Decodable {
 /// elle passe par le MÊME canal que l'écho, que le fil, le profil et le statut
 /// consomment déjà par cmid. Le second écho, celui du socket, ne trouve plus de
 /// carte cmid et se déduplique par id.
+///
+/// Seul ce que le serveur annonce sur `post:created` y passe : une story et un
+/// statut partent sur `story:created` / `status:created`, et le fil les
+/// insérerait sinon comme des posts (`belongsToStoryTray`).
 enum PublicationConfirmation {
 
     static func echo(of reply: PublishedPostReply, clientMutationId: String) -> SocketPostCreatedData? {
-        reply.post.map { SocketPostCreatedData(post: $0, clientMutationId: clientMutationId) }
+        guard let post = reply.post, !post.belongsToStoryTray else { return nil }
+        return SocketPostCreatedData(post: post, clientMutationId: clientMutationId)
     }
 
     static func announce(

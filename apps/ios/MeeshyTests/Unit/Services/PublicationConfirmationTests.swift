@@ -22,9 +22,9 @@ final class PublicationConfirmationTests: XCTestCase {
         )
     }
 
-    private func servedPost() -> String {
+    private func servedPost(type: String = "POST") -> String {
         """
-        {"id":"\(Self.serverId)","type":"POST","content":"Bonjour","createdAt":"2026-10-27T10:00:00.000Z",
+        {"id":"\(Self.serverId)","type":"\(type)","content":"Bonjour","createdAt":"2026-10-27T10:00:00.000Z",
          "author":{"id":"u-9","username":"zoe"}}
         """
     }
@@ -40,6 +40,27 @@ final class PublicationConfirmationTests: XCTestCase {
         let decoded = try reply("{\"unexpected\":true}")
 
         XCTAssertNil(PublicationConfirmation.echo(of: decoded.data, clientMutationId: Self.cmid))
+    }
+
+    /// Le serveur annonce une story sur `story:created` et un statut sur
+    /// `status:created`, jamais sur `post:created` : la confirmation REST n'a
+    /// pas à les y pousser, sinon le fil les insère comme des posts.
+    func test_echo_storyServie_nePassePasParLeCanalDesPosts() throws {
+        let echo = PublicationConfirmation.echo(of: try reply(servedPost(type: "STORY")).data, clientMutationId: Self.cmid)
+
+        XCTAssertNil(echo)
+    }
+
+    func test_echo_statutServi_nePassePasParLeCanalDesPosts() throws {
+        let echo = PublicationConfirmation.echo(of: try reply(servedPost(type: "STATUS")).data, clientMutationId: Self.cmid)
+
+        XCTAssertNil(echo)
+    }
+
+    func test_echo_reelServi_rendLePostServeurSousLeCmid() throws {
+        let echo = PublicationConfirmation.echo(of: try reply(servedPost(type: "REEL")).data, clientMutationId: Self.cmid)
+
+        XCTAssertEqual(echo?.post.id, Self.serverId)
     }
 
     func test_announce_reponseServie_publieLEchoSurLeCanalDesCreations() throws {
