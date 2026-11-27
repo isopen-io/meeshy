@@ -19,6 +19,7 @@ import android.text.TextPaint
 import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.FileProvider
 import java.io.File
+import java.text.NumberFormat
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.cos
@@ -46,6 +47,7 @@ internal data class AchievementShareCardSpec(
 ) {
     companion object {
         fun of(res: Resources, locale: Locale, moment: RevealPhotoMoment, authorHandle: String?): AchievementShareCardSpec {
+            moment.flameDays?.let { days -> return flame(res, locale, days) }
             val handle = authorHandle?.trim()?.removePrefix("@")?.takeIf { it.isNotEmpty() }
             val visible = moment.rarity
             return AchievementShareCardSpec(
@@ -56,6 +58,16 @@ internal data class AchievementShareCardSpec(
                 border = visible?.let(RarityBorder::of),
             )
         }
+
+        /** La carte d'une Flamme (iOS `GamePhotoMoments.flame`) : « Flamme », ses jours, et aucune plaque d'auteur. */
+        private fun flame(res: Resources, locale: Locale, days: Int): AchievementShareCardSpec =
+            AchievementShareCardSpec(
+                kicker = res.getString(R.string.game_photo_kicker_flame),
+                title = res.getString(R.string.game_photo_title_flame_days, NumberFormat.getIntegerInstance(locale).format(days)),
+                rarityLine = null,
+                authorLine = null,
+                border = null,
+            )
     }
 }
 

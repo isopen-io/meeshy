@@ -51,6 +51,17 @@ class AchievementShareCardTest {
     }
 
     @Test
+    fun `la carte d'une Flamme dit Flamme et ses jours, sans rarete ni plaque d'auteur`() {
+        val card = spec(RevealPhotoMoment("flame:30", "Ignoré", rarity = null, flameDays = 30))
+
+        assertThat(card.kicker).isEqualTo("Flamme")
+        assertThat(card.title).isEqualTo("30 jours de Flamme")
+        assertThat(card.rarityLine).isNull()
+        assertThat(card.border).isNull()
+        assertThat(card.authorLine).isNull()
+    }
+
+    @Test
     fun `un pseudo deja prefixe d'un arobase ne l'est pas deux fois`() {
         assertThat(spec(handle = "@alice").authorLine).isEqualTo("Haut fait de @alice")
     }

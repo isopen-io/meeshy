@@ -202,14 +202,10 @@ struct AchievementRevealView: View {
         String(localized: "reveal.achievement.photo", defaultValue: "En faire une carte", bundle: .main)
     }
 
-    /// Seul un succès OBTENU, célébré, se photographie.
+    /// Un succès ou une Flamme du carnet, CÉLÉBRÉS, se photographient (`GamePhotoMoments.ofReveal`).
     private var momentPhoto: PhotoMoment? {
         guard occasion.estCelebration, onPhoto != nil else { return nil }
-        switch reveal {
-        case .achievement, .composedAchievement:
-            return GamePhotoMoments.achievement(id: reveal.id, title: titre, rarity: rarity?.visibleRarity)
-        case .badge, .streak, .level: return nil
-        }
+        return GamePhotoMoments.ofReveal(reveal, title: titre, rarity: rarity?.visibleRarity)
     }
 
     /// La plaque d'auteur d'un SUCCÈS obtenu (#10816), au métal de sa rareté visible ; rien pour un badge, une

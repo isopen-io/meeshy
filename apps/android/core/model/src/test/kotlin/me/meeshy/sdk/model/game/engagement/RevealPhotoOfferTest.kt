@@ -25,10 +25,33 @@ class RevealPhotoOfferTest {
     }
 
     @Test
-    fun `un badge, une serie, un niveau ne se photographient pas`() {
-        listOf(EngagementReveal.Badge("content.text_message", 100), EngagementReveal.Streak(7), EngagementReveal.Level(2)).forEach {
+    fun `un badge et un niveau ne se photographient pas`() {
+        listOf(EngagementReveal.Badge("content.text_message", 100), EngagementReveal.Level(2)).forEach {
             assertThat(offer(it)).isNull()
         }
+    }
+
+    @Test
+    fun `une Flamme de 7, 30 ou 100 jours se propose en carte, sous l'identite du carnet`() {
+        val moment = offer(EngagementReveal.Streak(30), entry = epic)!!
+
+        assertThat(moment.id).isEqualTo("flame:30")
+        assertThat(moment.flameDays).isEqualTo(30)
+        assertThat(moment.rarity).isNull()
+        assertThat(offer(EngagementReveal.Streak(7))!!.id).isEqualTo("flame:7")
+        assertThat(offer(EngagementReveal.Streak(100))!!.id).isEqualTo("flame:100")
+        assertThat(offer(achievement)!!.flameDays).isNull()
+    }
+
+    @Test
+    fun `une Flamme qui n'est pas une etape du carnet ne propose rien`() {
+        listOf(3, 14, 60).forEach { assertThat(offer(EngagementReveal.Streak(it))).isNull() }
+    }
+
+    @Test
+    fun `une Flamme consultee, ou sous Jeu masque, ne propose rien`() {
+        assertThat(offer(EngagementReveal.Streak(30), occasion = consultation)).isNull()
+        assertThat(offer(EngagementReveal.Streak(30), offers = false)).isNull()
     }
 
     @Test
