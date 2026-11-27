@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-h4rohp` |
+| Branche de travail de la session courante | `claude/practical-fermat-3gkfko` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -60,7 +60,33 @@ normal.
 | **93w** | 2026-11-23 | `claude/practical-fermat-10zclt` | [#20472](https://github.com/isopen-io/meeshy/pull/20472) → `dev` | ✅ mergé |
 | **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
 | **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
-| **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | [#20607](https://github.com/isopen-io/meeshy/pull/20607) → `dev` | ⏳ ouverte |
+| **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | [#20607](https://github.com/isopen-io/meeshy/pull/20607) → `dev` | ✅ mergé |
+| **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | → `dev` | ⏳ ouverte |
+
+**97w** — cohérence de positionnement (dim. 6) / maintenabilité site-unique (dim. 11)
+/ parité iOS (**suite surgicale de 96w, moitié EXPORT de #20606**) : **jumelle
+divergente d'un formateur `m:ss` sur une carte EXPORTÉE**. `formatDuration`
+(`lib/export/message-card-media.ts`), source unique de la durée peinte sur les quatre
+styles de carte audio (`onde`/`spectre`/`pastille`/`etiquette`), calculait
+`Math.max(0, Math.round(ms/1000))` — arrondi + garde négatif SEULE — alors que le
+socle `formatMediaTime` (`lib/view/seek-track.ts`), le badge de vignette (#20605), le
+lecteur, la citation et les accusés **plancén** et gardent le non-fini en « 0:00 ».
+Deux défauts sur un artefact PARTAGÉ hors de l'app : (1) +1 s à l'œil à la fraction
+≥ .5 s (`90_500 ms` → carte « 1:31 », partout ailleurs « 1:30 ») ; (2) une durée
+indéfinie peignait **« NaN:NaN »** (la garde `Math.max(0,…)` ne couvrait que le
+négatif). Parité iOS confirmée et TRANCHÉE (le « à décider » de #20606) :
+`MediaFormat.duration` plancher par défaut (`.down`), et l'export iOS
+(`MessageCardExcerptStrip.swift:32`) l'appelle sans surcharge — floor. Correction :
+`formatDuration = (ms) => formatMediaTime(ms / 1000)` — délégation au socle, plancher +
+garde hérités, pas de cycle (`seek-track.ts` n'importe rien ; `lib/export/` importe déjà
+de `lib/view/`). La carte étant une IMAGE, la durée n'a pas de jumeau PARLÉ — correction
+complète pour l'export. Témoin NEUF (axe discriminant non couvert) `message-card-media.test.ts`
+(describe « même horloge plancher que le socle », **3 rouges → 13/13 verts** : 1,5 s → « 0:01 »,
+90,5 s → « 1:30 », accord byte-à-byte avec `formatMediaTime`, NaN/∞/négatif/0 → « 0:00 ») ;
+`lib/export/` **547/0** ; `tsc` 0 ; gate #8879 **0**. Housekeeping : 96w confirmée mergée
+(#20607, #20605 fermée) ; appariement analyses↔plans 1:1 (**76/76** `w` → **77/77** avec 97w,
+0 doublon). Dette #20606 reste ouverte pour la moitié `composer-tray` (œil + oreille à
+plancher ensemble). Analyse : `docs/analyses/uiux/2026-11-27-iteration-97w.md`.
 
 **96w** — cohérence de positionnement (dim. 6) / maintenabilité (dim. 11) / parité
 iOS (**revue FRAÎCHE**, #20326 soldée, gate #8879 à 0) : **jumelle divergente d'un

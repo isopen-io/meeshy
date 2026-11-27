@@ -4,6 +4,7 @@ import type { CardOp } from './message-card-ops';
 import { isStickerMedia } from './message-card-sticker';
 import type { CardPalette } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
+import { formatMediaTime } from '@/lib/view/seek-track';
 
 /**
  * **LES MÉDIAS D'UNE CARTE** (#8693, #9236) — l'image jointe, la PREMIÈRE image
@@ -50,12 +51,13 @@ const OVERFLOW_VEIL = 'rgba(0, 0, 0, 0.45)';
 
 const AUDIO_HEIGHT: Readonly<Record<CardAudioStyle, number>> = { onde: 150, spectre: 176, pastille: 124, etiquette: 112 };
 
-/** « 1:07 » — la durée d'un audio, lisible dans toutes les langues. */
+/** « 1:07 » — la durée d'un audio sur une carte exportée, lisible dans toutes les
+ * langues. DÉLÈGUE au socle `formatMediaTime` (`lib/view/seek-track.ts`, #20606) :
+ * même horloge PLANCHER + garde non-fini/négatif → « 0:00 » que le lecteur, le badge
+ * de vignette (#20605), la citation et les accusés. Parité iOS : `MediaFormat.duration`
+ * plancher par défaut (`rounding: .down`). Jamais d'arithmétique `m:ss` recopiée. */
 export function formatDuration(ms: number): string {
-  const total = Math.max(0, Math.round(ms / 1000));
-  const minutes = Math.floor(total / 60);
-  const seconds = total % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return formatMediaTime(ms / 1000);
 }
 
 /** Une onde dont chaque barre tient entre 0 et 1 — la plus haute touche le plafond. */
