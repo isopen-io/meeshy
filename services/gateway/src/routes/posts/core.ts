@@ -519,10 +519,9 @@ export function registerCoreRoutes(
       }
 
       if (replayed) {
-        return sendSuccess(reply, servePublishedPost({
+        return sendSuccess(reply, await servePublishedPost({
           post: post as unknown as Record<string, unknown>,
-          references: undefined,
-          request,
+          references: undefined, request, prisma,
         }), { statusCode: 201 });
       }
 
@@ -666,10 +665,9 @@ export function registerCoreRoutes(
       // post ORIGINAL d'une republication porte, lui, la relation sous son nom
       // de schéma (`repostOfInclude`), et un client ne décode pas
       // `repostOf.postMentions`.
-      return sendSuccess(reply, servePublishedPost({
+      return sendSuccess(reply, await servePublishedPost({
         post: served as unknown as Record<string, unknown>,
-        references: undefined,
-        request,
+        references: undefined, request, prisma,
       }));
     } catch (error) {
       logError(fastify.log, '[GET /posts/:postId] Error', error);
@@ -857,10 +855,9 @@ export function registerCoreRoutes(
       // La réponse va à l'AUTEUR — seul autorisé à éditer — et lui voit tout.
       // Même composition que les portes de création (`servePublishedPost`,
       // #4151) : une édition rend le même post que la publication.
-      return sendSuccess(reply, servePublishedPost({
+      return sendSuccess(reply, await servePublishedPost({
         post: post as unknown as Record<string, unknown>,
-        references,
-        request,
+        references, request, prisma,
       }));
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
