@@ -198,6 +198,42 @@ final class SocketInboundRouteTableTests: XCTestCase {
         }
     }
 
+    /// #16858 — la portée COMMUNAUTÉ, telle que `PUT/DELETE /user-preferences/communities/:id` l'émet
+    /// (ni `conversationId`, ni `category`), atteint son canal au lieu d'être jetée par le décodeur catégorie.
+    func test_userPreferencesUpdated_communityScope_reachesTheCommunityPreferencesChannel() async {
+        let registrar = installed(MessageSocketRoutes.all(for: .shared))
+        let written: [String: Any] = [
+            "userId": "u1", "communityId": "com-pinned", "reset": false,
+            "preferences": [
+                "isPinned": true, "isMuted": false, "isArchived": false, "isHidden": false,
+                "notificationLevel": "mentions", "customName": NSNull(),
+                "categoryId": NSNull(), "orderInCategory": NSNull(),
+            ] as [String: Any],
+        ]
+        let reset: [String: Any] = ["userId": "u1", "communityId": "com-reset", "reset": true, "preferences": NSNull()]
+
+        await expectOneValue(from: CommunityPreferencesChannel.shared.updated, where: {
+            $0.communityId == "com-pinned" && !$0.reset && $0.preferences?.isPinned == true
+                && $0.preferences?.notificationLevel == "mentions"
+        }) {
+            registrar.deliver("user:preferences-updated", written)
+        }
+        await expectOneValue(from: CommunityPreferencesChannel.shared.updated, where: {
+            $0.communityId == "com-reset" && $0.reset && $0.preferences == nil
+        }) {
+            registrar.deliver("user:preferences-updated", reset)
+        }
+        await expectNoValue(from: MessageSocketManager.shared.userPreferencesUpdated) {
+            registrar.deliver("user:preferences-updated", written)
+        }
+        await expectNoValue(from: MessageSocketManager.shared.userPreferencesConversationUpdated) {
+            registrar.deliver("user:preferences-updated", reset)
+        }
+        await expectNoValue(from: CommunityPreferencesChannel.shared.updated) {
+            registrar.deliver("user:preferences-updated", ["userId": "u1", "category": "pinned"])
+        }
+    }
+
     func test_callSignal_routesByType() async {
         let registrar = installed(MessageSocketRoutes.all(for: .shared))
         func signal(_ type: String) -> [String: Any] {

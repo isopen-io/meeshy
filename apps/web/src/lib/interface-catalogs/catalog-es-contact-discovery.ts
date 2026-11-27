@@ -18,6 +18,9 @@ const esContactDiscovery = {
   'settings.notif.together': 'Recibir invitaciones «juntos»',
   'settings.notif.together.info':
     'Un allegado puede invitarte a ver o escuchar juntos. Desactivado, tus allegados ya no pueden.',
+  'settings.notif.talkie': 'Recibir el walkie-talkie',
+  'settings.notif.talkie.info':
+    'Un allegado puede hablarte en directo, sin que descuelgues. Desactivado, tus allegados ya no pueden.',
 } satisfies ContactDiscoveryCatalogSlice;
 
 export default esContactDiscovery;
