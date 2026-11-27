@@ -97,8 +97,8 @@ final class ComposerMediaAltDoorTests: XCTestCase {
     /// **Le champ est câblé au meuble depuis le portail.** Une section montée
     /// sans binding serait un champ qui n'écrit nulle part.
     func test_lePortail_remetLeBindingDuMeuble() throws {
-        let portail = compact(try source("MeeshyComposerHost+Portals.swift"))
-        XCTAssertTrue(portail.contains("mediaAltText:mediaAltBinding(for:objet.id)"),
+        let portail = compact(try source("MeeshyComposerHost+ObjectEditing.swift"))
+        XCTAssertTrue(portail.contains("mediaAltText:host.mediaAltBinding(for:objet.id)"),
                       "Le portail doit remettre le binding du meuble, keyé par l'id de "
                       + "l'objet ouvert.")
     }

@@ -105,6 +105,11 @@ struct ComposerObjectEditorView: View {
     /// est donc CONSOMMÉE à la première résolution de famille, ci-dessous.
     var initialSection: ComposerObjectEditorSection?
 
+    /// **Supprimer l'objet ou changer son plan** (#5028) — le MEUBLE l'exécute,
+    /// comme pour la scène : c'est lui qui retire un média et qui ferme cet
+    /// écran. `nil` ⇒ le rail ne porte que l'historique.
+    var onObjectAction: ((StoryCanvasContextAction) -> Void)?
+
     /// **La demande n'a lieu qu'une fois.** Sans ce drapeau, changer d'objet
     /// depuis le plan 2D ramènerait l'auteur à la section par laquelle il est
     /// entré, en effaçant l'outil qu'il réglait — le contraire exact de ce que
@@ -558,13 +563,20 @@ struct ComposerObjectEditorView: View {
     /// dérivé sur le glyphe, la taille ou l'ordre, et personne n'aurait rougi —
     /// ce sont des jetons, pas des signatures.
     ///
-    /// `actions: []` et pas de `onAddSlide` : cet écran règle UN objet, il ne
-    /// crée pas de slide et n'empile rien. Le rail se réduit donc à ce que
-    /// l'auteur peut vraiment défaire ici, et disparaît si rien ne l'est.
+    /// Pas de `onAddSlide` : cet écran règle UN objet, il ne crée pas de slide.
+    /// Sous l'historique, ce qui porte sur l'objet RÉGLÉ — la corbeille, et
+    /// l'ordre des plans quand la scène le sert (#5028), par la politique de la
+    /// scène (`ComposerObjectEditorRail.objectActions`).
+    private var objectActions: [StoryCanvasContextAction] {
+        guard onObjectAction != nil else { return [] }
+        return ComposerObjectEditorRail.objectActions(slide: viewModel.currentSlide, objectId: objectId)
+    }
+
     private var historyRail: some View {
         ComposerTrailingRail(
             actions: [],
             plateauTint: plateauTint,
+            onAction: onObjectAction,
             onUndo: viewModel.canUndoGlobal ? { viewModel.undoGlobal() } : nil,
             onRedo: viewModel.canRedoGlobal ? { viewModel.redoGlobal() } : nil,
             // **Pas de colonne vide** : « pas de barre d'action qui se prolonge sans
@@ -572,7 +584,8 @@ struct ComposerObjectEditorView: View {
             // d'un seul bouton ; des
             // boutons SÉPARÉS, posés au bas, n'occupent que ce qu'ils portent.
             pushesToThumb: false,
-            separateButtons: true
+            separateButtons: true,
+            footActions: objectActions
         )
         .frame(width: ComposerRailGeometry.railWidth)
         .frame(maxHeight: .infinity, alignment: .bottom)

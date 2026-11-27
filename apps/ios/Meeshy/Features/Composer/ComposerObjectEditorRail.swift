@@ -665,3 +665,37 @@ struct ComposerObjectEditorOptionsHeightKey: PreferenceKey {
         value = max(value, nextValue())
     }
 }
+
+// MARK: - Supprimer et changer de plan depuis l'éditeur (#5028)
+
+/// > Directive porteur (#5028) : « en dessous de undo redo une poubelle
+/// > permet de supprimer l'objet entièrement ou de le descendre/remonter dans
+/// > les layers du plan ».
+///
+/// **La MÊME politique que la scène, jamais une seconde liste** : ce que
+/// `ComposerTrailingRailPolicy` accorde à l'objet pour l'hôte de scène, réduit
+/// aux actions qui portent sur l'objet RÉGLÉ. L'ordre des plans se fait au
+/// toucher (#13918) : tant que la scène ne sert ni « Monter » ni « Reculer »,
+/// le filtre les retranche ici aussi. Le jour où elle les servira,
+/// `ComposerObjectEditorPresenter.perform` devra les exécuter par la même
+/// primitive que la scène.
+extension ComposerObjectEditorRail {
+
+    nonisolated static let objectActionScope: Set<StoryCanvasContextAction> = [.delete, .bringForward, .sendBackward]
+
+    nonisolated static func objectActions(slide: StorySlide, objectId: String) -> [StoryCanvasContextAction] {
+        guard slide.sceneObject(id: objectId) != nil else { return [] }
+        return ComposerTrailingRailPolicy.actions(
+            slide: slide,
+            selectedId: objectId,
+            served: ComposerTrailingColumn.servedActions.intersection(objectActionScope),
+            hasEditor: false,
+            canLeaveScene: false)
+    }
+
+    /// **Supprimer ferme l'écran** : l'objet réglé a disparu, et un éditeur sans
+    /// sujet n'est pas un état. Changer de plan garde l'objet ouvert.
+    nonisolated static func closesEditor(after action: StoryCanvasContextAction) -> Bool {
+        action == .delete
+    }
+}

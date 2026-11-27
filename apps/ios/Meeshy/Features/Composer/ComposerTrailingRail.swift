@@ -102,6 +102,12 @@ struct ComposerTrailingRail: View {
     /// pouce (#8713), comme pour le dessin.
     var footFollowsOptions: Bool = false
 
+    /// **Les actions de l'objet RÉGLÉ, sous l'historique** (#5028) : la
+    /// corbeille, puis l'ordre des plans quand l'hôte le sert. Déjà filtrées
+    /// par `ComposerObjectEditorRail.objectActions` — la vue ne décide de rien.
+    /// Vide sur la scène, dont la barre de sélection porte « Retirer ».
+    var footActions: [StoryCanvasContextAction] = []
+
     @State private var lastTapped: String?
 
     /// **Le rail n'existe que s'il porte quelque chose** : une option, un
@@ -109,7 +115,7 @@ struct ComposerTrailingRail: View {
     /// passe encore. Sur la scène, le `[+]` vit à la barre haute (#8713).
     private var isEmpty: Bool {
         actions.isEmpty && onAddSlide == nil && onUndo == nil && onRedo == nil && options.isEmpty
-            && onTime == nil
+            && onTime == nil && footActions.isEmpty
     }
 
     var body: some View {
@@ -196,6 +202,13 @@ struct ComposerTrailingRail: View {
             if let onRedo {
                 tile(symbol: "arrow.uturn.forward", label: ComposerHistoryCopy.redo,
                      key: "redo", isOn: false, action: onRedo)
+            }
+            ForEach(footActions, id: \.self) { action in
+                tile(symbol: action.systemImage, label: action.title,
+                     key: String(describing: action), isOn: false,
+                     tint: action == .delete ? MeeshyColors.error : ComposerFloatingRailInk.rest) {
+                    onAction?(action)
+                }
             }
             if let onAddSlide {
                 tile(symbol: "plus.rectangle.on.rectangle", label: ComposerTrailingRailCopy.addSlide,

@@ -99,4 +99,66 @@ extension MeeshyComposerHost {
         viewModel.exitTextEditingMode()
         editedObject = nil
     }
+
+    var objectEditorPresenter: ComposerObjectEditorPresenter { ComposerObjectEditorPresenter(host: self) }
+}
+
+/// **L'éditeur d'objet plein écran, monté par le meuble** (#4634) — et ce qu'il
+/// remet au meuble : supprimer l'objet ouvert, ou changer son plan (#5028).
+@MainActor
+struct ComposerObjectEditorPresenter {
+    let host: MeeshyComposerHost
+
+    func editor(for objet: ComposerEditedObject) -> ComposerObjectEditorView {
+        ComposerObjectEditorView(
+            viewModel: host.viewModel,
+            // La MÊME boîte que la surface du dessous : le portail charge
+            // ses candidats une fois (`.task` plus bas), et l'écran modal
+            // — où la frappe a réellement lieu depuis #4634 — la reçoit.
+            mentionBox: host.sceneMentionBox,
+            objectId: objet.id,
+            aspectRatio: host.viewModel.currentCanvasRatio,
+            plateauTint: host.tint.color,
+            sceneImages: host.viewModel.loadedImages,
+            sceneStickerAnimations: host.viewModel.loadedStickerAnimations,
+            sceneImagesVersion: host.viewModel.loadedImagesVersion,
+            onClose: { host.closeObjectEditor() },
+            // Le plan 2D peut désigner un autre objet : c'est le MEUBLE qui
+            // possède « quel objet est ouvert », et deux sources pour ce
+            // fait divergeraient au premier tap sur une barre voisine.
+            onSelectObject: { id in host.editedObject = ComposerEditedObject(id: id) },
+            // **La carte vit au MEUBLE** (#4756) : c'est lui qui greffe la
+            // charge d'accessibilité sur ce que l'atelier remet au publieur
+            // (`accessibilityCarryingComposerCaptions`). Un magasin tenu par
+            // l'éditeur mourrait à sa fermeture — le défaut que la légende a
+            // payé avant #4890.
+            mediaAltText: host.mediaAltBinding(for: objet.id),
+            // **La section par laquelle on ENTRE** (2026-09-05). Un jeton
+            // de l'inspecteur nomme un réglage précis ; l'écran s'ouvre
+            // dessus au lieu de le faire rechercher. `nil` pour les autres
+            // portes — appui long, création, plan 2D — qui ne désignent
+            // rien.
+            //
+            // L'ordre des arguments SUIT la déclaration : cette vue n'a pas
+            // d'`init` écrit à la main, donc son init memberwise impose
+            // l'ordre des propriétés.
+            initialSection: objet.section,
+            onObjectAction: { perform($0, on: objet.id) }
+        )
+    }
+
+    /// Le même retrait que la corbeille de la scène, sans confirmation :
+    /// l'historique global est le filet, comme sur la scène. Supprimer ferme
+    /// l'écran — un éditeur sans sujet n'est pas un état.
+    func perform(_ action: StoryCanvasContextAction, on objectId: String) {
+        if action == .delete { remove(objectId) }
+        if ComposerObjectEditorRail.closesEditor(after: action) { host.closeObjectEditor() }
+    }
+
+    private func remove(_ objectId: String) {
+        host.retractMedia(objectIds: [objectId])
+        guard host.selectedSceneItemId == objectId else { return }
+        host.selectedSceneItemId = nil
+        host.selectedSceneItemKind = nil
+    }
 }

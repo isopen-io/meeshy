@@ -257,4 +257,57 @@ final class ComposerObjectEditorRailTests: XCTestCase {
         XCTAssertTrue(ComposerObjectEditorRail.entries(for: .media, hasTrimmableSource: false)
             .contains(.media(.filter)), "Les autres outils de l'image restent.")
     }
+
+    // MARK: - Supprimer et changer de plan depuis l'éditeur (#5028)
+
+    private func slideDeTextes(_ textes: [StoryTextObject]) -> StorySlide {
+        StorySlide(id: "s", effects: StoryEffects(textObjects: textes), duration: 6, order: 0)
+    }
+
+    private func texte(_ id: String, locked: Bool = false) -> StoryTextObject {
+        var t = StoryTextObject(id: id, text: id)
+        t.isLocked = locked
+        return t
+    }
+
+    /// **La MÊME politique que la scène, jamais une seconde liste** : ce que
+    /// l'éditeur sert est ce que `ComposerTrailingRailPolicy` accorde à l'objet
+    /// pour l'hôte de scène, réduit à la suppression et à l'ordre des plans.
+    func test_lesActionsDeLEditeur_sontCellesDeLaPolitiqueDeScene() {
+        let slide = slideDeTextes([texte("a"), texte("b")])
+        let scene = ComposerTrailingRailPolicy.actions(
+            slide: slide, selectedId: "a", served: ComposerTrailingColumn.servedActions,
+            hasEditor: true, canLeaveScene: false)
+        let attendu = scene.filter(ComposerObjectEditorRail.objectActionScope.contains)
+        XCTAssertEqual(ComposerObjectEditorRail.objectActions(slide: slide, objectId: "a"), attendu)
+        XCTAssertTrue(ComposerObjectEditorRail.objectActions(slide: slide, objectId: "a").contains(.delete),
+                      "l'objet ouvert se supprime depuis l'éditeur")
+    }
+
+    /// L'ordre des plans se fait au TOUCHER (décision porteur #13918) : la scène
+    /// ne sert ni « Monter » ni « Reculer », donc l'éditeur non plus.
+    func test_lEditeur_neSertPasLOrdre_tantQueLaSceneNeLeSertPas() {
+        let actions = ComposerObjectEditorRail.objectActions(
+            slide: slideDeTextes([texte("a"), texte("b")]), objectId: "a")
+        XCTAssertEqual(actions.contains(.bringForward),
+                       ComposerTrailingColumn.servedActions.contains(.bringForward))
+        XCTAssertEqual(actions.contains(.sendBackward),
+                       ComposerTrailingColumn.servedActions.contains(.sendBackward))
+        XCTAssertFalse(actions.contains(.duplicate), "dupliquer n'est pas l'affaire de l'éditeur")
+    }
+
+    /// Un objet verrouillé ne se supprime pas, et un objet absent n'a rien.
+    func test_objetVerrouilleOuAbsent_aucuneSuppression() {
+        let slide = slideDeTextes([texte("badge", locked: true), texte("b")])
+        XCTAssertFalse(ComposerObjectEditorRail.objectActions(slide: slide, objectId: "badge").contains(.delete))
+        XCTAssertTrue(ComposerObjectEditorRail.objectActions(slide: slide, objectId: "absent").isEmpty)
+    }
+
+    /// **Supprimer ferme l'écran** : rester sur un éditeur sans sujet n'est
+    /// pas un état. Changer de plan, lui, garde l'objet ouvert.
+    func test_supprimer_fermeLEditeur_changerDePlan_non() {
+        XCTAssertTrue(ComposerObjectEditorRail.closesEditor(after: .delete))
+        XCTAssertFalse(ComposerObjectEditorRail.closesEditor(after: .bringForward))
+        XCTAssertFalse(ComposerObjectEditorRail.closesEditor(after: .sendBackward))
+    }
 }
