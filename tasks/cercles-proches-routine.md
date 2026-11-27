@@ -2020,3 +2020,46 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : web de #19888, chaque épingle dit ce que vit la personne
+
+- Reprise : aucune PR de la routine ouverte. Le journal s'était arrêté le 2026-11-23 ; entre-temps, d'autres sessions
+  ont fusionné l'alerte « un Sang s'approche » (#20540) et réservé `claude/cercles-20542-purge-alerte-sang` (#20542).
+  #20514 (découpage iOS du partage de position, ouverte depuis le 2026-11-24) écrit les fichiers iOS de
+  `SharedLocation/` : les lots iOS de #20416, #20308 et #20054 lui cèdent. #19682 attend toujours la décision du porteur.
+- Lot : la part « épingles vivantes » de #19888, iso `PeerLiveOverlays` (iOS #19885). Chaque épingle de la carte des
+  cercles porte l'écoute (bandeau défilant), la batterie, le téléphone injoignable (qui prime sur la batterie),
+  « En appel » et l'alerte d'inactivité, lus dans leurs caches tels que servis à ce lecteur, et les dit dans le nom de
+  l'épingle. `usePinLife` / `pinLifeLabel` (`apps/web/src/lib/shared-locations/pin-life.ts`). Rien de nouveau ne part
+  du serveur ; aucune requête de plus.
+- Audit adversarial : non requis (affichage de signaux déjà servis et déjà tronqués par la passerelle).
+- Gates : témoins `shared-locations-map-pin-life` 7/7 (5 rouges avant le code) ; web `bun test` 35 585 verts, 1 rouge
+  hérité (`act-leak-guard`) ; `tsc` web 0.
+- Reste de #19888 : commandes dans la zone sûre, « Autour de toi » et la fiche rangeables, appui long ⇒ talkie,
+  chrome lisible sur fond clair. La chute (#18748) n'a pas encore de glyphe d'avatar sur le web.
+- Prochain lot : le reste de #19888 (feuilles rangeables + talkie à l'appui long) ; iOS de #20416 / #20308 / #20054
+  dès que #20514 est fusionnée ou abandonnée.
+
+## 2026-11-27 — réveil de 13 h (second run, même heure) : la liste dit la vie de la personne (#20658)
+
+- Collision : ce run a écrit la même tranche de #19888 en parallèle du run ci-dessus, qui a fusionné le premier
+  (867e62f8b, plus complet : appel et inactivité en plus). Selon la règle « celui qui a payé le second cède », ce run
+  a repris la version de `dev` et n'a gardé que ce qu'elle ne faisait pas.
+- Lot : #20658. La ligne de la liste des positions dit la même vie que le nom de l'épingle (`usePinLife` /
+  `pinLifeLabel`), y compris pour une personne hors de l'emprise, dont l'épingle n'est pas posée.
+- Gates : `shared-locations-map-pin-life` 9/9 (2 rouges avant le code), `shared-locations-map-view` vert ; `tsc` web 0.
+
+## 2026-11-27 — réveil de 14 h : une alerte de proximité entre Sangs ne survit pas (#20542)
+
+- Reprise : #20417 (iOS de #20249) fusionnée le 23/11, #20463 (Android de #19883) aussi. Aucune PR de la routine
+  ouverte. Les lots iOS de position (#20416 point 2, #20308, #20054, #20056) touchent
+  `SharedLocationSharingCenter.swift` et `SharedLocationRosterStore.swift`, que la PR brouillon #20514 (découpage par
+  responsabilité, autre session) a déjà écrits : ce réveil cède et prend un lot serveur.
+- Lot : #20542. L'effacement de l'historique retire toute alerte `blood_proximity` qui nomme le titulaire (chez tous ses
+  Sangs) et celles de sa cloche ; retirer `location.proximity` à un Sang retire chez lui les alertes qui nomment le
+  titulaire. Lignes supprimées puis annoncées (`notification:deleted`, révocation push). Index TTL PARTIEL sur
+  `Notification.expiresAt` au seul type `blood_proximity` (`2026-11-27-notification-blood-proximity-ttl.mongodb.js`) :
+  à jouer sur le staging ; en production, feu vert du porteur et sauvegarde vérifiée d'abord.
+- PR : #20698 (vers `dev`). Suivis de l'audit : #20697.
+- Prochain lot : #20514 fusionnée ou abandonnée ⇒ iOS de #20416 / #20308, #20054, #20056 ; sinon un lot web/serveur
+  du jalon 2 (#20540 suites, #19888).
