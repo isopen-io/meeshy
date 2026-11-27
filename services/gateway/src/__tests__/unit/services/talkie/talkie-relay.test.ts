@@ -123,20 +123,41 @@ describe('#13935 — le son se lit dès sa réception', () => {
     expect(chunks[0].payload).toMatchObject({ talkieId, fromUserId: FROM, capturedAt: 1, relayedAt: t.now() });
   });
 
-  it('le relais d’un fragment ne prend que le temps d’une lecture de cache : p95 sous 5 ms sur 300 fragments', async () => {
-    const t = relayWith();
+  // #20130 — le témoin compte le TRAVAIL, jamais l'horloge murale : une p95 « sous 5 ms » rendait exactement 5 ms
+  // en local et rougissait sur un runner chargé sans que le relais ait changé. Ce qui se garde : un fragment ne
+  // coûte qu'UNE lecture de cache (`cutAt`), aucune autre dépendance asynchrone, et il repart avant le prochain tour
+  // de boucle — une E/S ou une attente glissée dans le chemin du fragment rougit ici en nommant la dépendance.
+  it('le relais d’un fragment ne coûte qu’une lecture de cache, aucune autre E/S, et repart avant le prochain tour de boucle', async () => {
+    const calls = { judge: 0, withinStartRate: 0, cutAt: 0, fallbackConversation: 0, wake: 0, followUp: 0 };
+    const t = relayWith({
+      judge: async () => { calls.judge += 1; return { ok: true }; },
+      withinStartRate: async () => { calls.withinStartRate += 1; return true; },
+      cutAt: async () => { calls.cutAt += 1; return null; },
+      fallbackConversation: async () => { calls.fallbackConversation += 1; return null; },
+      wake: async () => { calls.wake += 1; },
+      followUp: async () => { calls.followUp += 1; },
+    });
     const talkieId = await open(t);
-    const durations: number[] = [];
+    const opening = { ...calls };
+    const lateChunks: number[] = [];
     for (let seq = 0; seq < 300; seq += 1) {
-      const before = performance.now();
-      await t.relay.chunk(SOCKET, FROM, { talkieId, seq, data: frame(1000) });
-      durations.push(performance.now() - before);
+      let relayed = false;
+      void t.relay.chunk(SOCKET, FROM, { talkieId, seq, data: frame(1000) }).then(() => { relayed = true; });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      if (!relayed) lateChunks.push(seq);
     }
     t.relay.dispose();
 
-    const sorted = [...durations].sort((a, b) => a - b);
     expect(of(t, 'talkie:chunk')).toHaveLength(300);
-    expect(sorted[Math.floor(sorted.length * 0.95)]).toBeLessThan(5);
+    expect(lateChunks).toEqual([]);
+    expect({
+      judge: calls.judge - opening.judge,
+      withinStartRate: calls.withinStartRate - opening.withinStartRate,
+      cutAt: calls.cutAt - opening.cutAt,
+      fallbackConversation: calls.fallbackConversation - opening.fallbackConversation,
+      wake: calls.wake - opening.wake,
+      followUp: calls.followUp - opening.followUp,
+    }).toEqual({ judge: 0, withinStartRate: 0, cutAt: 300, fallbackConversation: 0, wake: 0, followUp: 0 });
   });
 
   it('un ArrayBuffer est relayé en octets', async () => {

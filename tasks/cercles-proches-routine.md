@@ -2020,3 +2020,18 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : le témoin du relais talkie compte le travail, plus l'horloge (#20130)
+
+- Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées le 2026-11-23. Aucune PR de la routine ouverte.
+- Anti-collision : #20514 (autre session, vivante) découpe `SharedLocationSharingCenter` et ses voisins iOS. Les lots iOS
+  de #20416 (point 2), #20308, #20054 et #20056 écrivent ces mêmes fichiers : ils lui cèdent jusqu'à sa fusion.
+- Lot : #20130. La p95 « sous 5 ms » en horloge murale du relais talkie rendait exactement 5 ms en local et a rendu
+  `dev` rouge au hasard (re-run vert sans changement). Le témoin garde la propriété, « un fragment ne coûte qu'une lecture
+  de cache », en la comptant : sur 300 fragments, 300 `cutAt` et zéro appel à `judge`, `withinStartRate`,
+  `fallbackConversation`, `wake` et `followUp` ; chaque fragment repart avant le prochain `setImmediate`. Un rouge nomme
+  la dépendance fautive.
+- Preuve par mutation : un `judge` glissé dans le chemin du fragment ⇒ rouge `judge: 300` ; un `setTimeout(0)` ⇒ rouge.
+- Gates : passerelle `talkie/` 216/216, aussi avec huit cœurs saturés ; `tsc` passerelle 0 (les 3 erreurs du
+  `tsconfig.test.json` sur ce fichier existent déjà sur `dev`).
+- Prochain lot : après la fusion de #20514, iOS de #20416 / #20308, puis #20054, #20056 ; sinon web de #19888.
