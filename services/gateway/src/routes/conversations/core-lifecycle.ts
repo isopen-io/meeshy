@@ -31,8 +31,8 @@ import {
 } from '../../services/messaging/messageRequests';
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
-import { applyCommunityAdmission, invitedEntrants, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
-import { refuseCommunityAddition, spendCommunityAdditionBatch, spendCommunityAdditionByActor } from '../../utils/community-addition-budget';
+import { applyCommunityAdmission } from '../../services/conversations/communityMembershipSync';
+import { gateHostCommunityAdmission } from './host-community-admission';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
 import { gateParticipantsPresence } from './participants-presence';
@@ -208,11 +208,10 @@ export function registerCreateConversationRoute(
         throw createError(ErrorCode.MISSING_REQUIRED_FIELD, 'Un groupe sans invité doit avoir un titre');
       }
 
-      // #16639 — faire entrer les participants dans la communauté hôte est une
-      // INVITATION : elle se décide AVANT la création, sous la loi de
-      // `POST /communities/:id/invite`, pour refuser sans rien écrire.
-      const communityAdmission = communityId && hostCommunity
-        ? await planCommunityAdmission(prisma, {
+      // #16639, #20464 — l'entrée dans la communauté hôte se décide et se
+      // débite AVANT la création (`host-community-admission.ts`).
+      const hostGate = communityId && hostCommunity
+        ? await gateHostCommunityAdmission(fastify, prisma, reply, {
             communityId,
             actorId: userId,
             createdBy: hostCommunity.createdBy,
@@ -221,31 +220,8 @@ export function registerCreateConversationRoute(
             participantIds: uniqueParticipantIds,
           })
         : null;
-      if (communityAdmission?.kind === 'refused') {
-        if (communityAdmission.reason === 'invite-forbidden') {
-          return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
-        }
-        // #20464 — une tentative vers un compte non ajoutable coûte une unité à
-        // l'acteur, comme sur `POST …/invite` : la porte n'est pas un sondage gratuit.
-        const probe = await spendCommunityAdditionByActor(fastify, userId);
-        return probe.allowed
-          ? sendNotFound(reply, 'User to invite not found')
-          : refuseCommunityAddition(reply, probe.retryAfter);
-      }
-      // #20464 — faire entrer des participants dans la communauté hôte débite
-      // le budget des ajouts sans accord (`POST …/invite` et `…/members`) :
-      // une unité par personne qui ENTRE à l'acteur, une à chacune. Refusé ⇒ 429,
-      // rien n'est créé.
-      if (communityAdmission?.kind === 'admitted' && communityId) {
-        const budget = await spendCommunityAdditionBatch(fastify, {
-          actorId: userId,
-          communityId,
-          targetIds: invitedEntrants(communityAdmission),
-        });
-        if (!budget.allowed) {
-          return refuseCommunityAddition(reply, budget.retryAfter);
-        }
-      }
+      if (hostGate?.kind === 'replied') return reply;
+      const communityAdmission = hostGate?.kind === 'proceed' ? hostGate.admission : null;
 
       // Block enforcement applies to DIRECT conversations only (group / community /
       // public / global / broadcast are never block-enforced). Bidirectional: reject
