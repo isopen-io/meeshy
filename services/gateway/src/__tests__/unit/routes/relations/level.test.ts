@@ -57,7 +57,7 @@ const memeObjectId = (a: string, b: string): boolean => a.toLowerCase() === b.to
 function prismaDouble({ niveaux, bloques = [], acceptees = [], roles = {}, naissances = {}, supprimes = [] }: Monde) {
   const user = {
     findMany: jest.fn<any>(async (args: any) =>
-      Object.entries(roles)
+      Object.entries({ [MOI]: 'USER', [AUTRE]: 'USER', ...roles })
         .filter(([id]) => args.where.id.in.some((wanted: string) => memeObjectId(wanted, id)))
         .map(([id, role]) => ({ id, role, birthDate: naissances[id] ?? null, isActive: true, deletedAt: supprimes.includes(id) ? new Date() : null, deactivatedAt: null }))
     ),

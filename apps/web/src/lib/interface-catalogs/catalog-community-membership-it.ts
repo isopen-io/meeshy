@@ -61,6 +61,7 @@ const itCommunityMembership = {
   'community.invite.done.other': '{count} persone sono entrate nella community.',
   'community.invite.partial': 'Alcune persone non sono state aggiunte.',
   'community.invite.failed': 'L’invito non è riuscito. Riprova.',
+  'community.invite.throttled': 'Troppe aggiunte per ora. Riprova più tardi.',
   'community.invite.refused': 'Non puoi più invitare in questa community.',
   'community.create.members.title': 'Aggiungi membri',
   'community.create.members.search': 'Cerca',

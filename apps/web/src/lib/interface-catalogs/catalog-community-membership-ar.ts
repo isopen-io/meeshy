@@ -61,6 +61,7 @@ const arCommunityMembership = {
   'community.invite.done.other': 'انضم {count} أشخاص إلى المجتمع.',
   'community.invite.partial': 'تعذّرت إضافة بعض الأشخاص.',
   'community.invite.failed': 'فشلت الدعوة. حاول مرة أخرى.',
+  'community.invite.throttled': 'عدد كبير جدًا من الإضافات حاليًا. حاول لاحقًا.',
   'community.invite.refused': 'لم يعد بإمكانك الدعوة إلى هذا المجتمع.',
   'community.create.members.title': 'إضافة أعضاء',
   'community.create.members.search': 'بحث',

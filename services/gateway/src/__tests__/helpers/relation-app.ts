@@ -9,6 +9,7 @@ import { notificationRawStore, type StoredNotification } from './notification-ra
 import Fastify from 'fastify';
 import { relationStore, type RelationStore } from './user-relation-store';
 import { clearPrivacyPreferencesCache } from '../../services/preferences/privacy-cache';
+import { findManyIn } from './mongo-where';
 
 export const MOI = '507f1f77bcf86cd799439011';
 export const AUTRE = '507f1f77bcf86cd799439022';
@@ -63,6 +64,12 @@ export type AppOptions = {
   readonly reglages?: ReadonlyArray<Record<string, unknown>>;
   /** Le document `UserPreferences.privacy` de chaque compte (#19362). */
   readonly privacy?: Readonly<Record<string, Record<string, boolean>>>;
+  /** L'état de compte de chacun (#19571) : `isActive`, `deactivatedAt`, `deletedAt` posés sur sa ligne `User`. */
+  readonly comptes?: Readonly<Record<string, Record<string, unknown>>>;
+  /** La présence en base de chaque compte (#19539) : `isOnline` et `lastActiveAt`. */
+  readonly presences?: Readonly<Record<string, { readonly isOnline: boolean; readonly lastActiveAt: Date | null }>>;
+  /** Les comptes dont une socket est au premier plan, que le gestionnaire sert (#19539). Absent : pas de présence vivante. */
+  readonly connectes?: readonly string[];
 };
 
 export type TestApp = {
@@ -107,8 +114,11 @@ export async function buildRelationApp(
   };
   const users = new Map<string, Record<string, unknown>>(
     [MOI, AUTRE, TIERS].map((id) => [id, {
-      id, deactivatedAt: null, blockedUserIds: options.bloques && id === AUTRE ? [...options.bloques] : [],
+      id, role: 'USER', isActive: true, deletedAt: null, deactivatedAt: null,
+      blockedUserIds: options.bloques && id === AUTRE ? [...options.bloques] : [],
       birthDate: options.naissances?.[id] ?? null, username: `u${id.slice(-2)}`, displayName: `U${id.slice(-2)}`,
+      isOnline: false, lastActiveAt: null, ...(options.presences?.[id] ?? {}),
+      ...(options.comptes?.[id] ?? {}),
     }]),
   );
   const notes = notificationRawStore(options.notifications ?? []);
@@ -116,7 +126,7 @@ export async function buildRelationApp(
     notification: notes.prisma.notification,
     user: {
       findUnique: jest.fn(async (args: { where: { id: string } }) => users.get(args.where.id) ?? null),
-      findMany: jest.fn(async () => []),
+      findMany: jest.fn(findManyIn([...users.values()]).findMany),
       findFirst: jest.fn(async (args: { where: { OR: Array<{ id: string; blockedUserIds: { has: string } }> } }) =>
         args.where.OR.map((branch) => users.get(branch.id)).find((u, i) =>
           u !== undefined && ((u.blockedUserIds as string[]) ?? []).includes(args.where.OR[i].blockedUserIds.has),
@@ -173,7 +183,10 @@ export async function buildRelationApp(
   app.decorate('notificationService', notifier as never);
   app.decorate('socialEvents', null as never);
   app.decorate('redis', null as never);
-  app.decorate('socketIOHandler', { getManager: () => ({ getIO: () => io, joinUserToConversationRoom: async () => undefined }) } as never);
+  app.decorate('socketIOHandler', { getManager: () => ({
+    getIO: () => io, joinUserToConversationRoom: async () => undefined,
+    ...(options.connectes ? { isPresenceOnline: (id: string) => options.connectes!.includes(id) } : {}),
+  }) } as never);
   let acting = options.userId ?? MOI;
   app.decorate('authenticate', async (req: object) => {
     Object.assign(req, {
