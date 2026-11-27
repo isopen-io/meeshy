@@ -36,6 +36,12 @@
  * participants — jusqu'à 250 par requête. L'acteur y paie le nombre d'ENTRANTS
  * (un membre déjà actif ne coûte rien), et chaque entrant débite son seau.
  *
+ * Deux autres chemins s'y ajoutent depuis #20694, au même prix : RATTACHER
+ * une conversation existante à une communauté privée, et PASSER une
+ * communauté en privée (ses occupants de salons y entrent). La bascule par
+ * l'équipe de la plateforme en est dispensée (rang d'administration, motif
+ * écrit, journal d'audit) : ce n'est pas un ajout entre utilisateurs.
+ *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau
  * de la cible, et son refus ne touche pas ce dernier. Un administrateur qui

@@ -978,3 +978,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée.
 - Reste, suivi #20664 : iOS et Android disent le même refus, même clé.
 - PR #20666 en brouillon (CI des PR gelée), `ci.yml` lancé en `workflow_dispatch` sur la tête.
+
+## 2026-11-27 — réveil 13:38 UTC
+
+- Début du run : #20681 (#20464) fusionnée dans `dev` (`0dc913924`) ; #20682 (publications Android) ouverte et poussée il y a moins d'une minute par une autre session : cédée. Aucune branche vivante sur `routes/communities/core.ts`, `settings.ts` ni `communitySalonAdoption.ts`.
+- Lot : #20694, les deux chemins EN MASSE (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `POST /communities/:id/conversations/:conversationId` vers une communauté PRIVÉE paie `spendCommunitySalonAdmission` avant toute écriture (entrants invités ; un membre déjà actif ne coûte rien ; une tentative vers un compte non ajoutable se paie) ; vers une communauté publique, personne n'entre, rien n'est débité. `PUT /communities/:id` qui passe en privée appelle `admitSalonOccupantsUnderBudget` : le créateur paie le nombre d'ENTRANTS (ni l'ancien membre qui ne revient pas, ni le compte non ajoutable qui sort) ; refusé, ni membre ni bascule. 429 `COMMUNITY_ADDITION_BUDGET_EXCEEDED` déclaré aux deux schémas. Prix partagé : `spendCommunityEntrants` (`services/conversations/communitySalonAdmissionBudget.ts`).
+- Décision : la bascule par l'équipe (`PATCH /admin/communities/:id`) est dispensée (rang d'administration, motif, journal d'audit).
+- Revue adversariale : corrigé dans le lot — la seconde passe de `closeSalonsAfterSwitch` faisait entrer sans débit les ajouts au salon lancés PENDANT la bascule (rejouable par aller-retour public/privé) ; elle paie désormais le même budget, et un retardataire refusé sort des salons (témoins `community-salon-adoption.test.ts` +2 et `private-switch-…` +1, rouges prouvés : 3 échecs avant). Suivis : #20704 (`décision-produit` : au-delà de 30 entrants, la bascule et le rattachement sont refusés pour toujours sous un `Retry-After` qui promet l'inverse), #20705 (une cible saturée bloque tout le geste groupé), et deux écarts commentés sur #20703 (tentative non ajoutable non payée à la bascule ; rattachement refusé qui coûte N unités).
+- Témoins : `attach-salon-addition-budget-20694.test.ts` (5 ; rouge prouvé : 3 échecs avant le branchement), `private-switch-addition-budget-20694.test.ts` (5 ; rouge prouvé : 2 échecs avant, et 1 sous la mutation qui fait payer aussi l'ancien membre et le compte non ajoutable).
+- Gates locaux : `tsc --noEmit` passerelle exit 0 ; `src/__tests__/*.test.ts` 79 suites vertes ; `routes/communities`, `routes/conversations`, `routes/admin`, `security`, `services/conversations` : 292 suites, 4 231 tests verts.
+- Suivi #20703 (même milestone) : les entrées une par une (salon, débannissement, partage, lien, appel), le budget non rendu quand `POST /conversations` n'écrit rien.
+- Prochain lot recommandé : #20703, puis #19813.
