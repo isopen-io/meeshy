@@ -387,4 +387,25 @@ describe('#20542 — retirer la proximité efface chez l\'autre les alertes qui 
 
     expect(retraits).toEqual([]);
   });
+
+  it('le retrait part dès l\'écriture, même quand la réponse dit 404 (blocage demandé sans lien)', async () => {
+    const app = await appli({ liens: [] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true });
+    await regler(app, { proximityShared: false, bringBlocked: true });
+    await app.close();
+
+    expect(app.reglages.get(`${AUTRE}:${MOI}`)).toMatchObject({ proximityShared: false });
+    expect(retraits).toEqual([{ kind: 'at', ownerId: AUTRE, readerId: MOI }]);
+  });
+
+  it('entre Sangs verrouillés, le 409 ne retire rien', async () => {
+    const app = await appli({ liens: [lien('BLOOD', 'BLOOD')] });
+    app.reglages.set(`${AUTRE}:${MOI}`, { ownerId: AUTRE, otherId: MOI, locationShared: true, locationHistoryShared: true, proximityShared: true, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    app.reglages.set(`${MOI}:${AUTRE}`, { ownerId: MOI, otherId: AUTRE, locationShared: true, locationHistoryShared: true, proximityShared: true, bloodBundleAcceptedAt: NOW, bloodBundleVersion: BLOOD_BUNDLE_VERSION });
+    const res = await regler(app, { proximityShared: false });
+    await app.close();
+
+    expect(res.body.code).toBe(RELATION_BLOOD_LOCKED_CODE);
+    expect(retraits).toEqual([]);
+  });
 });
