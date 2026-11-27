@@ -19,12 +19,15 @@ public data class SharedLocationPin(
     val name: String?,
     val initials: String,
     val deadlineMillis: Long,
-    val updatedAtMillis: Long = 0L,
     val motion: SharedLocationMotion? = null,
+    val motionUntilMillis: Long = 0L,
 ) {
-    /** Le mouvement à dessiner maintenant (#20665) : frais de moins de cinq minutes, et pas immobile. */
-    public fun drawnMotion(nowMillis: Long): SharedLocationMotion? =
-        SharedLocationMotion.drawn(SharedLocationMotion.shown(motion, updatedAtMillis, nowMillis))
+    /**
+     * Le mouvement à dessiner maintenant (#20665) : pas immobile, et frais de moins de cinq minutes. L'épingle ne garde
+     * que l'échéance d'un mouvement DESSINABLE, jamais l'heure de la position : une personne immobile resservie garde
+     * la même épingle (aucune recomposition), la fraîcheur se lit à part (`SharedLocationsMapViewModel.updatedAt`).
+     */
+    public fun drawnMotion(nowMillis: Long): SharedLocationMotion? = motion?.takeIf { nowMillis < motionUntilMillis }
 }
 
 /**
@@ -55,8 +58,9 @@ public object SharedLocationsMap {
                 name = name,
                 initials = name?.let(::initials) ?: "?",
                 deadlineMillis = entry.deadlineMillis,
-                updatedAtMillis = entry.updatedAtMillis,
-                motion = entry.motion,
+                motion = SharedLocationMotion.drawn(entry.motion),
+                motionUntilMillis = SharedLocationMotion.drawn(entry.motion)
+                    ?.let { entry.updatedAtMillis + SharedLocationMotion.FRESH_FOR_MILLIS } ?: 0L,
             )
         }.sortedWith(compareBy<SharedLocationPin>({ it.name == null }, { it.name?.lowercase() }, { it.userId }))
 

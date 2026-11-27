@@ -38,7 +38,6 @@ class SharedLocationsMapTest {
                 name = "Awa Diop",
                 initials = "AD",
                 deadlineMillis = t0 + 3_600_000L,
-                updatedAtMillis = t0,
             ),
         )
     }

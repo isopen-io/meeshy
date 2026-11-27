@@ -75,4 +75,15 @@ class SharedLocationMotionTest {
 
         assertThat(state.byUser.getValue("u2").motion).isNull()
     }
+
+    @Test
+    fun `une personne immobile resservie garde la meme epingle, sans recomposition`() {
+        val first = requireNotNull(decode("stationary"))
+        val again = first.copy(updatedAtMillis = t0 + 90_000L)
+        val before = SharedLocationsMap.pins(SharedLocationsState().receive(first, "me", t0).byUser, emptyMap())
+        val after = SharedLocationsMap.pins(SharedLocationsState().receive(again, "me", t0 + 90_000L).byUser, emptyMap())
+
+        assertThat(after).isEqualTo(before)
+        assertThat(after.single().drawnMotion(nowMillis = t0)).isNull()
+    }
 }
