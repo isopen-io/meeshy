@@ -97,6 +97,12 @@ describe('#19539 — une baisse sous Ami retire la pastille chez l\'autre, dans 
     expect(statuts(app).map((e) => e.room)).toEqual([ROOMS.user(MOI)]);
   });
 
+  it('une baisse qui ne change rien de ce qui est servi reste muette (RG-07) : l\'autre était hors ligne, sans dernière connexion', async () => {
+    const app = await baisser({ liens: [lien('FRIEND', 'FRIEND')] }, 'PUBLIC');
+
+    expect(statuts(app)).toEqual([]);
+  });
+
   it('aucune charge ne part vers un tiers, ni ne nomme la baisse', async () => {
     const app = await baisser({ liens: [lien('FRIEND', 'FRIEND')], presences: LES_DEUX_EN_LIGNE }, 'PUBLIC');
 

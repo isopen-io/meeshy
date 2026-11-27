@@ -2020,3 +2020,26 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationsFanTest` 6/6 (rouge à la compilation avant le code),
   `SharedLocationsMapTest` 6/6 ; Compose prouvé par `android.yml` sur la PR #20463.
 - Prochain lot : fusionner #20417 et fermer #20249 ; puis iOS de #20416 / #20308, #20054, #20056.
+
+## 2026-11-27 — réveil de 13 h : la pastille « en ligne » s'éteint après une baisse ou une rupture (#19539)
+
+- Reprise : aucune PR de la routine ouverte depuis le 2026-11-23 (#20463 fusionnée). Les lots iOS de la position
+  (#20416 point 2, #20308, #20054, #20056) touchent `apps/ios/Meeshy/Features/SharedLocation/`, que #20514 (autre
+  session, ouverte, non fusionnée) découpe fichier par fichier : ce réveil cède ces chemins.
+- Lot : #19539, passerelle. Après une baisse sous Ami ou une rupture d'amitié, l'audience de `user:status` excluait
+  déjà l'ancien Ami, donc plus aucune transition ne lui parvenait et il gardait la pastille verte jusqu'à sa propre
+  reconnexion (de même, un Proche baissé à Ami gardait une dernière connexion figée). `presenceAfterDrop.ts`
+  (`services/relations/`) lit la visibilité de chaque sens AVANT l'écriture, la relit APRÈS, et pousse au lecteur
+  dont la présence SERVIE change exactement ce que la loi lui sert désormais : un `user:status` hors ligne sans
+  dernière connexion (ou « en ligne » binaire de Proche à Ami). Branché sur `POST /relations/:userId/level` et sur
+  la rupture d'une demande acceptée. Une baisse qui ne change rien de visible reste muette (RG-07), un tiers ne
+  reçoit rien.
+- `presence:snapshot` : son cache (60 s) garde des données brutes et rejuge la visibilité à l'émission, sans cache
+  d'amis : il ne ressert pas l'ancienne présence. Lu, pas témoigné par un nouveau test.
+- Clients : la charge est celle qu'un Ami reçoit déjà (`lastActiveAt` nul) ; le web l'éteint (témoin ajouté
+  dans `presence-live.test.ts`), iOS (`PresenceManager`) remplace l'entrée telle quelle. Témoins iOS et Android en
+  suivi.
+- Gates : passerelle `relations` + `directory` 606/606, nouveau témoin 8/8 (6 rouges avant le branchement), gardes
+  de présence et de porte d'émission vertes, `tsc` 0 ; web `presence-live` 18/18.
+- Prochain lot : après la fusion de #20514, iOS de #20416 / #20308, #20054, #20056 ; sinon #19538 ou #19540
+  (présence et cercles côté passerelle).
