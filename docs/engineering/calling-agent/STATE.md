@@ -2798,7 +2798,11 @@ socket jusqu'au client.
 
 ### Cycle suivant : par où reprendre
 
-0. Si la PR de ce cycle n'est pas fusionnée : lire sa CI, fusionner `dev` dans la branche, puis fusionner la PR.
+0. **PR #20710 non fusionnée.** Le run `ci.yml` 46036890384 sur `9d8bac4dc` est vert sur tous les jobs du lot, y compris les trois tranches passerelle. Il garde deux rouges qui viennent de `dev` :
+   - `Tests · shared`, dans `swift-socket-payload-shape-gate.test.ts:90` : `user:preferences-updated` a été réparé par #16858 (`4347bbcb9`) mais reste listé dans l'inventaire ;
+   - `Tests · web`, sur `CommunityInviteSheet`, qui passe en local.
+
+   Quand `dev` repasse au vert : fusionner `dev` dans la branche, relancer `ci.yml` en `workflow_dispatch`, puis fusionner la PR.
 1. **#20709** (la bulle de résumé reçoit le relevé tardif), **#20300** et **#20335** (iOS, à coordonner avec la routine iOS), **#20436**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
 
