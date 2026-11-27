@@ -812,6 +812,48 @@ final class OutboxFlusherTests: XCTestCase {
                        "une seconde passe ne dépasse jamais l'envoi en vol de la première")
     }
 
+    /// #16659 — l'ordre se garde DANS une conversation, jamais en travers de
+    /// la file entière : un post dont le média se téléverse pendant des
+    /// minutes (TUS, dans `dispatch`) ne retient pas le message qu'on envoie
+    /// pendant ce temps dans une conversation.
+    func test_concurrentFlushers_longUploadInAnotherLane_doesNotHoldBackAMessage() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "post", kind: .createPost, conversationId: "",
+                clientMessageId: "cid_post", payload: Data(), status: .pending,
+                attempts: 0, lastError: nil, createdAt: now,
+                updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        let network = GatedOutboxDispatcher(heldId: "post")
+        let a = OutboxFlusher(pool: pool, dispatcher: network)
+        let b = OutboxFlusher(pool: pool, dispatcher: network)
+
+        let passA = Task { _ = await a.flush() }
+        await network.waitUntilHeld()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "msg", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_msg", payload: Data(), status: .pending,
+                attempts: 0, lastError: nil, createdAt: now.addingTimeInterval(1),
+                updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        let passB = Task { _ = await b.flush() }
+        await network.waitForDelivered(count: 1, timeout: .seconds(1))
+        let whileUploading = await network.deliveredIds
+        await network.release()
+        _ = await (passA.value, passB.value)
+
+        XCTAssertEqual(whileUploading, ["msg"],
+                       "le message part pendant que le post téléverse son média")
+        let delivered = await network.deliveredIds
+        XCTAssertEqual(delivered, ["msg", "post"])
+    }
+
     private func makeFreshPool() throws -> DatabaseQueue {
         return try DatabaseQueue()
     }
@@ -937,8 +979,8 @@ final class OutboxFlusherTests: XCTestCase {
     /// vivante de ce processus ne tient (claims laissés par une passe morte,
     /// en attente du reclaim à `staleInflightReclaimSeconds`) ne sont ni volées
     /// ni bloquantes pour le reste du backlog. Ce n'est pas une licence de
-    /// dépasser une réclamation VIVANTE : deux passes sur la même base se
-    /// sérialisent (`OutboxDrainLock`, #16659, témoin
+    /// dépasser une réclamation VIVANTE : deux passes se sérialisent sur la
+    /// voie d'une conversation (`OutboxDrainLock`, #16659, témoin
     /// `test_concurrentFlushers_sharingAPool_deliverBacklogInWrittenOrder`).
     func test_flush_freshInflightClaims_doNotBlockBacklogDrain() async throws {
         let pool = try makeFreshPool()

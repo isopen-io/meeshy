@@ -177,19 +177,8 @@ public actor OutboxFlusher {
         "status", "attempts", "lastError", "updatedAt", "nextAttemptAt", "waitingForFanoutOriginSince",
     ]
 
-    /// #16659 — la passe attend que toute autre passe sur la même base ait
-    /// fini (`OutboxDrainLock`) : un arriéré part dans l'ordre où on l'a écrit,
-    /// quel que soit le nombre de déclencheurs qui se lèvent au même reconnect.
     @discardableResult
     public func flush() async -> Date? {
-        let base = OutboxDrainLock.key(for: pool)
-        await OutboxDrainLock.shared.acquire(base)
-        let nextRetry = await drainOnce()
-        await OutboxDrainLock.shared.release(base)
-        return nextRetry
-    }
-
-    private func drainOnce() async -> Date? {
         // BW1 — gate de bande passante : en mode avion / 1G saturé, dispatcher
         // brûlerait les `maxAttempts` en timeouts URLSession de 60 s chacun.
         //
@@ -233,7 +222,7 @@ public actor OutboxFlusher {
             }
 
             for record in pending {
-                await processRecord(record)
+                await processRecordInItsLane(record)
             }
             pass += 1
         } while pending.count == 50 && pass < 20
@@ -541,6 +530,17 @@ public actor OutboxFlusher {
     static func erasesRefusedRow(_ record: OutboxRecord, after error: Error) -> Bool {
         guard record.kind == .sendMessage || record.kind == .editMessage else { return false }
         return error is EndToEndSendRefusal || EndToEndSendGate.isServerPlaintextRefusal(error)
+    }
+
+    /// #16659 — une ligne ne se réclame que sa voie tenue (`OutboxDrainLock`) :
+    /// une seconde passe ne dépasse jamais l'envoi en vol d'une autre dans la
+    /// même conversation, quel que soit le nombre de déclencheurs qui se lèvent
+    /// au même reconnect, et un long téléversement ne retient que sa voie.
+    private func processRecordInItsLane(_ record: OutboxRecord) async {
+        let lane = OutboxDrainLock.lane(of: record, in: pool)
+        await OutboxDrainLock.shared.acquire(lane)
+        await processRecord(record)
+        await OutboxDrainLock.shared.release(lane)
     }
 
     private func processRecord(_ record: OutboxRecord) async {
