@@ -137,7 +137,8 @@ déclaration parasite comme celle-là est aussi ce qui empêche d'écrire un gar
 « tout `CLIENT_EVENTS` a un handler gateway » sans liste d'exemptions.
 
 **Ce garde existe depuis le 2026-11-14 (#18499)** : `socket-event-handler-gate`
-ferme la direction MONTANTE, que les cinq cliquets voisins laissaient ouverte —
+ferme le bout SERVEUR de la direction MONTANTE, que les cinq cliquets voisins
+laissaient ouvert —
 un nom de `CLIENT_EVENTS` sans `socket.on` est un canal que le contrat AFFIRME
 et que **Socket.IO laisse tomber sans lever la moindre erreur**. Il est à deux
 sens : une dette neuve rougit chez celui qui l'écrit, et un canal qui gagne son
@@ -147,6 +148,40 @@ noms de fil, et c'est celle que la passerelle importe — un nom ajouté à l'un
 pas à l'autre échappait à tous les cliquets. Le scan « la passerelle épelle-t-elle
 ce nom ? » est un site UNIQUE (`__tests__/ci/socket-payload-shape/gateway-event-names.ts`),
 partagé avec `socket-event-emitter-gate`.
+
+**Et le bout CLIENT de la même direction est fermé depuis le 2026-11-28 (#20791)** :
+`socket-event-client-emitter-gate` demande « quel `CLIENT_EVENTS` n'est ÉMIS par
+aucun client ? ». Une direction a deux bouts, comme la descendante — qui a les
+siens depuis #18342 — et cette phrase-ci a dit « la direction MONTANTE est
+fermée » pendant deux semaines alors qu'un seul des deux l'était.
+
+Le prix n'est pas le même aux deux bouts, et c'est le point : sans ÉCOUTEUR, un
+canal SE TAIT ; sans ÉMETTEUR, c'est l'inverse du silence — un `socket.on`
+vivant, sa validation Zod, son seau de débit, ses gardes et ses témoins,
+**maintenus pour un appelant qui n'existe pas**. Mesuré à l'ouverture : **dix
+canaux servis sans appelant**, dont les transports SOCKET de l'édition, de la
+suppression et des deux sens de la réaction d'un message (les clients passent par
+REST), les deux canaux montants du Signal Protocol, et l'authentification
+MANUELLE du socket. Aucun retrait n'est demandé — la rétrocompatibilité (#9223)
+l'interdit sans mesure de parc ; l'inventaire demande que la liste soit connue.
+
+**Deux pièges, tous deux payés en écrivant la garde :**
+
+- **Le relevé partagé `eventsNamedByClients` est AVEUGLE aux noms sans
+  deux-points.** Sa regex de littéral exige la forme `entity:action`, et trois
+  noms déclarés ne la suivent pas : `authenticate`, `heartbeat`, et `error` côté
+  `SERVER_EVENTS` — donc l'orphan gate ne voit pas ce dernier non plus. Au
+  premier jet, la garde a inventorié `heartbeat` comme un canal sans émetteur :
+  **il en a DEUX** (iOS `safeEmit("heartbeat", …)` à 30 s, Android
+  `socket.emit(EVENT_HEARTBEAT, …)` avec son écoute de l'ack). Un inventaire
+  porte une AFFIRMATION, et celle-là aurait été fausse pour la forme d'une regex.
+  D'où un second relevé, étroit et littéral, borné aux noms sans deux-points.
+- **Et le doc-comment de la passerelle affirmait, lui, qu'« Android n'a jamais
+  émis de heartbeat applicatif » et que le canal « ne subsiste que pour iOS ».**
+  Les deux sont mesurés faux, et c'est en les confrontant au relevé qu'on l'a su.
+  C'est la leçon du cycle 94 : *un commentaire qui ÉNONCE une contrainte est une
+  affirmation, et se vérifie comme telle* — ici il décrivait le parc des clients,
+  ce que rien ne tenait à jour.
 
 **Et le septième cliquet garde ce que les six premiers ne peuvent pas voir**
 (`socket-seq-lockstep-gate`, #18602, 2026-11-15). Les six répondent « ce NOM
