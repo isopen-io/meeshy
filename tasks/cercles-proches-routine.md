@@ -2311,3 +2311,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   inscription et relations 28 suites, 396/396 ; `tsc` passerelle 0.
 - Prochain lot : les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) dès que #20514 aura fusionné ;
   sinon un lot serveur du jalon 1/2.
+
+## 2026-11-28 — réveil de 7 h 13 : le départ d'un compte efface les alertes « un Sang s'approche » qui le nomment (#20688)
+
+- Reprise : #20738 fusionnée à 5 h 41, #19540 fermée ; aucune PR de la routine ouverte. #20514 (découpage du centre
+  iOS de la position) toujours ouverte : les lots iOS de la position restent cédés. Aucune branche vivante sur les
+  chemins du lot.
+- Lot : #20688, passerelle. `withdrawRitualSharesOfUser` (désactivation et suppression par un admin, et les retours
+  de compte qui le rejouent) efface d'abord, par `bloodProximityRetractorOf` en portée `everywhere`, toute alerte
+  `blood_proximity` qui nomme le compte chez ses Sangs et celles de sa cloche, puis éteint les partages ; un
+  effacement en panne lève et laisse les partages allumés pour le rejeu au retour, comme `withdrawRitualSharesBetween`.
+  `purgeAccountIsolatedData` (fin de grâce et « supprimer maintenant ») fait le même effacement : la purge
+  `notification.deleteMany({ userId })` ne vidait que la cloche du compte, jamais celle de ses Sangs.
+- Écart à l'issue : elle nommait `eraseBloodProximityNoticesOf`, qui n'existe pas ; le site unique est
+  `retractBloodProximityNotices` (#20542). Il n'existe pas de désactivation par la personne elle-même : le troisième
+  chemin est la suppression qu'elle demande.
+- Gates : nouveau témoin 5/5 (5 rouges avant), jugé sur des documents ; doubles Prisma de six suites complétés
+  (`notification.findRaw`) ; `tsc` passerelle 0.
+- Prochain lot : #20689 (l'alerte en vol relit le consentement juste avant de s'écrire) ou #20679 ; puis les lots iOS
+  de la position après #20514.
