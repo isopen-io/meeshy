@@ -5,6 +5,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminGlyph } from './admin-glyph';
 import { AdminFormError, type AdminData, type AdminSelectOption } from './form';
 import { BRAND, EDGE, INK, INK2, INK3 } from './tone';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
@@ -173,7 +174,9 @@ export function AdminInlineField({
               onChange={() => undefined}
               onBlur={(event) => finish(event.currentTarget.value, false)}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
+                const enter = enterKeyIntent(event.nativeEvent, { multiline: false });
+                if (enter === 'composing') return;
+                if (enter === 'submit') {
                   event.preventDefault();
                   finish(event.currentTarget.value, true);
                   return;
