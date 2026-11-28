@@ -5,6 +5,7 @@ import { EngagementService } from './engagement/EngagementService.js';
 import { recordFriendship } from './relations/userRelationWriter.js';
 import { isBlockedBetween } from '../utils/blocking.js';
 import type { AffiliateReferralJoined } from './affiliate-referral-announce';
+import type { AffiliateFriendshipLinked } from './affiliate-friendship-announce';
 
 const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
 
@@ -87,6 +88,7 @@ export class AffiliateTrackingService {
     userId: string,
     sessionKey?: string,
     onReferralJoined?: (joined: AffiliateReferralJoined) => void,
+    onFriendshipLinked?: (linked: AffiliateFriendshipLinked) => void,
   ) {
     try {
       // Trouver le token d'affiliation
@@ -217,31 +219,47 @@ export class AffiliateTrackingService {
         // un « non » qu'un lien d'invitation n'efface pas, et rien ne s'écrit.
         const linked = !existingFriendRequest || ['pending', 'accepted'].includes(existingFriendRequest.status);
 
-        if (existingFriendRequest?.status === 'pending') {
-          await prisma.friendRequest.update({
+        const acceptedRequest = existingFriendRequest?.status === 'pending'
+          ? await prisma.friendRequest.update({
             where: { id: existingFriendRequest.id, status: 'pending' },
             data: { status: 'accepted', respondedAt: new Date() },
-          });
-        } else if (!existingFriendRequest) {
-          await prisma.friendRequest.create({
-            data: {
-              senderId: affiliateToken.createdBy,
-              receiverId: userId,
-              status: 'accepted', // Accepter automatiquement pour les affiliations
-              respondedAt: new Date(),
-            }
-          });
-        }
+          })
+          : !existingFriendRequest
+            ? await prisma.friendRequest.create({
+              data: {
+                senderId: affiliateToken.createdBy,
+                receiverId: userId,
+                status: 'accepted', // Accepter automatiquement pour les affiliations
+                respondedAt: new Date(),
+              }
+            })
+            : null;
 
         // Le lien (#13926) : la demande acceptée d'une affiliation vaut FRIEND des
         // deux côtés, par le MÊME écrivain que l'acceptation d'une demande.
         if (linked) {
-          await recordFriendship(prisma, {
+          const outcome = await recordFriendship(prisma, {
             userA: affiliateToken.createdBy,
             userB: userId,
             origin: 'request',
             at: new Date(),
           });
+          // #19540 — les deux le voient aussitôt, comme une acceptation ordinaire.
+          const levelRaised = outcome === 'created' || outcome === 'raised';
+          if (levelRaised || acceptedRequest) {
+            try {
+              onFriendshipLinked?.({
+                sponsorId: affiliateToken.createdBy,
+                referredId: userId,
+                levelRaised,
+                acceptedRequest: acceptedRequest
+                  ? { id: acceptedRequest.id, senderId: acceptedRequest.senderId, receiverId: acceptedRequest.receiverId }
+                  : null,
+              });
+            } catch {
+              /* l'écho temps réel ne fait pas échouer la conversion */
+            }
+          }
         }
       } catch (friendRequestError) {
         logger.error(
