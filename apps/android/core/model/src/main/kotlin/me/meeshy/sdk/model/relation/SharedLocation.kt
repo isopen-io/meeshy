@@ -72,6 +72,7 @@ public data class SharedLocation(
     val circle: SharedLocationCircle?,
     val updatedAtMillis: Long,
     val expiresAtMillis: Long,
+    val motion: SharedLocationMotion? = null,
 ) {
     /** La durée de vie servie, bornée par le contrat : une échéance absurde ne garde jamais une position affichée. */
     val lifetimeMillis: Long
@@ -92,6 +93,7 @@ public data class SharedLocationChangedWire(
     val circle: String? = null,
     val updatedAt: String? = null,
     val expiresAt: String? = null,
+    val motion: String? = null,
 ) {
     /** La position bornée, ou `null` si la charge sort du contrat. */
     public fun served(): SharedLocation? {
@@ -111,6 +113,7 @@ public data class SharedLocationChangedWire(
             circle = SharedLocationCircle.of(circle),
             updatedAtMillis = updated,
             expiresAtMillis = expires,
+            motion = SharedLocationMotion.of(motion),
         )
     }
 

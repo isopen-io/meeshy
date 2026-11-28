@@ -60,6 +60,10 @@
     <string name="keypad_no_match_title">لم يتم العثور على جهة اتصال</string>
     <string name="keypad_online_lower">متصل</string>
     <string name="keypad_result_open_profile_a11y">فتح الملف الشخصي</string>
+    <string name="location_map_motion_automotive">في السيارة</string>
+    <string name="location_map_motion_cycling">على الدراجة</string>
+    <string name="location_map_motion_running">يركض</string>
+    <string name="location_map_motion_walking">سيرًا على الأقدام</string>
     <string name="phone_prompt_benefit">يجدك معارفك بفضل رقمك.</string>
     <string name="phone_prompt_code_label">رمز من 6 أرقام</string>
     <string name="phone_prompt_code_sent">تم إرسال الرمز برسالة نصية</string>

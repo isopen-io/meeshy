@@ -273,3 +273,57 @@ export async function resolveEverCallParticipantId(deps: CallParticipantResolver
     return null;
   }
 }
+/**
+ * Le client envoie son dernier `call:quality-report` APRÈS `call:end` (#20459),
+ * quand `endCall` a déjà posé `leftAt` sur chaque participant. Ce relevé se
+ * persiste s'il arrive dans cette fenêtre ; au-delà, il est rejeté.
+ */
+export const QUALITY_REPORT_GRACE_MS = 30_000;
+
+export type QualityReporter = { participantId: string; userId: string; departed: boolean };
+
+function departureMs(leftAt: Date | string | null | undefined): number | null {
+  if (!leftAt) return null;
+  const ms = new Date(leftAt).getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Qui a le droit d'écrire un relevé de qualité sur CET appel : un participant
+ * actif (`departed: false`), sinon la sortie la plus récente de cet
+ * utilisateur si elle date d'au plus `QUALITY_REPORT_GRACE_MS`
+ * (`departed: true`). Une sortie datée du futur ou illisible n'ouvre aucune
+ * fenêtre. Les autres écritures restent sous `resolveActiveCallParticipant`.
+ */
+export async function resolveQualityReporter(
+  deps: CallParticipantResolverDeps,
+  userId: string,
+  callId: string,
+  { now = Date.now() }: { now?: number } = {}
+): Promise<QualityReporter | null> {
+  try {
+    const callSession = await deps.callService.getCallSession(callId);
+    const rows = callSession.participants
+      .map((p) => ({ participantId: p.participantId, userId: p.participant?.userId ?? p.participantId, leftAt: p.leftAt }))
+      .filter((row) => row.userId === userId);
+    const active = rows.find((row) => !row.leftAt);
+    if (active) return { participantId: active.participantId, userId: active.userId, departed: false };
+    const latest = rows
+      .map((row) => ({ row, leftMs: departureMs(row.leftAt) }))
+      .filter((entry): entry is { row: typeof entry.row; leftMs: number } =>
+        entry.leftMs !== null && entry.leftMs <= now && now - entry.leftMs <= QUALITY_REPORT_GRACE_MS)
+      .reduce<{ row: (typeof rows)[number]; leftMs: number } | null>(
+        (best, entry) => (!best || entry.leftMs > best.leftMs ? entry : best),
+        null
+      );
+    if (!latest) return null;
+    return { participantId: latest.row.participantId, userId: latest.row.userId, departed: true };
+  } catch (error) {
+    logger.warn('resolveQualityReporter: getCallSession failed, treating caller as unauthorized', {
+      userId,
+      callId,
+      error: error instanceof Error ? error.message : String(error)
+    });
+    return null;
+  }
+}
