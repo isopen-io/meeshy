@@ -14,6 +14,9 @@
  * voyagent que l'identité de l'autre (`actor`, `metadata.userId`) et ce palier : jamais une
  * coordonnée, une précision ou l'heure du point. La ligne expire avec
  * la cadence — passé 2 h, « est tout près, à 500 m » ne dit plus rien de vrai.
+ *
+ * `admits` (#20689) relit la paire JUSTE AVANT `createNotification` : refusée, rien ne s'écrit.
+ * Rend l'identifiant de la ligne écrite (ou `null`), pour qu'un retrait passé pendant l'écriture la retire.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
@@ -24,7 +27,7 @@ import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { RELATION_THRESHOLDS } from '@meeshy/shared/utils/relation-levels';
 import { RECIPIENT_LANG_SELECT, recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import type { NotificationService } from '../notifications/NotificationService';
-import type { BloodProximityNotice } from './bloodLocationTypes';
+import type { BloodProximityNotice, BloodProximityNoticeOptions } from './bloodLocationTypes';
 
 export type BloodProximityNotifier = Pick<NotificationService, 'createNotification'>;
 
@@ -56,18 +59,19 @@ export function bloodProximityNotifierOf(params: {
   readonly prisma: Pick<PrismaClient, 'user'>;
   readonly notifications: BloodProximityNotifier | null;
   readonly now?: () => number;
-}): ((notice: BloodProximityNotice) => Promise<boolean>) | undefined {
+}): ((notice: BloodProximityNotice, options?: BloodProximityNoticeOptions) => Promise<string | null>) | undefined {
   const notifications = params.notifications;
   if (notifications === null) return undefined;
   const now = params.now ?? Date.now;
   const ttlMs = RELATION_THRESHOLDS.proximity.cooldownHours * 3_600_000;
 
-  return async (notice) => {
+  return async (notice, options) => {
     const [other, recipient] = await Promise.all([
       params.prisma.user.findUnique({ where: { id: notice.otherId }, select: ACTOR_SELECT }) as Promise<Person | null>,
       params.prisma.user.findUnique({ where: { id: notice.recipientId }, select: { id: true, ...RECIPIENT_LANG_SELECT } }),
     ]);
-    if (!other || !recipient) return false;
+    if (!other || !recipient) return null;
+    if (options?.admits && !(await options.admits())) return null;
     const lang = recipientLanguage(recipient, 'fr');
     const metadata = bloodProximityNotificationMetadata({ userId: other.id, distanceMeters: notice.distanceMeters });
     const distance = proximityDistanceLabel(recipientDateLocale(recipient, 'fr'), metadata.distanceMeters);
@@ -84,6 +88,6 @@ export function bloodProximityNotifierOf(params: {
       collapseId: `blood-proximity-${other.id}`,
       expiresAt: new Date(now() + ttlMs),
     });
-    return created !== null && created !== undefined;
+    return created?.id ?? null;
   };
 }

@@ -2330,3 +2330,24 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   (`notification.findRaw`) ; `tsc` passerelle 0.
 - Prochain lot : #20689 (l'alerte en vol relit le consentement juste avant de s'écrire) ou #20679 ; puis les lots iOS
   de la position après #20514.
+
+## 2026-11-28 — réveil de 9 h 13 : une alerte « un Sang s'approche » en vol relit la paire avant de s'écrire (#20689)
+
+- Reprise : #20794 (#20688) fusionnée à 8 h 55 ; aucune PR de la routine ouverte ; #20514 toujours ouverte, les lots
+  iOS de la position restent cédés. Aucune branche vivante sur `bloodLocation/`.
+- Lot : #20689, passerelle. `bloodProximityPairOpen` relit la paire (drapeau, fantôme global ou ciblé dans les deux
+  sens, consentement mutuel `location.proximity` sous la loi d'accès, point frais et visible de chacun) APRÈS la
+  cadence Redis, avant l'événement socket. Le notifieur la relit encore juste avant `createNotification` (option
+  `admits`, avec le silence ciblé du lecteur) et rend l'identifiant écrit. Une ligne écrite pendant qu'un retrait
+  passait est relue après et retirée (`at` + `writtenId`) : son push, parti sans être attendu, est révoqué sans lire
+  `pushSent`, et annoncé même si l'effacement l'a déjà supprimée. Une relecture qui lève vaut paire fermée. Les deux
+  notifications d'une paire partent désormais l'une après l'autre.
+- Audit adversarial : non bloquant ; corrigé dans le lot : la bannière restait à l'écran (révocation conditionnée à
+  `pushSent`), la relecture qui lève laissait la ligne. Laissé en suivi : un retrait qui lève n'est pas rejoué (borné
+  à 2 h), ~16 lectures par relecture (bornées par la cadence et le budget horaire), cadence prise avant la relecture
+  (une paire refermée puis rouverte dans les 2 h n'est plus alertée, fail-closed).
+- Gates : nouveau témoin 12/12 (7 rouges avant le correctif, 3 rouges sous la mutation qui retire `writtenId`) ;
+  bloodLocation + notifications 88 suites, 1 329/1 329 ; suites qui touchent l'alerte ou le départ de compte 34 suites,
+  566/566 ; `tsc` passerelle 0. `dev` 98dd6cd22 contenue.
+- Prochain lot : #20679 (compte supprimé en attente de purge et fiche de cercle) ; puis les lots iOS de la position
+  après #20514.
