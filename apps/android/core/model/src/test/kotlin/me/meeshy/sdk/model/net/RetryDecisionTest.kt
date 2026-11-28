@@ -67,4 +67,9 @@ class RetryDecisionTest {
         }
         assertThat(RetryDecision.shouldRetry(429, 0, EndpointRetryPolicy.STANDARD, "OTHER")).isTrue()
     }
+
+    @Test
+    fun `le budget d'ajouts d'une communaute ne se rejoue jamais`() {
+        assertThat(RetryDecision.shouldRetry(429, 0, EndpointRetryPolicy.STANDARD, "COMMUNITY_ADDITION_BUDGET_EXCEEDED")).isFalse()
+    }
 }
