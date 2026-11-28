@@ -160,3 +160,56 @@ describe('pairAccessAmong — la loi jugée sur les lectures vraies', () => {
     expect(verdict).toMatchObject({ allowed: false, reason: 'self' });
   });
 });
+
+describe('pairAccessAmong — un compte inutilisable n\'ouvre rien (#20679)', () => {
+  const SANG = '6100000000000000000000d1';
+  const SANG_SUPPRIME = '6100000000000000000000d2';
+  const SANG_INACTIF = '6100000000000000000000d3';
+  const SANG_DESACTIVE = '6100000000000000000000d4';
+  const PARTI = '6100000000000000000000d5';
+  const sangs = () =>
+    messagingWorld({
+      links: [
+        [SANG, SANG_SUPPRIME, 'BLOOD'],
+        [SANG, SANG_INACTIF, 'BLOOD'],
+        [SANG, SANG_DESACTIVE, 'BLOOD'],
+        [PARTI, SANG, 'BLOOD'],
+      ],
+      users: [
+        { id: SANG, birthDate: ADULT_BIRTH },
+        { id: SANG_SUPPRIME, birthDate: ADULT_BIRTH, isActive: false, deletedAt: new Date('2026-11-20T00:00:00Z') },
+        { id: SANG_INACTIF, birthDate: ADULT_BIRTH, isActive: false },
+        { id: SANG_DESACTIVE, birthDate: ADULT_BIRTH, isActive: false, deactivatedAt: new Date('2026-11-20T00:00:00Z') },
+        { id: PARTI, birthDate: ADULT_BIRTH, isActive: false, deletedAt: new Date('2026-11-20T00:00:00Z') },
+      ],
+      communityMembers: [],
+    });
+  const hors = [SANG_SUPPRIME, SANG_INACTIF, SANG_DESACTIVE];
+
+  it('un Sang supprimé en attente de purge, inactif ou désactivé ne reçoit ni ne donne rien, dans les deux sens', async () => {
+    const among = (subjectIs: 'viewer' | 'target') => pairAccessAmong(db(sangs()), { feature: 'dm.typing', subjectId: SANG, otherIds: hors, subjectIs });
+    const verdicts = [...(await among('viewer')).values(), ...(await among('target')).values()];
+    expect(verdicts.map((v) => v.allowed)).toEqual([false, false, false, false, false, false]);
+    expect(verdicts.every((v) => v.effectiveLevel === 'PUBLIC')).toBe(true);
+  });
+
+  it('le SUJET inutilisable n\'ouvre rien à ses Sangs non plus', async () => {
+    const verdict = await pairAccess(db(sangs()), { feature: 'dm.typing', viewerId: PARTI, targetId: SANG });
+    expect(verdict).toMatchObject({ allowed: false, effectiveLevel: 'PUBLIC' });
+  });
+
+  it('une feature à consentement reste fermée même accordée, et la raison ne dit pas pourquoi (ni blocage ni départ)', async () => {
+    const verdicts = await pairAccessAmong(db(sangs()), { feature: 'location.temporary', subjectId: SANG, otherIds: hors, subjectIs: 'target', consentOf: () => 'granted' });
+    expect([...verdicts.values()].map((v) => [v.allowed, v.reason])).toEqual([[false, 'level'], [false, 'level'], [false, 'level']]);
+  });
+
+  it('une ligne de compte absente ferme aussi', async () => {
+    const verdict = await pairAccess(db(sangs()), { feature: 'dm.typing', viewerId: SANG, targetId: '6100000000000000000000ff' });
+    expect(verdict.allowed).toBe(false);
+  });
+
+  it('témoin de contrôle : entre deux Sangs utilisables, la même feature s\'ouvre', async () => {
+    const world = messagingWorld({ links: [[SANG, PARTI, 'BLOOD']], users: [{ id: SANG, birthDate: ADULT_BIRTH }, { id: PARTI, birthDate: ADULT_BIRTH }], communityMembers: [] });
+    expect((await pairAccess(db(world), { feature: 'dm.typing', viewerId: SANG, targetId: PARTI })).allowed).toBe(true);
+  });
+});

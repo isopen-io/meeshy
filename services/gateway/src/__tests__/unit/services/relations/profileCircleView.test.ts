@@ -36,6 +36,7 @@ type Double = {
   sharedCommunity?: boolean;
   roles?: Record<string, string>;
   birth?: Record<string, Date | null>;
+  accounts?: Record<string, { isActive: boolean; deletedAt: Date | null; deactivatedAt: Date | null }>;
 };
 
 const prismaOf = (d: Double = {}) =>
@@ -56,6 +57,7 @@ const prismaOf = (d: Double = {}) =>
           isActive: true,
           deletedAt: null,
           deactivatedAt: null,
+          ...d.accounts?.[id],
         }));
       }),
       findUnique: jest.fn<any>(async () => ({ blockedUserIds: d.blockedByA ? [B] : [] })),
@@ -110,6 +112,20 @@ describe('readProfileCircleView — la loi lue sur la paire réelle', () => {
 
   it('un blocage posé par le LECTEUR ferme tout aussi', async () => {
     const view = await readProfileCircleView(prismaOf({ row: rowOf('CLOSE', 'CLOSE'), blockedByA: true }), { viewerId: A, targetId: B });
+    expect(Object.values(view.capabilities).every((c) => c?.state === 'locked')).toBe(true);
+  });
+
+  it('un compte SUPPRIMÉ en attente de purge ferme la fiche comme un compte désactivé (#20679)', async () => {
+    const supprime = { isActive: false, deletedAt: new Date('2026-11-20T00:00:00Z'), deactivatedAt: null };
+    const view = await readProfileCircleView(prismaOf({ row: rowOf('BLOOD', 'BLOOD'), accounts: { [B]: supprime } }), { viewerId: A, targetId: B });
+    expect(Object.values(view.capabilities).every((c) => c?.state === 'locked')).toBe(true);
+    expect(view.level).toBe('PUBLIC');
+    expect('grantedByTarget' in view).toBe(false);
+  });
+
+  it('un compte inactif sans date ferme la fiche aussi (#20679)', async () => {
+    const inactif = { isActive: false, deletedAt: null, deactivatedAt: null };
+    const view = await readProfileCircleView(prismaOf({ row: rowOf('BLOOD', 'BLOOD'), accounts: { [B]: inactif } }), { viewerId: A, targetId: B });
     expect(Object.values(view.capabilities).every((c) => c?.state === 'locked')).toBe(true);
   });
 
