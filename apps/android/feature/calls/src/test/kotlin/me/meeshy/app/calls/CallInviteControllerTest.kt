@@ -75,6 +75,19 @@ class CallInviteControllerTest {
     }
 
     @Test
+    fun `an invitation refused by the addition budget says try later and is not replayed (#20802)`() = runTest(UnconfinedTestDispatcher()) {
+        coEvery { social.inviteCallParticipant(any(), any()) } returns Result.failure(CallControlRefusal("RATE_LIMITED", retryAfter = 42))
+        val controller = controller()
+
+        controller.invite(BOB)
+
+        assertThat(controller.state.value.ringing).isEmpty()
+        assertThat(controller.state.value.board.notice).isEqualTo(CallInviteNotice.Throttled)
+        coVerify(exactly = 1) { social.inviteCallParticipant("call-1", "bob") }
+        controller.onCleared()
+    }
+
+    @Test
     fun `a settled invitation or an arrival leaves the ringing list, another call's never does`() = runTest(UnconfinedTestDispatcher()) {
         val controller = controller()
         invited.emit(CallParticipantInvited("call-1", "a", CallInvitedUser("bob", "bob"), 3))

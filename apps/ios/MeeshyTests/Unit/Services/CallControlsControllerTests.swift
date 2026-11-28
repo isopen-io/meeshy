@@ -112,6 +112,27 @@ final class CallControlsControllerTests: XCTestCase {
         XCTAssertEqual(env.sut.notice, .inviteFailed(code: "MAX_PARTICIPANTS_REACHED"))
     }
 
+    // #20802 — un refus du budget des ajouts est certain : il se dit, il ne se rejoue pas.
+    func test_invite_rateLimited_saysTryLater_andIsNotReplayed() async {
+        let env = makeEnv()
+        env.socket.inviteError = CallControlRefusal(code: "RATE_LIMITED", retryAfter: 42)
+
+        await env.sut.invite(lea)?.value
+
+        XCTAssertTrue(env.sut.invites.isEmpty)
+        XCTAssertEqual(env.sut.notice, .inviteFailed(code: "RATE_LIMITED"))
+        XCTAssertEqual(env.socket.invites.count, 1)
+    }
+
+    func test_inviteNotice_rateLimited_isNotTheGenericFailure() {
+        let throttled = CallControlsCopy.notice(.inviteFailed(code: "RATE_LIMITED"))
+        let generic = CallControlsCopy.notice(.inviteFailed(code: "INTERNAL_ERROR"))
+
+        XCTAssertNotEqual(throttled, generic)
+        XCTAssertEqual(throttled, String(localized: "call.invite.rateLimited", bundle: .main))
+        XCTAssertEqual(CallControlsCopy.notice(.inviteFailed(code: "MAX_PARTICIPANTS_REACHED")), generic)
+    }
+
     func test_invite_twice_asksOnce() async {
         let env = makeEnv()
         await env.sut.invite(lea)?.value

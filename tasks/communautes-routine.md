@@ -1054,3 +1054,15 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Témoins : `callInvitation.test.ts` (+11), `call-invite-events.test.ts` (+3), `community-addition-budget-redis-outage-20795.test.ts` (4, neuf). Rouges prouvés : 9 échecs avant le code, puis 3 sous la mutation des correctifs d'audit.
 - Revue adversariale (non bloquante), corrigé dans le lot : un ancien membre `guest-only` bloqué payait alors que la décision dit qu'il ne paie rien ; le cas « membre actif » n'avait pas de témoin ; salon fermé aux nouveaux membres ; témoin de panne partielle (une fenêtre comptée, l'autre non) ; avertissement quand aucun hôte de budget n'est posé à l'autorisation. Reste écrit dans la décision : l'oracle sur le blocage est taxé, pas fermé (seau de la cible plein).
 - Suivi #20802 (même milestone) : iOS et Android disent « réessayez plus tard » pour une invitation refusée en `RATE_LIMITED` et lisent `retryAfter` (le web dit déjà la phrase ; aucun client ne lit `retryAfter`).
+
+## 2026-11-28 — réveil 11:37 UTC
+
+- Début du run : #20803 (#20795) fusionnée dans `dev` (`a5727568d`) ; aucune PR de la routine ouverte ; aucune branche vivante sur `CallControlsController`, `CallControlsViews`, `CallInviteBoard`, `CallAddPeopleCapability` ni `CallControlsSocket` (le dernier lot d'appels, #20798, est fusionné).
+- Lot : #20802 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »), iOS et Android.
+- SDK iOS : `CallControlRefusal.retryAfter` (secondes, optionnel, `init(code:retryAfter: = nil)` garde les appelants) lu de l'accusé (`SocketAckRefusal.retryAfter`). App : `CallControlsCopy.notice(.inviteFailed(code: "RATE_LIMITED"))` dit `call.invite.rateLimited`, les mots du web (`callControls.error.rateLimited`), sept langues ; tout autre code garde « Impossible d'inviter cette personne ».
+- Android : `CallControlRefusal(code, retryAfter)` lu par `controlRefusal()` ; `CallInviteNotice.Throttled`, posé par `CallInviteBoard.refused(userId, code)` quand le code est `RATE_LIMITED` ; `CallAddPeopleCapability` passe le code ; chaîne `call_invite_rate_limited` adoptée du catalogue iOS (manifeste `calls.d/calls-invite-rate-limited-20802.json`, générateur `--check` vert).
+- Aucun chemin ne rejoue l'invitation : les deux transports émettent une fois par geste ; les témoins le vérifient (une émission, un appel).
+- Témoins : `CallControlsSocketTests` (+2), `CallControlsControllerTests` (+2) ; `CallControlsSocketTest` (+2), `CallInviteBoardTest` (+1), `CallInviteControllerTest` (+1). iOS et Android ne compilent pas en conteneur (`jvm-check` : Maven Central rend 429 sur `libsignal-client`) : preuve par la CI.
+- Gardes locales iOS : `check_house_rules`, `check_cohesion_budget`, `check_test_registration`, accent verts.
+- Revue adversariale : non lancée — lot client seul, aucune route, garde ni contrat serveur touché.
+- Prochain lot recommandé : #19813 reste une décision produit ; reprendre le backlog (#14227 appartenances lues par index, ou le doublon `isActive` + `deletedAt`).

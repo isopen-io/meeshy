@@ -150,6 +150,7 @@ internal fun CallInviteAvatar(invite: CallPendingInvite, presence: PresenceState
 internal fun CallInviteNoticePill(notice: CallInviteNotice, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     val text = when (notice) {
         CallInviteNotice.Failed -> stringResource(R.string.call_invite_failed)
+        CallInviteNotice.Throttled -> stringResource(R.string.call_invite_rate_limited)
         is CallInviteNotice.Declined -> stringResource(R.string.call_invite_declined, notice.name)
         is CallInviteNotice.Unanswered -> stringResource(R.string.call_invite_unanswered, notice.name)
     }

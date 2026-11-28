@@ -155,6 +155,7 @@
     <string name="call_incoming_self_preview_label">كاميرتك، لا تُرسل قبل الرد</string>
     <string name="call_invite_declined">رفض %1$s المكالمة</string>
     <string name="call_invite_failed">تعذّرت دعوة هذا الشخص</string>
+    <string name="call_invite_rate_limited">محاولات كثيرة: أعد المحاولة بعد قليل</string>
     <string name="call_invite_ringing">يرنّ…</string>
     <string name="call_invite_sheet_empty">لا يوجد أصدقاء لإضافتهم</string>
     <string name="call_invite_sheet_title">إضافة إلى المكالمة</string>

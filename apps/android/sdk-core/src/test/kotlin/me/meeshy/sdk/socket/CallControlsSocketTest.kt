@@ -54,6 +54,22 @@ class CallControlsSocketTest {
     }
 
     @Test
+    fun `an invitation refused by the addition budget carries its code and when to retry (#20802)`() = runTest {
+        val fake = FakeCallSocket(ackReply = JSONObject("""{"success":false,"code":"RATE_LIMITED","retryAfter":42}"""))
+        val refusal = manager(fake).inviteCallParticipant("c1", "u2").exceptionOrNull() as CallControlRefusal
+        assertThat(refusal.code).isEqualTo("RATE_LIMITED")
+        assertThat(refusal.retryAfter).isEqualTo(42)
+        assertThat(fake.emitted.count { it.first == "call:invite-participant" }).isEqualTo(1)
+    }
+
+    @Test
+    fun `a refusal without retryAfter has none`() = runTest {
+        val fake = FakeCallSocket(ackReply = JSONObject("""{"success":false,"code":"RATE_LIMITED","retryAfter":null}"""))
+        val refusal = manager(fake).inviteCallParticipant("c1", "u2").exceptionOrNull() as CallControlRefusal
+        assertThat(refusal.retryAfter).isNull()
+    }
+
+    @Test
     fun `a silent gateway times out`() = runTest {
         val result = manager(FakeCallSocket(ackSilent = true)).inviteCallParticipant("c", "u")
         assertThat((result.exceptionOrNull() as CallControlRefusal).code).isEqualTo("TIMEOUT")

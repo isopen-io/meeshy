@@ -36,6 +36,18 @@ class CallInviteBoardTest {
     }
 
     @Test
+    fun `an invitation refused by the addition budget says try later, any other refusal says it failed (#20802)`() {
+        val board = CallInviteBoard().ringing(invite("bob")).ringing(invite("carol"))
+
+        val throttled = board.refused("bob", "RATE_LIMITED")
+        assertThat(throttled.notice).isEqualTo(CallInviteNotice.Throttled)
+        assertThat(throttled.ringingIds).containsExactly("carol")
+
+        assertThat(board.refused("bob", "MAX_PARTICIPANTS_REACHED").notice).isEqualTo(CallInviteNotice.Failed)
+        assertThat(board.refused("bob", null).notice).isEqualTo(CallInviteNotice.Failed)
+    }
+
+    @Test
     fun `a settlement for nobody ringing says nothing`() {
         val board = CallInviteBoard().ringing(invite("bob"))
 

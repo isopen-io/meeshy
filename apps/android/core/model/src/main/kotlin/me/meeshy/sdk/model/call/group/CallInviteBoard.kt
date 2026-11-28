@@ -24,6 +24,9 @@ sealed interface CallInviteNotice {
     /** La passerelle a refusé l'invitation (`call:invite-participant` à accusé négatif). */
     data object Failed : CallInviteNotice
 
+    /** La passerelle a refusé l'invitation au nom du budget des ajouts (`RATE_LIMITED`, #20802) : réessayer plus tard. */
+    data object Throttled : CallInviteNotice
+
     /** L'invité a refusé (`call:invite-declined`). */
     data class Declined(val name: String) : CallInviteNotice
 
@@ -55,8 +58,10 @@ data class CallInviteBoard(
     fun ringing(invite: CallPendingInvite): CallInviteBoard =
         if (invite.userId.isBlank() || isRinging(invite.userId)) this else copy(invites = invites + invite)
 
-    /** La passerelle refuse l'invitation : l'ami ne sonne plus, et on le dit. */
-    fun refused(userId: String): CallInviteBoard = withdrawn(userId).copy(notice = CallInviteNotice.Failed)
+    /** La passerelle refuse l'invitation : l'ami ne sonne plus, et on dit pourquoi quand [code] le permet. */
+    fun refused(userId: String, code: String? = null): CallInviteBoard = withdrawn(userId).copy(
+        notice = if (code == RATE_LIMITED) CallInviteNotice.Throttled else CallInviteNotice.Failed,
+    )
 
     /** L'invité a rejoint l'appel : il quitte la bande, sans mot. */
     fun withdrawn(userId: String): CallInviteBoard =
@@ -77,5 +82,7 @@ data class CallInviteBoard(
     companion object {
         /** Le mot de retour s'efface seul au bout de 4 s — iOS `CallControlsNoticePill`. */
         const val NOTICE_DISPLAY_MILLIS: Long = 4_000L
+
+        private const val RATE_LIMITED = "RATE_LIMITED"
     }
 }
