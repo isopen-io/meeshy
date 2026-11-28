@@ -48,17 +48,23 @@ function io(sockets: readonly PostRoomSocket[], options: { panne?: boolean } = {
   return { io: { in: dans }, fetchSockets, dans };
 }
 
+/** L'auteur par défaut n'est AUCUN des lecteurs des témoins : il ne soustrait
+ *  donc rien tant qu'un témoin ne le nomme pas. */
+const AUTEUR_HORS_JEU = 'auteur-hors-jeu';
+
 const appel = (
   surface: ReturnType<typeof io>,
   separes: readonly string[],
   dejaServis: readonly string[] = [],
   fermees: readonly string[] = [],
+  auteur: string = AUTEUR_HORS_JEU,
 ) =>
   separatedCompanionSpectators({
     io: surface.io,
     postRoom: ROOM,
     separatedFromCompanion: new Set(separes),
-    alreadyServed: dejaServis,
+    audience: dejaServis,
+    authorId: auteur,
     closedRooms: fermees,
   });
 
@@ -90,6 +96,11 @@ describe('#20779 — l’énumération de la room du post', () => {
   it('ne rend PAS un lecteur DÉJÀ servi par la boucle de l’audience', async () => {
     const surface = io([socket('s1', 'u1')]);
     expect(await appel(surface, ['u1'], ['u1'])).toEqual([]);
+  });
+
+  it('ne rend PAS l’AUTEUR, dont l’écho part toujours sur sa feed room', async () => {
+    const surface = io([socket('s1', 'u1')]);
+    expect(await appel(surface, ['u1'], [], [], 'u1')).toEqual([]);
   });
 
   it('ne rend PAS un lecteur dont l’axe de l’AUTEUR ferme la room', async () => {

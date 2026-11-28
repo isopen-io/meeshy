@@ -94,15 +94,21 @@ export type SeparatedCompanionSpectatorsInput = {
   /** Les lecteurs qu'un blocage sépare d'un compagnon (`companions.keys()`). */
   readonly separatedFromCompanion: ReadonlySet<string>;
   /**
-   * Ceux que la boucle par lecteur a déjà servis : l'audience et l'auteur.
-   *
-   * Des LISTES, pas des `Set`, et c'est délibéré : les deux ensembles ne se
-   * construisent qu'APRÈS le court-circuit du cas nominal, donc une diffusion
-   * sans aucun lecteur séparé ne paie pas O(audience) d'allocation. Le
-   * court-circuit n'a qu'UN propriétaire (ce module), ce qui est la raison de ce
-   * choix de forme — voir la note de `separatedCompanionSpectators`.
+   * L'audience, telle que la boucle par lecteur l'a déjà servie sur les feed
+   * rooms. **Passée TELLE QUELLE**, et c'est la forme qui rend vraie la phrase
+   * du court-circuit : l'appelant la tient déjà, donc il ne la copie pas, et
+   * l'ensemble ne se construit qu'APRÈS le court-circuit du cas nominal. La
+   * forme d'avant (`alreadyServed: [...recipients, authorId]`) composait un
+   * tableau chez l'appelant, AVANT le court-circuit, et faisait de « le cas
+   * nominal n'alloue rien » une affirmation fausse d'un spread.
    */
-  readonly alreadyServed: readonly string[];
+  readonly audience: readonly string[];
+  /**
+   * L'AUTEUR, nommé à part de l'audience parce qu'il en sort pour une autre
+   * raison : son écho part TOUJOURS sur sa feed room (exemption écrite de
+   * #20430), et non parce qu'une boucle l'a servi.
+   */
+  readonly authorId: string;
   /** Les rooms `user:` que l'axe de l'AUTEUR exclut : elles ne reçoivent RIEN. */
   readonly closedRooms: readonly string[];
 };
@@ -118,6 +124,11 @@ export type SeparatedCompanionSpectatorsInput = {
  * reçoit rien), donc une perte de direct, jamais une fuite.
  *
  * **Ce court-circuit n'a qu'UN propriétaire, et c'est une correction mesurée.**
+ * Son corollaire de forme est dans {@link SeparatedCompanionSpectatorsInput} :
+ * les entrées sont celles que l'appelant TIENT DÉJÀ, sans composition, sans quoi
+ * le cas nominal paierait chez l'appelant ce que ce court-circuit lui épargne
+ * ici — une phrase vraie du module et fausse du chemin.
+ *
  * Il a d'abord été écrit DEUX fois — ici, et dans la condition d'appel de
  * `emitPostToAudience`. Mutée, la seconde couche laissait **131 témoins verts** :
  * deux couches mutuellement redondantes dont aucune n'était tenue, exactement la
@@ -143,7 +154,8 @@ export async function separatedCompanionSpectators(
     return [];
   }
 
-  const dejaServis = new Set(input.alreadyServed);
+  const dejaServis = new Set(input.audience);
+  dejaServis.add(input.authorId);
   const fermees = new Set(input.closedRooms);
   const aServir: SeparatedSpectator[] = [];
   for (const socket of sockets) {

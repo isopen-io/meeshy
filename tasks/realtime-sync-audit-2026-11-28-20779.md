@@ -75,10 +75,23 @@ et on aurait payé un aller-retour Redis sur chaque `post:updated`.
 
 **La redondance est RETIRÉE, pas doublée d'un témoin.** Le site d'appel ne
 décide plus que de ce que lui seul sait — la room du post est-elle adressée ? —
-et le module décide seul s'il y a quelque chose à énumérer. Ce qui a permis de
-retirer sans rien payer : les deux ensembles de soustraction (`alreadyServed`,
-`closedRooms`) passent en LISTES et ne deviennent des `Set` qu'APRÈS le
-court-circuit, donc le cas nominal n'alloue toujours rien.
+et le module décide seul s'il y a quelque chose à énumérer.
+
+**Et la phrase qui justifiait ce retrait était FAUSSE d'un spread.** « Les
+ensembles ne se construisent qu'après le court-circuit, donc le cas nominal
+n'alloue rien » était vraie du MODULE et fausse du CHEMIN : l'appelant passait
+`alreadyServed: [...recipients, authorId]`, un tableau composé O(audience) AVANT
+le court-circuit. Les entrées sont désormais celles que l'appelant TIENT DÉJÀ —
+`audience: recipients`, et `authorId` nommé à part parce qu'il sort pour une
+AUTRE raison : son écho part toujours sur sa feed room (exemption écrite de
+#20430), et non parce qu'une boucle l'a servi. Cette seconde soustraction a
+gagné au passage son propre témoin, qu'aucun n'exerçait.
+
+> **Une affirmation de coût se vérifie sur le CHEMIN, pas sur l'unité qui la
+> porte.** Celle-ci décrivait exactement ce que le module fait, et un appelant à
+> quatre lignes de là la démentait. C'est la famille « un commentaire qui ÉNONCE
+> une contrainte est une AFFIRMATION » (cycle 94) appliquée à une allocation —
+> et le pire endroit pour la poser, puisqu'un coût n'a pas de symptôme.
 
 > **Devant deux couches qui disent la même chose, la question n'est pas
 > « laquelle tester ? » mais « laquelle est propriétaire ? ».** Tester les deux

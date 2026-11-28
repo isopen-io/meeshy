@@ -528,9 +528,13 @@ export class SocialEmissionCore {
       io: this.io,
       postRoom: ROOMS.post(postRoom.id),
       separatedFromCompanion: apart,
-      /* L'AUTEUR en fait partie : son écho part TOUJOURS sur sa feed room
-         (exemption de #20430), donc le servir à sa socket le doublerait. */
-      alreadyServed: [...recipients, authorId],
+      /* Les deux soustractions « déjà servi », passées SANS composition : les
+         ensembles se construisent après le court-circuit du module, et un
+         tableau composé ici les paierait avant lui. L'audience sort parce que
+         la boucle ci-dessus l'a servie ; l'AUTEUR, parce que son écho part
+         TOUJOURS sur sa feed room (exemption de #20430). */
+      audience: recipients,
+      authorId,
       /* L'axe de l'AUTEUR (#20430) ferme ces rooms : leur servir une charge
          amputée des compagnons leur livrerait le POST, que le blocage de
          l'auteur leur refuse. */

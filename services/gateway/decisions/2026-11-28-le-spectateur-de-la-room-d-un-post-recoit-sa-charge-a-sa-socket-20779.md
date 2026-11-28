@@ -111,8 +111,16 @@ première rédaction**, et elles disent deux choses différentes :
    doublée d'un témoin** : le site d'appel ne décide plus que de ce que lui seul
    sait — la room est-elle adressée ? — et le module décide seul s'il y a quelque
    chose à énumérer. Ce qui a permis de retirer sans rien payer : les deux
-   ensembles de soustraction se construisent APRÈS le court-circuit, donc le cas
-   nominal n'alloue toujours rien.
+   ensembles de soustraction se construisent APRÈS le court-circuit. **Et cette
+   phrase a d'abord été FAUSSE d'un spread** — l'appelant passait
+   `alreadyServed: [...recipients, authorId]`, un tableau composé O(audience)
+   AVANT le court-circuit, donc le cas nominal payait chez l'appelant ce que le
+   module lui épargnait. Les entrées sont désormais celles que l'appelant TIENT
+   DÉJÀ (`audience: recipients`, et `authorId` nommé à part — il sort pour une
+   AUTRE raison, son exemption écrite de #20430, et non parce qu'une boucle l'a
+   servi). *Une affirmation de coût se vérifie sur le CHEMIN, pas sur l'unité qui
+   la porte* — et c'est le pire endroit pour en poser une fausse, un coût n'ayant
+   pas de symptôme.
 2. **Le fail-open de l'axe de l'auteur n'était tenu par rien.** Retirer
    `postRoom.separated === null` de la condition laissait **tous** les témoins
    verts. Réparé par un mode de panne CIBLÉ sur les deux requêtes dont les
