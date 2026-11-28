@@ -58,6 +58,7 @@ import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 import { useWindowFileDrop } from '@/lib/view/use-window-file-drop';
 import { ComposerDropVeil } from './composer-drop-veil';
 
@@ -971,10 +972,10 @@ export const Composer = memo(function Composer({
                 }
                 // La touche Entree ENVOIE (`.submitLabel(.send)`) ; Maj+Entree
                 // insere une ligne.
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendDraft();
-                }
+                const enter = enterKeyIntent(e.nativeEvent, { multiline: true });
+                if (enter === 'none') return;
+                e.preventDefault();
+                if (enter === 'submit') sendDraft();
               }}
               placeholder={translate(uiLanguage, 'composer.field.placeholder')}
               aria-label={translate(uiLanguage, 'composer.field.label')}

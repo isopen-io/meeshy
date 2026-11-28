@@ -5,6 +5,7 @@ import { Field } from '@/components/field';
 import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/components/info-hint';
 import { Sheet } from '@/components/sheet';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminButton, type AdminButtonTone } from './button';
@@ -294,7 +295,7 @@ export function AdminTextInput({
               onCommit?.(event.currentTarget.value);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') onCommit?.(event.currentTarget.value);
+              if (enterKeyIntent(event.nativeEvent, { multiline: false }) === 'submit') onCommit?.(event.currentTarget.value);
             }}
             className={`w-full bg-transparent text-body outline-none disabled:opacity-50 ${mono ? 'font-mono' : ''}`.trim()}
             style={{ minHeight: 44, color: INK }}

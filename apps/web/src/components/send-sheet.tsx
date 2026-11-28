@@ -37,6 +37,7 @@ import {
 import { ForwardDurationRow, PreviewCard, PUBLISH_ORDER, SectionTitle, StatusLine, type StatusEntry } from './send-sheet-parts';
 import { ActionsZone, CreateGroupSwitch, GroupingToggle, OverLimitBanner, PieceStrip, ReasonLine, RecipientsZone, SelectedRow, type ActionButton } from './send-sheet-zones';
 import { BUTTON } from './ui-chrome';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 
 /**
  * L'ÉCRAN DE PARTAGE UNIQUE (#10948, planche `docs/product/partage-unique/`,
@@ -349,9 +350,10 @@ export function SendSheet({
   };
 
   const onCaptionKey = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    const enter = enterKeyIntent(event.nativeEvent, { multiline: true });
+    if (enter === 'none') return;
     event.preventDefault();
-    send();
+    if (enter === 'submit') send();
   };
 
   const forward = plan.title === 'forward';
