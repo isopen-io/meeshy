@@ -61,6 +61,7 @@ import {
   mockRepostPost,
   mockRecordEngagementBatch,
 } from './interactions.harness';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 describe('POST /posts/:id/view — unauthenticated', () => {
   it('returns 401 when no auth context', async () => {
@@ -587,6 +588,10 @@ describe('POST /posts/:id/view — un acteur SANS pseudo diffuse la charge anony
         // d'ingestion (`post.findMany`), pas par une lecture unitaire.
         findMany: aclAwareFindMany(),
       },
+      // Ce témoin monte son app sans `buildApp`, donc sans le délégué de
+      // séparation du harnais : sans lui, la vue ne serait jamais créditée et
+      // `story:viewed` ne partirait pas (#20717).
+      user: noBlockUserDelegate(),
     };
     app.decorate('prisma', prisma);
     app.decorate('notificationService', {

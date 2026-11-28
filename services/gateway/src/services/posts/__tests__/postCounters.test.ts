@@ -130,6 +130,11 @@ describe('les sites d\'appel réels comptent un post antérieur aux colonnes', (
         updateMany: store.updateMany,
       },
       postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: async () => ({ count: 1 }) },
+      /* #20717 — la porte de consommation lit la séparation par blocage, UNE
+         fois pour tous les auteurs du lot. « Aucun blocage » est le cas
+         nominal de ce témoin ; sans ce délégué la lecture lève et le lot
+         ENTIER est refusé (fermé sur l'échec). */
+      user: { findMany: async () => [], findUnique: async () => ({ blockedUserIds: [] }) },
       $runCommandRaw: store.runCommandRaw,
     } as unknown as PrismaClient;
     const deps = { fastify: {}, prisma, postService: {} } as unknown as SocialEventsDeps;

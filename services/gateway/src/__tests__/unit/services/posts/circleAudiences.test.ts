@@ -27,6 +27,7 @@ import { feedCirclesCacheKey, invalidateFeedFriends, loadFeedCircles } from '../
 import { relationStore } from '../../../helpers/user-relation-store';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
 import type { CacheStore } from '../../../../services/CacheStore';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 const hex = (letter: string): string => letter.repeat(24);
 
@@ -79,7 +80,10 @@ const world = (extra: { readonly dmContacts?: readonly string[]; readonly relati
   const prisma = {
     ...store.prisma,
     // Aucun compte de l'équipe dans ce monde : la loi lit rôle et âge (#16623) et ne trouve que des inconnus.
-    user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
+    // Les deux lectures de rôle GARDENT leur réponse ; `findFirst` vient du
+    // délégué de séparation, car le verdict unitaire interroge le blocage par
+    // lui (#20717) et ce monde n'en porte aucun.
+    user: { ...noBlockUserDelegate(), findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
     communityMember: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
     participant: {
       findMany: participantFindMany,
@@ -239,7 +243,9 @@ describe('les cercles du lecteur — loadFeedCircles et les filtres qui les lise
     const store = relationStore({ relations: [l(ACQ, 'ACQUAINTANCE'), l(FRI, 'FRIEND'), l(CLS, 'CLOSE'), l(BLD, 'BLOOD')] });
     const prisma = {
       ...store.prisma,
-      user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })) },
+      // Même monde sans blocage, côté LECTEUR : `findFirst` manquait au verdict
+      // unitaire de la porte de consommation (#20717).
+      user: { ...noBlockUserDelegate(), findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })) },
       communityMember: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
       participant: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
     };

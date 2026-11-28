@@ -61,6 +61,15 @@ function makePrisma(byId: Record<string, FakePost | null>) {
         Promise.resolve(byId[where.id] ?? null)),
     },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    /* #20717 — le verdict de CONSOMMATION lit la séparation par blocage. Le
+       double la sert « aucun blocage », le cas NOMINAL de ces témoins ; sans
+       ce délégué la lecture lève et la garde refuse (fermée sur l'échec), ce
+       qui est le bon comportement et un mauvais harnais. */
+    user: {
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findUnique: jest.fn<any>().mockResolvedValue({ blockedUserIds: [] }),
+    },
     friendRequest: { findFirst: jest.fn().mockResolvedValue(null) },
     communityMember: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },
     participant: { findMany: jest.fn().mockResolvedValue([]), findFirst: jest.fn().mockResolvedValue(null) },

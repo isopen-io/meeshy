@@ -81,6 +81,7 @@ jest.mock('../../../../utils/sanitize.js', () => ({
 
 import { registerCoreRoutes } from '../../../../routes/posts/core';
 import { registerCommentRoutes } from '../../../../routes/posts/comments';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -124,6 +125,9 @@ async function buildApp(): Promise<FastifyInstance> {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       findFirst: jest.fn<any>().mockResolvedValue({ postId: POST_ID, post: publicAcl }),
     },
+    // Audience PUBLIC des deux côtés, blocage compris (#20717) : le plafond
+    // mesuré ici ne se lit que si la porte laisse passer la traduction.
+    user: noBlockUserDelegate(),
   } as any;
   app.decorate('prisma', prisma);
   app.decorate('socialEvents', {

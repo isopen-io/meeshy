@@ -66,6 +66,7 @@ import {
   socialEventsRateLimitKey,
   SOCIAL_EVENTS_BATCH_CAP,
 } from '../../../../routes/social/events';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -153,6 +154,7 @@ function makePrisma() {
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postMention: { findFirst: jest.fn<any>().mockResolvedValue(null) },
+    user: noBlockUserDelegate(), // #20717 — sans ses trois lectures, rien n'est crédité ni écrit.
   };
   return prisma;
 }
@@ -797,7 +799,8 @@ describe('#10772 — une session de lecture passe par le statut d’analyse que 
   };
   const withUser = (row: Record<string, unknown> | null) => ({
     ...makePrisma(),
-    user: { findUnique: jest.fn<any>().mockResolvedValue(row) },
+    // La ligne de consentement, que ce témoin MESURE, gagne sur le délégué (#20717).
+    user: { ...noBlockUserDelegate(), findUnique: jest.fn<any>().mockResolvedValue(row) },
   });
   const standingSent = () => (mockRecordEngagementBatch.mock.calls[0] as any)[2];
   const post = (app: FastifyInstance, payload: Record<string, unknown>) =>

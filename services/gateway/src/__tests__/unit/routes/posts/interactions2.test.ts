@@ -99,6 +99,7 @@ jest.mock('../../../../services/CacheStore', () => ({
 }));// ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerInteractionRoutes } from '../../../../routes/posts/interactions';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -137,8 +138,7 @@ function makePrisma() {
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
-    // #14242 — le partage lit le blocage entre le partageur et l'auteur : aucun ici.
-    user: { findFirst: async () => null },
+    user: noBlockUserDelegate(), // Blocage : #14242 au partage, #20717 à la consommation — aucun ici.
     post: {
       update: jest.fn<any>().mockResolvedValue({}),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),

@@ -9,6 +9,7 @@
 import { describe, it, expect, beforeAll, afterAll, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { noBlockUserDelegate } from './helpers/separation-double';
 
 const recordEngagementBatch = jest.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValue(1);
 
@@ -83,6 +84,9 @@ async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
       updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
     postImpression: { createMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
+    // Le point d'ingestion lit la séparation par blocage avant d'écrire (#20717) :
+    // sans ce délégué la passe de lot se ferme et le témoin lit `recorded: 0`.
+    user: noBlockUserDelegate(),
   } as unknown as PrismaClient;
   const requiredAuth = buildAuthMiddleware(authenticated ? 'u1' : undefined);
   const { registerInteractionRoutes } = await import('../routes/posts/interactions');

@@ -1,6 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 import { registerInteractiveResponseRoutes } from '../../../../routes/posts/interactiveResponses';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 /**
  * Route-level: exerce la vraie sérialisation (`app.inject`), jamais un double
@@ -55,6 +56,9 @@ function makePrisma() {
       count: jest.fn<any>().mockResolvedValue(2),
       findUnique: jest.fn<any>().mockResolvedValue(null),
     },
+    // `mayConsumePost` interroge aussi le blocage entre lecteur et auteur
+    // (#20717) : sans ce délégué, répondre à un sondage rendrait 404.
+    user: noBlockUserDelegate(),
   };
 }
 

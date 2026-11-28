@@ -31,6 +31,7 @@ import {
   canUserInteractWithPost,
   canUserViewPost,
 } from '../../../../services/posts/postVisibility';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 const AUTHOR = 'u-author';
 
@@ -117,6 +118,10 @@ function makeGraphPrisma(graph: Graph = {}) {
     },
     post: { findFirst: jest.fn<any>(async () => null) },
     postComment: { findFirst: jest.fn<any>(async () => null) },
+    // Le graphe de ce monde dit l'amitié, le DM et la communauté ; il ne dit
+    // AUCUN blocage, et la porte de consommation en lit un (#20717) — par les
+    // trois méthodes, puisque ce fichier confronte le verdict unitaire au lot.
+    user: noBlockUserDelegate(),
   } as any;
 }
 
@@ -385,6 +390,9 @@ describe('canUserViewPost — branche référence', () => {
       friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
       participant: { findFirst: jest.fn<any>().mockResolvedValue(null) },
       postMention: { findUnique: jest.fn<any>().mockResolvedValue(reference) },
+      // Être NOMMÉ ouvre la consommation — encore faut-il que la lecture de
+      // blocage réponde, sans quoi la branche référence se ferme (#20717).
+      user: noBlockUserDelegate(),
     } as any;
   }
 

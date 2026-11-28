@@ -24,6 +24,7 @@ import {
   canUserInteractWithPost,
 } from '../../../../services/posts/postVisibility';
 import { doUsersShareDirectConversation } from '../../../../services/posts/directContactVisibility';
+import { noBlockUserDelegate } from '../../../helpers/separation-double';
 
 const AUTHOR = 'u-author';
 const VIEWER = 'u-viewer';
@@ -68,6 +69,12 @@ function makePrisma(opts: {
       ),
       findFirst: jest.fn<any>().mockResolvedValue(opts.directPeer ? { id: 'pt-1' } : null),
     },
+    // Exception à la doctrine ci-dessus : la séparation par blocage (#20717) est
+    // la SEULE lecture de la garde qui soit FERMÉE sur l'échec. Son délégué
+    // manquant ne lève donc pas — il rend « accès refusé », verdict par défaut
+    // exactement de l'espèce que ce double voulait rendre visible. Il faut donc
+    // le fournir, et ce monde-ci ne porte aucun blocage.
+    user: noBlockUserDelegate(),
   };
   return prisma;
 }

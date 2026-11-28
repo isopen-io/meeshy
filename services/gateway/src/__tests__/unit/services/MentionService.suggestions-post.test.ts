@@ -26,6 +26,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { MentionService, type MentionSuggestion } from '../../../services/MentionService';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 const POST_ID = '507f1f77bcf86cd799439011';
 const CURRENT_USER_ID = '507f1f77bcf86cd799439099';
@@ -84,6 +85,10 @@ function fakePrisma(scenario: Scenario) {
       ),
     },
     user: {
+      // Le double d'annuaire répond déjà aux deux lectures de LOT ; `findFirst`
+      // vient du délégué de séparation, que la porte du post interroge au
+      // verdict unitaire (#20717).
+      ...noBlockUserDelegate(),
       findMany: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
         const ids = (where.id as { in?: string[] } | undefined)?.in;
         if (ids) return ids.flatMap((id) => (people.has(id) ? [people.get(id) as User] : []));

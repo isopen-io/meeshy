@@ -70,6 +70,7 @@ import type { PostReactionService } from '../../../services/PostReactionService'
 import type { NotificationService } from '../../../services/notifications/NotificationService';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { validateSocketEvent } from '../../../middleware/validation';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 // ===== HELPERS =====
 
@@ -126,10 +127,10 @@ function createMockPrisma() {
       // handleAddReaction / handleRemoveReaction.
       findFirst: jest.fn(),
     },
-    postComment: {
-      findFirst: jest.fn(),
-    },
+    postComment: { findFirst: jest.fn() },
     userRelation: { findUnique: jest.fn<any>().mockResolvedValue(null), findMany: jest.fn<any>().mockResolvedValue([]) },
+    // #20717 — « aucun blocage » : la porte de consommation LIT, et ferme sur l'échec.
+    user: noBlockUserDelegate(),
     friendRequest: {
       findFirst: jest.fn(),
     },

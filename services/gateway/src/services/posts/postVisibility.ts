@@ -13,6 +13,7 @@ import { doUsersShareDirectConversation } from './directContactVisibility';
 import { verdictFor } from './referenceAccess';
 import { NOT_DELETED } from './softDelete';
 import { amitieAcceptee } from '../friendship';
+import { isBlockedWithAny } from '../../utils/blocking';
 import { postCircleAudienceFeature } from '@meeshy/shared/utils/relation-levels';
 import { pairAccess, type PairAccessDb } from '../relations/pairAccess';
 
@@ -428,6 +429,55 @@ export async function canUserInteractWithThread(prisma: PostAclPrisma, thread: C
 }
 
 /**
+ * Les options du verdict de CONSOMMATION. Un seul champ, et sa POLARITÉ est la
+ * moitié de sa raison d'être (#20717).
+ */
+export type PostConsumptionOptions = {
+  /**
+   * Les auteurs dont un blocage sépare CE lecteur, déjà lus par l'appelant.
+   *
+   * Pour un appelant de LOT — `consumablePostAuthors`, appelé à chaque
+   * défilement sur jusqu'à cinquante publications — lire la séparation par
+   * publication rendrait N requêtes là où la question est posée UNE fois par
+   * lecteur : c'est une lenteur, donc un bug (§ Roadmap, dimension 2). Il lit
+   * donc l'ensemble une fois (`getBlockedUserIdsAmong`, deux requêtes bornées)
+   * et le passe ici.
+   *
+   * **L'ABSENCE fait LIRE, elle ne désarme pas.** Ce n'est pas le « paramètre
+   * dont l'absence désactive une garde » que le dépôt refuse (§ Une garde de
+   * confidentialité se relit CHEZ ELLE) : la polarité est inversée — omettre
+   * coûte une requête de plus, jamais une règle de moins. C'est le motif que
+   * `feedVisibility.ts` emploie déjà pour la même valeur
+   * (`separated !== undefined ? [...separated] : blockedIdsAroundViewer(…)`).
+   *
+   * Fourni, il doit venir d'une lecture FRAÎCHE : un verdict de lecture est une
+   * AUTORISATION, et le cache de `separatedRooms.ts` déclare explicitement ne
+   * servir que des AUDIENCES.
+   */
+  readonly separatedAuthorIds?: ReadonlySet<string>;
+};
+
+/**
+ * Un blocage sépare-t-il ce lecteur de l'auteur ? FERMÉ sur l'échec, comme les
+ * trois portes voisines (`commentHome`, `PostReactionService`,
+ * `contentAuthorBlock`) : une lecture qui ne conclut pas refuse la lecture.
+ *
+ * L'auteur n'est jamais séparé de lui-même, et ce cas ne coûte AUCUNE requête —
+ * la garde ne doit pas renchérir le chemin le plus fréquent de tous, celui où
+ * quelqu'un relit son propre contenu.
+ */
+async function isSeparatedFromAuthor(
+  prisma: PostAclPrisma,
+  userId: string,
+  authorId: string,
+  known: ReadonlySet<string> | undefined,
+): Promise<boolean> {
+  if (authorId === userId) return false;
+  if (known !== undefined) return known.has(authorId);
+  return isBlockedWithAny(prisma, userId, [authorId]);
+}
+
+/**
  * A-t-il le droit de CONSOMMER ce post et le contenu qui y est attaché (lire
  * le fil de commentaires, les réponses) ?
  *
@@ -438,14 +488,56 @@ export async function canUserInteractWithThread(prisma: PostAclPrisma, thread: C
  * lecteur légitime en 404.
  *
  * `userId` absent = visiteur non identifié : seul un post `PUBLIC` lui est
- * ouvert, et aucune requête de graphe n'est émise pour l'établir.
+ * ouvert, et aucune requête de graphe n'est émise pour l'établir — un visiteur
+ * sans compte n'a pas de blocage à lire non plus.
+ *
+ * ─── LE BLOCAGE SE POSE ICI, ET C'EST LE DOMICILE QUE LE DÉPÔT DÉSIGNE ───
+ *
+ * `viewerAudience.ts` écrit, depuis #7184, que le blocage des accès UNITAIRES
+ * n'appartient pas au filtre de liste mais à cette fonction. Mesuré le
+ * 2026-11-27 (#20717) : le délégataire ne le lisait pas. Une publication
+ * `PUBLIC` d'un auteur qui avait bloqué le lecteur traversait tout ce que ce
+ * verdict gouverne — `post:join` et sa salle temps réel, le décompte des
+ * réactions, le fil de commentaires, le favori, l'impression, le partage, la
+ * traduction et l'export d'un média, les réponses interactives, les
+ * suggestions de mention, l'ingestion sociale v2, la réponse à une story et
+ * l'éligibilité d'une notification — alors que les trois portes voisines
+ * (commenter, réagir, republier) et le fil de LISTE l'appliquaient déjà.
+ *
+ * > Une délégation ÉCRITE se vérifie chez le DÉLÉGATAIRE. La phrase de #7184
+ * > est vraie des deux côtés — le filtre ne pose pas la règle, et le domicile
+ * > désigné ne l'a jamais reçue — ce qui est exactement la forme sous laquelle
+ * > une règle devient invisible : chaque moitié renvoie à l'autre.
+ *
+ * ─── CE QUE CE VERDICT NE GOUVERNE PAS, ET QU'IL FAUT DIRE ICI ────────────
+ *
+ * **`PostService.getPostById`, `recordView`, `recordMediaDownloads`,
+ * `recordEngagementBatch` et `deletePost` ne passent PAS par cette fonction**
+ * (mesuré le 2026-11-27 : `PostService` n'importe d'ici que
+ * `isEphemeralPostType` et `RepostPassage`). Ils se gardent par
+ * `buildViewerVisibilityFilter`, qui passe une liste de blocage VIDE, que
+ * `buildPostVisibilityOrFilter` court-circuite. Lire une publication, compter
+ * une vue et télécharger ses médias restent donc ouverts à un lecteur séparé —
+ * **suivi #20720**.
+ *
+ * Ce n'est pas une omission de l'énumération ci-dessus : c'est la raison pour
+ * laquelle une énumération de portes ne se recopie pas depuis la phrase qui les
+ * DÉLÈGUE. Le commentaire de `viewerAudience.ts` nomme ces trois accès comme
+ * relevant de cette fonction ; il dit l'INTENTION, jamais l'état, et le lot qui
+ * a fermé cette porte s'est lui-même trompé en le lisant.
+ *
+ * Il se pose AVANT l'audience : une séparation refuse quelle que soit la
+ * visibilité, et il n'y a rien à apprendre du graphe d'un lien qu'un blocage
+ * vient de couper.
  */
 export async function canUserConsumePost(
   prisma: PostAclPrisma,
   post: PostVisibilityRecord,
   userId?: string,
+  options: PostConsumptionOptions = {},
 ): Promise<boolean> {
   if (!userId) return post.visibility === PostVisibility.PUBLIC;
+  if (await isSeparatedFromAuthor(prisma, userId, post.authorId, options.separatedAuthorIds)) return false;
   return canUserViewPost(prisma, post, userId, {
     includeDirectContacts: true,
     includeReferenced: true,

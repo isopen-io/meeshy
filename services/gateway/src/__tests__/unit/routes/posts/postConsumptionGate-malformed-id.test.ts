@@ -72,6 +72,12 @@ function makePrisma() {
         return rows.filter((r) => (ids as string[]).includes(r.id));
       },
     },
+    /* #20717 — le verdict de consommation lit la séparation par blocage.
+       « Aucun blocage » est le cas nominal de ces témoins, qui portent sur la
+       forme de l'identifiant ; sans ce délégué la lecture lève et la garde
+       refuse tout, ce qui ferait passer le contrôle POSITIF pour un échec de
+       la règle d'identifiant. */
+    user: { findFirst: async () => null, findMany: async () => [], findUnique: async () => ({ blockedUserIds: [] }) },
   } as any;
 }
 

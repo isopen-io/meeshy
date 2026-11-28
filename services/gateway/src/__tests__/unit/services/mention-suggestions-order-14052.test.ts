@@ -16,6 +16,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 import { MentionSuggestionFinder } from '../../../services/mentions/mentionSuggestions';
+import { noBlockUserDelegate } from '../../helpers/separation-double';
 
 const ME = '507f1f77bcf86cd799439099';
 const POST = '6a0000000000000000000001';
@@ -96,6 +97,10 @@ function fakePrisma(world: World) {
     },
     conversationMessageStats: { findUnique: jest.fn(async () => null) },
     user: {
+      // L'ORDRE des suggestions est ce que ce témoin mesure ; il n'en lit aucun
+      // si la porte du post refuse, et elle interroge le blocage par
+      // `findFirst` (#20717).
+      ...noBlockUserDelegate(),
       findMany: jest.fn(async ({ where }: { where: AnyWhere }) => {
         const ids = inList(where.id);
         if (ids) return ids.flatMap((u) => (PEOPLE[u] ? [PEOPLE[u]] : []));
