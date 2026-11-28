@@ -108,10 +108,12 @@ public data class CallStats(
          * - [roundTripTimeMs] (`currentRoundTripTime` ×1000) is read on the SELECTED
          *   pair ([selectedCandidatePair], #19899) — a probing pair listed after it no
          *   longer overwrites the live path's figure. When no pair is elected, or the
-         *   elected one lacks the field, the `candidate-pair` carrying it first in the
+         *   elected one lacks the field or carries an aberrant value (NaN, infinite,
+         *   negative, #20797), the `candidate-pair` carrying a valid one first in the
          *   election order (strongest `priority`, then smallest `id`, #20121) gives it —
-         *   never the report's order. No pair carrying it at all: the peer's
+         *   never the report's order. No pair carrying one at all: the peer's
          *   `remote-inbound-rtp` `roundTripTime`, first in [streamOrder] (#20348, web `readStats`).
+         *   A 0 is a measure and ends the fallback.
          * - [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) is read
          *   ONLY on the selected pair, with no fallback (#20284, web `readStats`): a pair
          *   that carries no traffic holds a weak or stale estimate, and the video tier
@@ -170,13 +172,22 @@ public data class CallStats(
         private fun streamOrder(entries: List<RawEntry>): List<RawEntry> =
             entries.sortedWith(compareBy<RawEntry> { it.kind == "video" }.thenBy { it.id })
 
+        /** #20348, #20797 — une mesure n'est retenue que finie et `>= 0` ; un 0 est une mesure. */
+        private fun Double.isValidMeasure(): Boolean = isFinite() && this >= 0.0
+
+        /**
+         * #20797 — une mesure de paire, lue sur la paire élue ; absente d'elle ou aberrante (NaN, infinie,
+         * négative), sur la première paire de [electionOrder] qui en porte une valide ; `null` sinon, et
+         * l'appelant passe au repli. Jamais pour `availableOutgoingBitrate` (#20284).
+         */
         private fun pairMeasure(key: String, elected: RawEntry?, entries: List<RawEntry>): Double? =
-            elected?.values?.get(key) ?: electionOrder(entries).firstNotNullOfOrNull { it.values[key] }
+            (listOfNotNull(elected) + electionOrder(entries))
+                .firstNotNullOfOrNull { entry -> entry.values[key]?.takeIf { it.isValidMeasure() } }
 
         /** #20348 — le `roundTripTime` (s) du pair : le premier `remote-inbound-rtp` de [streamOrder] qui en porte un fini et `>= 0` (web `remoteRoundTripTime`). */
         private fun remoteRoundTripTime(entries: List<RawEntry>): Double? =
             streamOrder(entries.filter { it.type == "remote-inbound-rtp" })
-                .firstNotNullOfOrNull { entry -> entry.values["roundTripTime"]?.takeIf { it.isFinite() && it >= 0.0 } }
+                .firstNotNullOfOrNull { entry -> entry.values["roundTripTime"]?.takeIf { it.isValidMeasure() } }
 
         public fun reduce(entries: List<RawEntry>): CallStats {
             var packetsLost = 0
