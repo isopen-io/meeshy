@@ -186,7 +186,8 @@ extension CallStats {
             "packetsLost", "packetsReceived",
             "packetsSent", "bytesSent", "bytesReceived", "jitter", "audioLevel",
             "nominated", "priority", "freezeCount", "totalFreezesDuration", "framesPerSecond",
-            "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples", "nackCount", "pliCount"
+            "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples", "nackCount", "pliCount",
+            "roundTripTime"
         ]
 
         nonisolated static let stringKeys = [
@@ -263,6 +264,13 @@ extension CallStats {
         elected?.values[key] ?? electionOrder(entries).first { $0.values[key] != nil }?.values[key]
     }
 
+    /// #20348 — the peer's `roundTripTime` (s): the first `remote-inbound-rtp`
+    /// of `streamOrder` carrying a finite value `>= 0` (web `remoteRoundTripTime`).
+    private static func remoteRoundTripTime(in entries: [RawEntry]) -> Double? {
+        streamOrder(entries.filter { $0.type == "remote-inbound-rtp" })
+            .lazy.compactMap { $0.values["roundTripTime"] }.first { $0.isFinite && $0 >= 0 }
+    }
+
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
     /// `codecId → codec.mimeType` (the legacy code stored the stats-graph
     /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) on the
@@ -270,10 +278,12 @@ extension CallStats {
     /// inbound audio/video separate. RTT and available outgoing bitrate come
     /// from the SELECTED pair (#20098). RTT alone falls back, with no elected
     /// pair or an elected pair lacking it, to the pair carrying it first in
-    /// `electionOrder` (strongest `priority`, then smallest `id`, #20121). The
+    /// `electionOrder` (strongest `priority`, then smallest `id`, #20121), and
+    /// with no pair carrying it, to the peer's `remote-inbound-rtp` (#20348). The
     /// bitrate never does (#20284): a pair that carries no traffic holds a low
     /// or stale estimate, and the video tier would follow it — no estimate on
-    /// the elected pair reads 0, "no estimate", as on the web (`readStats`).
+    /// the elected pair reads 0, "no estimate", as on the web (`readStats`), and
+    /// so does an estimate beyond `CallStatValue.maxBitrateEstimateBps` (#20348).
     static func reduce(entries: [RawEntry]) -> CallStats {
         var packetsLost = 0
         var bytesSent = 0
@@ -325,8 +335,9 @@ extension CallStats {
             .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
 
         let elected = selectedCandidatePair(in: entries)
-        let rtt = pairMeasure("currentRoundTripTime", elected: elected, in: entries).map { CallStatValue.measured($0 * 1000) } ?? 0
-        let availableOutgoingBitrateBps = elected?.values["availableOutgoingBitrate"].map(CallStatValue.count) ?? 0
+        let rtt = (pairMeasure("currentRoundTripTime", elected: elected, in: entries) ?? remoteRoundTripTime(in: entries))
+            .map { CallStatValue.measured($0 * 1000) } ?? 0
+        let availableOutgoingBitrateBps = elected?.values["availableOutgoingBitrate"].map(CallStatValue.bitrateEstimate) ?? 0
 
         let jitterMs = audioJitterCount > 0 ? CallStatValue.measured((audioJitterSum / Double(audioJitterCount)) * 1000) : 0
 
@@ -435,6 +446,17 @@ nonisolated enum CallStatValue {
     static func count(_ value: Double) -> Int {
         let valid = measured(value)
         return valid > Double(maxSafeCount) ? 0 : Int(valid)
+    }
+
+    /// La borne de VRAISEMBLANCE d'une estimation de débit (`availableOutgoingBitrate`,
+    /// b/s), la même sur Android (`Int.MAX_VALUE`) et le web (#20348) : ~2,1 Gb/s.
+    static let maxBitrateEstimateBps = 2_147_483_647
+
+    /// Une estimation non finie, nulle, négative ou au-delà de `maxBitrateEstimateBps`
+    /// n'est pas une estimation et vaut 0 (#20348).
+    static func bitrateEstimate(_ value: Double) -> Int {
+        let valid = measured(value)
+        return valid > Double(maxBitrateEstimateBps) ? 0 : Int(valid)
     }
 
     static func sum(_ lhs: Int, _ rhs: Int) -> Int {

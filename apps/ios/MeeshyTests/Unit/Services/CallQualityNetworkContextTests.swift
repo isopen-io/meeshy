@@ -544,6 +544,7 @@ final class CallStatsStreamOrderTests: XCTestCase {
 
 // MARK: - #20348 — l'estimation hors bornes et le RTT absent de la paire, comme Android et le web
 
+@MainActor
 final class CallStatsEstimateAndRemoteRttTests: XCTestCase {
 
     private func elected(_ values: [String: Double] = [:]) -> CallStats.RawEntry {
@@ -605,7 +606,7 @@ final class CallStatsEstimateAndRemoteRttTests: XCTestCase {
             remoteInbound("RA", kind: "audio", rtt: 0.12)
         ]
 
-        [report, report.reversed()].forEach { order in
+        [report, Array(report.reversed())].forEach { order in
             XCTAssertEqual(CallStats.reduce(entries: order).roundTripTimeMs, 120, accuracy: 0.001)
         }
     }
