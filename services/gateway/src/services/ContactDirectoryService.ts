@@ -200,7 +200,7 @@ export function contactLookupScope(options: {
  * clause de blocage. Lecture unique, réutilisable sur une requête.
  */
 export async function blockedIdsAroundViewer(
-  prisma: PrismaClient,
+  prisma: Pick<PrismaClient, 'user'>,
   viewerId: string
 ): Promise<string[]> {
   // Un `viewerId` vide n'a rien bloqué et n'est bloqué par personne — et le

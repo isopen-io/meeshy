@@ -38,6 +38,31 @@ function withoutSnapshotColumn<T>(post: T): T {
 }
 
 /**
+ * CE POST A-T-IL UN COMPAGNON QU'UN BLOCAGE POURRAIT RETIRER ? (#20204)
+ *
+ * Dérivé des MÊMES accesseurs que {@link withoutSeparatedCompanions}, et c'est
+ * tout l'intérêt : un prédicat recopié à la main dériverait au premier
+ * compagnon ajouté, et il dériverait du bon côté — en répondant « rien à
+ * filtrer » sur une forme qui porte désormais un tiers.
+ *
+ * Il sert aux portes UNITAIRES, qui doivent LIRE les blocages pour servir leur
+ * lecteur (`servedWireReader`) : quand la charge ne porte ni source republiée
+ * ni commentaire, cette lecture ne décide de RIEN, et c'est le cas nominal
+ * d'une porte de CRÉATION — un post qu'on vient d'écrire n'a pas de
+ * commentaire, et `repostOf` n'existe que sur une republication.
+ *
+ * Ce n'est pas un raccourci de garde : le prédicat porte sur la charge SORTANTE,
+ * jamais sur une autorisation. S'il répond `false`, il n'y a rien à taire —
+ * pas « rien à vérifier ».
+ */
+export function hasSeparableCompanions(post: unknown): boolean {
+  const source = (post as { repostOf?: unknown } | null)?.repostOf;
+  if (authorOf(source) !== undefined || snapshotOf(source) !== undefined) return true;
+  const comments = (post as { comments?: unknown } | null)?.comments;
+  return Array.isArray(comments) && comments.some((comment) => authorOf(comment) !== undefined);
+}
+
+/**
  * Une source est séparée quand son auteur l'est, ou quand elle est la COPIE
  * d'un contenu dont l'auteur d'origine l'est (`snapshotAuthorId`).
  */

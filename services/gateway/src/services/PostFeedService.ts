@@ -9,6 +9,7 @@ import { EPHEMERAL_AUTHOR_ARCHIVE_MS } from './posts/ephemeralPosts';
 import { likedFromReactions, withViewerPostState } from './posts/viewerPostState';
 import { buildFeedVisibilityFilter, viewerPostAudience } from './posts/feedVisibility';
 import { readerSeparatedFrom } from './posts/separatedReader';
+import { separatedIdsOf, snapshotAuthorNotSeparated } from './posts/separatedCompanions';
 import {
   reelAffinityScore,
   type ReelAffinityContext,
@@ -574,9 +575,31 @@ export class PostFeedService {
     return { items, nextCursor, hasMore };
   }
 
+  /**
+   * LA DÉCOUVERTE DES STATUTS — et la séparation du lecteur (#20204).
+   *
+   * Cette porte compose son `where` à la main : elle n'emprunte pas
+   * `buildFeedVisibilityFilter`, parce qu'elle ne sert qu'un `PUBLIC` dont
+   * l'audience ne se discute pas. Son prix a été de n'avoir JAMAIS porté la
+   * clause que ce filtre pose pour tout le monde — `authorId: { notIn }` sur
+   * les deux sens du blocage. Sa jumelle `getStatuses` l'avait gratuitement, et
+   * c'est exactement ce qui l'a rendue invisible : la règle existait, posée par
+   * un collaborateur que cette porte-ci n'appelle pas.
+   *
+   * L'exclusion vit dans la REQUÊTE, jamais après la lecture : filtrée en aval,
+   * une page reviendrait courte avec un `hasMore` faux
+   * (`separatedCommentAuthors.ts` l'écrit pour les commentaires, et la raison
+   * est la même ici).
+   *
+   * FERMÉ : `readerSeparatedFrom` fait échouer la requête quand la lecture des
+   * blocages ne conclut pas — on ne sert pas une page de découverte sans savoir
+   * ce qu'elle doit taire.
+   */
   async getDiscoverStatuses(userId: string, cursor?: string, limit: number = 20, reader?: WireReader) {
     const now = new Date();
     const cursorData = cursor ? decodeCursor(cursor) : null;
+    const served = await readerSeparatedFrom(this.prisma, userId, reader);
+    const separated = separatedIdsOf(served);
 
     const where: any = {
       deletedAt: NOT_DELETED,
@@ -584,7 +607,14 @@ export class PostFeedService {
       visibility: PostVisibility.PUBLIC,
       AND: [
         { OR: [{ expiresAt: { isSet: false } }, { expiresAt: { equals: null } }, { expiresAt: { gt: now } }] },
+        /* La COPIE d'un contenu éphémère porte les médias de son auteur
+           d'ORIGINE et lui survit : elle se retire par la même clause que les
+           dix portes de liste (`snapshotAuthorNotSeparated`). */
+        ...(separated.length > 0 ? [snapshotAuthorNotSeparated(separated)] : []),
       ],
+      /* Rien à écarter ⇒ aucune clause : un `notIn: []` coûterait un niveau de
+         plan pour rien, et c'est la forme que le dépôt emploie déjà. */
+      ...(separated.length > 0 ? { authorId: { notIn: separated } } : {}),
     };
 
     if (cursorData) {
@@ -605,7 +635,7 @@ export class PostFeedService {
 
     const hasMore = statuses.length > limit;
     const items = (hasMore ? statuses.slice(0, limit) : statuses)
-      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), reader));
+      .map((p) => withMentions(hoistLocationDeep(withAudienceListFor(p, userId)), served));
     const nextCursor = hasMore && items.length > 0
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
