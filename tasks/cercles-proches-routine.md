@@ -2279,3 +2279,6 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `tsc` 0.
 - Prochain lot : #19540 (le filleul apparaît en Ami chez son parrain, même manque d'émission) ; puis les lots iOS de
   la position quand #20514 aura fusionné.
+- Fusion (2026-11-28, réveil de 1 h 13) : la CI `ci.yml` (`workflow_dispatch` 46079394825) est verte sur 345cdcf0c,
+  26 tâches sur 26. `dev` (09436f271) fusionnée dans la branche, sans chemin commun ; rejoué sur l'arbre fusionné :
+  relations + jobs 503/503, `tsc` 0. PR #20714 fusionnée dans `dev`, #19538 fermée.
