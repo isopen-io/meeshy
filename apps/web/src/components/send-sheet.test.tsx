@@ -450,6 +450,19 @@ describe('SendSheet — envoyer', () => {
     expect(calls.filter((call) => call.port === 'sendMessage')).toHaveLength(1);
   });
 
+  test('Entrée qui confirme une composition dans la légende n’envoie pas (#20752)', async () => {
+    const { ports, calls } = portsOf();
+    const host = await mount({ ports });
+    await mounter.click(row(host, 'conversation:c-lyon'));
+    const caption = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      caption.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+      caption.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true }));
+    });
+    await mounter.settle();
+    expect(calls).toEqual([]);
+  });
+
   test('un DOUBLE clic sur « Envoyer » ne part qu’UNE fois', async () => {
     const { ports, calls } = portsOf();
     const host = await mount({ ports });

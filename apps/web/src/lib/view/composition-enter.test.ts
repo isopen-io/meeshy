@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
 import { enterConfirmsComposition } from './composition-enter';
+import type { CompositionKeyEvent } from './composition-enter';
 
-const keydown = (init: KeyboardEventInit): KeyboardEvent => new KeyboardEvent('keydown', init);
+const keydown = (init: Partial<CompositionKeyEvent>): CompositionKeyEvent => ({ key: 'Enter', isComposing: false, keyCode: 0, ...init });
 
 describe('enterConfirmsComposition — Entrée qui confirme une saisie à méthode de saisie (#20752)', () => {
   test('un Entrée ordinaire ne confirme rien', () => {

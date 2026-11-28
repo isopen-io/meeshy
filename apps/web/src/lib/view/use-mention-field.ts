@@ -2,6 +2,7 @@ import { useCallback, useId, useState } from 'react';
 
 import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 
+import { enterConfirmsComposition } from './composition-enter';
 import { insertMention } from './mention-query';
 import type { MentionSource } from './mention-source';
 import { useMentionSuggestions, type MentionSuggestions } from './use-mention-suggestions';
@@ -11,7 +12,7 @@ export const mentionOptionId = (listId: string, index: number): string => `${lis
 
 export type MentionFieldElement = HTMLTextAreaElement | HTMLInputElement;
 
-export type MentionKeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'isComposing' | 'preventDefault' | 'stopPropagation'>;
+export type MentionKeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'isComposing' | 'keyCode' | 'preventDefault' | 'stopPropagation'>;
 
 export type MentionFieldAria = {
   readonly 'aria-autocomplete': 'list';
@@ -101,7 +102,7 @@ export function useMentionField(input: {
   };
 
   const onKeyDown = (event: MentionKeyEvent): boolean => {
-    if (!suggestions.open || event.isComposing) return false;
+    if (!suggestions.open || event.isComposing || enterConfirmsComposition(event)) return false;
     if (event.key === 'Escape') {
       suggestions.dismiss();
       return consumed(event);

@@ -21,6 +21,7 @@ import { ADMIN_GROUPS, visibleAdminSections, type ServedAdminSection } from '@/l
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { useOptionalRoute } from '@/lib/router';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
 
@@ -201,6 +202,7 @@ function AdminNav({
                 }
                 if (event.key === 'Enter') {
                   event.preventDefault();
+                  if (enterConfirmsComposition(event.nativeEvent)) return;
                   nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.click();
                   return;
                 }

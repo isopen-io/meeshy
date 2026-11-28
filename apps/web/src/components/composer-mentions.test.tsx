@@ -92,8 +92,8 @@ function typeAt(el: HTMLElement, value: string, caret: number = value.length): v
   });
 }
 
-function press(el: HTMLElement, key: string): KeyboardEvent {
-  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+function press(el: HTMLElement, key: string, composition: Pick<KeyboardEventInit, 'isComposing' | 'keyCode'> = {}): KeyboardEvent {
+  const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...composition });
   act(() => {
     fieldOf(el).dispatchEvent(event);
   });
@@ -205,6 +205,24 @@ describe('le clavier choisit sans envoyer', () => {
     typeAt(el, 'bonjour');
     press(el, 'Enter');
     expect(sent).toEqual(['bonjour']);
+  });
+
+  test('Entrée qui confirme une saisie japonaise, chinoise ou coréenne n’envoie pas ; l’Entrée suivant envoie (#20752)', async () => {
+    const { el, sent } = await mountComposer();
+    typeAt(el, 'こんにちは');
+    press(el, 'Enter', { isComposing: true });
+    press(el, 'Enter', { keyCode: 229 });
+    expect(sent).toEqual([]);
+    press(el, 'Enter');
+    expect(sent).toEqual(['こんにちは']);
+  });
+
+  test('liste ouverte, cet Entrée ne choisit personne non plus (#20752)', async () => {
+    const { el, sent } = await mountComposer();
+    typeAt(el, 'salut @al');
+    press(el, 'Enter', { keyCode: 229 });
+    expect(fieldOf(el).value).toBe('salut @al');
+    expect(sent).toEqual([]);
   });
 });
 

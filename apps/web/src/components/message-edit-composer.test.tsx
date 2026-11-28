@@ -142,6 +142,16 @@ describe('MessageEditDock — en édition', () => {
     expect(calls).toEqual(['submit:bonsoir à tous']);
   });
 
+  test('Entrée qui confirme une composition n’envoie pas, même quand Safari l’a déjà close (#20752)', () => {
+    const { calls } = mount(EDITING);
+    type(field(), 'こんばんは');
+    act(() => {
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }));
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true }));
+    });
+    expect(calls).toEqual([]);
+  });
+
   test('le bouton d’envoi n’existe que si le texte a changé et n’est pas vide', () => {
     mount(EDITING);
     expect(container.querySelector('[data-composer-edit-submit]')).toBeNull();

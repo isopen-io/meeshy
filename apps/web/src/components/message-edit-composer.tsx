@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 import type { MessageEditState } from '@/lib/view/use-message-edit';
 
 import { Glyph } from './glyph';
@@ -123,8 +124,9 @@ function MessageEditComposer({
                 onCancel();
                 return;
               }
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+              if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                if (enterConfirmsComposition(e.nativeEvent)) return;
                 onSubmit(text);
               }
             }}

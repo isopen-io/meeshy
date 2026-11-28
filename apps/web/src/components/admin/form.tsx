@@ -6,6 +6,7 @@ import { InfoHintButton, InfoHintText, useInfoHint, type InfoHint } from '@/comp
 import { Sheet } from '@/components/sheet';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 
 import { AdminButton, type AdminButtonTone } from './button';
 import { BRAND, INK, INK2, INK3 } from './tone';
@@ -294,7 +295,7 @@ export function AdminTextInput({
               onCommit?.(event.currentTarget.value);
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') onCommit?.(event.currentTarget.value);
+              if (event.key === 'Enter' && !enterConfirmsComposition(event.nativeEvent)) onCommit?.(event.currentTarget.value);
             }}
             className={`w-full bg-transparent text-body outline-none disabled:opacity-50 ${mono ? 'font-mono' : ''}`.trim()}
             style={{ minHeight: 44, color: INK }}

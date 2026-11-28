@@ -262,6 +262,17 @@ describe('« Aller à… » filtre le menu (#10562)', () => {
     expect(window.location.pathname).toBe('/admin/users');
   });
 
+  test('Entrée qui confirme une composition ne suit aucune section (#20752)', async () => {
+    const hote = await cadre('BIGBOSS');
+    const depart = window.location.pathname;
+    await taper(filtre(hote), 'comptes');
+    await act(async () => {
+      filtre(hote)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }));
+      filtre(hote)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true }));
+    });
+    expect(window.location.pathname).toBe(depart);
+  });
+
   test('replié en rail, le menu ne porte pas de champ', async () => {
     const hote = await cadre('BIGBOSS');
     act(() => hote.querySelector<HTMLButtonElement>('[data-admin-sidebar-toggle]')?.click());

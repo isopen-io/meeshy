@@ -92,6 +92,19 @@ describe('AdminInlineField — l’information s’édite là où elle s’affic
     expect(view(host)?.textContent).toContain('awa_diop');
   });
 
+  test('Entrée qui confirme une composition ne valide pas : le champ reste ouvert (#20752)', async () => {
+    const commits: Commits = [];
+    const host = await mount(<Host initial="awa" commits={commits} />);
+    await edit(host);
+    await typeIn(input(host), 'あわ');
+    await act(async () => {
+      input(host)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }));
+      input(host)?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true }));
+    });
+    expect(commits).toEqual([]);
+    expect(input(host)).not.toBeNull();
+  });
+
   test('quitter le champ valide (perte du focus), une seule fois', async () => {
     const commits: Commits = [];
     const host = await mount(<Host initial="awa" commits={commits} />);

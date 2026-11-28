@@ -58,6 +58,7 @@ import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
 import { useMentionField } from '@/lib/view/use-mention-field';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 import { useWindowFileDrop } from '@/lib/view/use-window-file-drop';
 import { ComposerDropVeil } from './composer-drop-veil';
 
@@ -973,6 +974,7 @@ export const Composer = memo(function Composer({
                 // insere une ligne.
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
+                  if (enterConfirmsComposition(e.nativeEvent)) return;
                   sendDraft();
                 }
               }}

@@ -187,6 +187,18 @@ describe('CommentComposer — le repli ⌄ tout à droite, toujours visible (#91
     expect(document.activeElement).toBe(host.querySelector('[data-hote-fil]'));
   });
 
+  test('Entrée qui confirme une composition n’envoie pas le commentaire : le brouillon reste (#20752)', async () => {
+    const host = await monter(hote({ writes: [], foldOnSend: true }));
+    await act(async () => champ(host).focus());
+    await taper(host, 'きれい');
+    await act(async () => {
+      champ(host).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true, cancelable: true }));
+      champ(host).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true, cancelable: true }));
+    });
+    expect(champ(host).value).toBe('きれい');
+    expect(document.activeElement).toBe(champ(host));
+  });
+
   test('hôte `foldOnSend` : un envoi qui se confirme APRÈS la fermeture de la feuille ne retire pas le focus rendu ailleurs (#16762)', async () => {
     container = document.createElement('div');
     document.body.append(container);

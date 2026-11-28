@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 
 import { AdminGlyph } from './admin-glyph';
 import { AdminFormError, type AdminData, type AdminSelectOption } from './form';
@@ -175,6 +176,7 @@ export function AdminInlineField({
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
+                  if (enterConfirmsComposition(event.nativeEvent)) return;
                   finish(event.currentTarget.value, true);
                   return;
                 }

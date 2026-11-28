@@ -20,6 +20,7 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 import type { MentionSource } from '@/lib/view/mention-source';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { recordingSupported, useRecorder, type RecorderEngine, type RecorderStatus } from '@/lib/view/use-recorder';
 
@@ -532,6 +533,7 @@ export function CommentComposer({
              composeur du fil (`composer.tsx`), jamais une seconde. */
           if (e.key !== 'Enter' || e.shiftKey) return;
           e.preventDefault();
+          if (enterConfirmsComposition(e.nativeEvent)) return;
           void submit();
         }}
         className="max-h-32 min-h-11 flex-1 resize-none rounded-chip px-3 py-2.5 text-body focus-visible:outline-2 focus-visible:outline-offset-2"

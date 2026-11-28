@@ -16,6 +16,7 @@ import { shareDestinationOf } from '@/lib/send/share-destination';
 import { sharePlanOf } from '@/lib/send/share-entry';
 import { studioSeedOfShare } from '@/lib/share-incoming/compose-from-share';
 import { offerStudioSeedOf } from '@/lib/stories/studio-seed';
+import { enterConfirmsComposition } from '@/lib/view/composition-enter';
 import { portailDuNavigateur } from '@/lib/view/invitation';
 import { href, navigate } from '@/routes/route-table';
 
@@ -349,8 +350,9 @@ export function SendSheet({
   };
 
   const onCaptionKey = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return;
+    if (event.key !== 'Enter' || event.shiftKey) return;
     event.preventDefault();
+    if (enterConfirmsComposition(event.nativeEvent)) return;
     send();
   };
 

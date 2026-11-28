@@ -141,6 +141,11 @@ describe('AdminField et AdminTextInput — un libellé, une note, un refus, tous
     await typeInto(input, '1.5');
     expect(commits).toEqual([]);
     await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 229, bubbles: true }));
+    });
+    expect(commits).toEqual([]);
+    await act(async () => {
       input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
     });
     expect(commits).toEqual(['1.5']);
