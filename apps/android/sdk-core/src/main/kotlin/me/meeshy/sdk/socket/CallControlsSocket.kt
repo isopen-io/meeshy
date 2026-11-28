@@ -42,7 +42,10 @@ internal fun CallAck.controlRefusal(): CallControlRefusal? = when (this) {
     is CallAck.Received -> when {
         body == null -> CallControlRefusal(CallControlRefusal.MALFORMED_ACK)
         body.optBoolean("success", false) -> null
-        else -> CallControlRefusal(body.optString("code").ifBlank { CallControlRefusal.MALFORMED_ACK })
+        else -> CallControlRefusal(
+            code = body.optString("code").ifBlank { CallControlRefusal.MALFORMED_ACK },
+            retryAfter = if (body.isNull("retryAfter")) null else body.optInt("retryAfter"),
+        )
     }
 }
 

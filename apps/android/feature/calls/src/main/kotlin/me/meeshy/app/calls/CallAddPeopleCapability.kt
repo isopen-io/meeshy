@@ -24,6 +24,7 @@ import me.meeshy.feature.calls.R
 import me.meeshy.sdk.friend.FriendRepository
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.call.CallAction
+import me.meeshy.sdk.model.call.CallControlRefusal
 import me.meeshy.sdk.model.call.CallInvitedUser
 import me.meeshy.sdk.model.call.CallState
 import me.meeshy.sdk.model.call.group.CallInviteBoard
@@ -112,7 +113,9 @@ class CallInviteController internal constructor(
         if (_state.value.board.isRinging(user.userId)) return false
         board { it.inviting(CallPendingInvite.of(user)) }
         scope.launch {
-            social.inviteCallParticipant(target, user.userId).onFailure { board { it.refused(user.userId) } }
+            social.inviteCallParticipant(target, user.userId).onFailure { error ->
+                board { it.refused(user.userId, (error as? CallControlRefusal)?.code) }
+            }
         }
         return true
     }

@@ -64,6 +64,8 @@ extension CallControlsCopy {
         switch notice {
         case .mutedBy(let name):
             return String(format: String(localized: "call.moderation.mutedBy", defaultValue: "%@ a coupé votre micro", bundle: .main), name)
+        case .inviteFailed(let code) where code == "RATE_LIMITED":
+            return String(localized: "call.invite.rateLimited", defaultValue: "Trop de tentatives : réessayez dans un instant", bundle: .main)
         case .inviteFailed:
             return String(localized: "call.invite.failed", defaultValue: "Impossible d’inviter cette personne", bundle: .main)
         case .actionFailed:

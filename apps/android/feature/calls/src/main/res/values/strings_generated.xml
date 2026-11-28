@@ -155,6 +155,7 @@
     <string name="call_incoming_self_preview_label">Your camera, not sent until you answer</string>
     <string name="call_invite_declined">%1$s declined</string>
     <string name="call_invite_failed">Couldn’t invite this person</string>
+    <string name="call_invite_rate_limited">Too many attempts: try again in a moment</string>
     <string name="call_invite_ringing">Ringing…</string>
     <string name="call_invite_sheet_empty">No friends to add</string>
     <string name="call_invite_sheet_title">Add to the call</string>

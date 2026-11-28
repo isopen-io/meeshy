@@ -150,11 +150,15 @@ public enum CallControlSocketEvent: Sendable, Equatable {
 
 /// Le refus d'un verbe : un `CALL_CONTROL_ERROR_CODES` de la passerelle, ou
 /// `NO_SOCKET` / `TIMEOUT` / `MALFORMED_ACK` quand la réponse n'arrive pas.
+/// `retryAfter` (secondes) accompagne un `RATE_LIMITED` (#20795) : c'est un
+/// refus certain, qu'aucun chemin ne rejoue de lui-même (#20802).
 public struct CallControlRefusal: Error, Sendable, Equatable {
     public let code: String
+    public let retryAfter: Int?
 
-    public init(code: String) {
+    public init(code: String, retryAfter: Int? = nil) {
         self.code = code
+        self.retryAfter = retryAfter
     }
 }
 
@@ -215,7 +219,7 @@ extension MessageSocketManager: CallControlsSocketProviding {
         switch ack {
         case .accepted: return nil
         case .timedOut: return CallControlRefusal(code: "TIMEOUT")
-        case .refused(let refusal): return CallControlRefusal(code: refusal.code ?? "MALFORMED_ACK")
+        case .refused(let refusal): return CallControlRefusal(code: refusal.code ?? "MALFORMED_ACK", retryAfter: refusal.retryAfter)
         case .acceptedWithoutPayload, .undecodable: return CallControlRefusal(code: "MALFORMED_ACK")
         }
     }

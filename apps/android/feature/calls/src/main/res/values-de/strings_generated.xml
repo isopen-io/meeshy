@@ -155,6 +155,7 @@
     <string name="call_incoming_self_preview_label">Deine Kamera, wird erst nach dem Annehmen gesendet</string>
     <string name="call_invite_declined">%1$s hat abgelehnt</string>
     <string name="call_invite_failed">Diese Person konnte nicht eingeladen werden</string>
+    <string name="call_invite_rate_limited">Zu viele Versuche: Bitte gleich erneut versuchen</string>
     <string name="call_invite_ringing">Klingelt …</string>
     <string name="call_invite_sheet_empty">Keine Freunde zum Hinzufügen</string>
     <string name="call_invite_sheet_title">Zum Anruf hinzufügen</string>

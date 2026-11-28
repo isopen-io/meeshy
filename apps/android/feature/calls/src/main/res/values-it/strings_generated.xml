@@ -155,6 +155,7 @@
     <string name="call_incoming_self_preview_label">La tua fotocamera, non inviata prima di rispondere</string>
     <string name="call_invite_declined">%1$s ha rifiutato</string>
     <string name="call_invite_failed">Impossibile invitare questa persona</string>
+    <string name="call_invite_rate_limited">Troppi tentativi: riprova tra un attimo</string>
     <string name="call_invite_ringing">Squilla…</string>
     <string name="call_invite_sheet_empty">Nessun amico da aggiungere</string>
     <string name="call_invite_sheet_title">Aggiungi alla chiamata</string>

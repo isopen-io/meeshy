@@ -4,8 +4,10 @@ package me.meeshy.sdk.model.call
  * Pourquoi un verbe de contrôle d'appel (inviter, couper le micro, réagir, cadre)
  * a été refusé. [code] est un `CALL_CONTROL_ERROR_CODES` de la passerelle, ou
  * `NO_SOCKET` / `TIMEOUT` / `MALFORMED_ACK` quand la réponse n'arrive pas entière.
+ * [retryAfter] (secondes) accompagne un `RATE_LIMITED` (#20795) : un refus certain,
+ * qu'aucun chemin ne rejoue de lui-même (#20802).
  */
-class CallControlRefusal(val code: String) : Exception(code) {
+class CallControlRefusal(val code: String, val retryAfter: Int? = null) : Exception(code) {
 
     enum class Reason { INSUFFICIENT_RIGHT, CALL_ENDED, LIMIT, UNAVAILABLE, OFFLINE, OTHER }
 

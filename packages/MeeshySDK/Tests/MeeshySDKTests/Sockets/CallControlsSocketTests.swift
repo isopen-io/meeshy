@@ -18,6 +18,18 @@ final class CallControlsSocketTests: XCTestCase {
         XCTAssertEqual(MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse(["success": false, "code": "NOT_A_CONTACT"], payloadAt: .none)), CallControlRefusal(code: "NOT_A_CONTACT"))
     }
 
+    // #20802 — la charge réelle d'une invitation refusée par le budget des ajouts.
+    func test_ack_rateLimited_carriesTheCodeAndWhenToRetry() {
+        let refusal = MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse(["success": false, "code": "RATE_LIMITED", "retryAfter": 42], payloadAt: .none))
+        XCTAssertEqual(refusal?.code, "RATE_LIMITED")
+        XCTAssertEqual(refusal?.retryAfter, 42)
+    }
+
+    func test_ack_refusalWithoutRetryAfter_hasNone() {
+        let refusal = MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse(["success": false, "code": "RATE_LIMITED"], payloadAt: .none))
+        XCTAssertNil(refusal?.retryAfter)
+    }
+
     func test_ack_timeout_isARefusal() {
         XCTAssertEqual(MessageSocketManager.callControlRefusal(SocketAck<SocketAckNoPayload>.parse("NO ACK", payloadAt: .none)), CallControlRefusal(code: "TIMEOUT"))
     }
