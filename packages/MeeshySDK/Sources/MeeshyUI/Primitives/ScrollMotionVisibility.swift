@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Scroll Motion Visibility
 //
@@ -100,14 +101,9 @@ private struct ScrollMotionFromOffset: ViewModifier {
             .environment(\.isScrollMotionActive, isMoving)
             .adaptiveOnChange(of: offset) { _, _ in
                 if !isMoving { isMoving = true }
-                settle.arm(after: Self.seconds(settleDelay)) { isMoving = false }
+                settle.arm(after: settleDelay.timeInterval) { isMoving = false }
             }
             .onDisappear { settle.cancel() }
-    }
-
-    private static func seconds(_ duration: Duration) -> TimeInterval {
-        TimeInterval(duration.components.seconds)
-            + TimeInterval(duration.components.attoseconds) * 1e-18
     }
 }
 

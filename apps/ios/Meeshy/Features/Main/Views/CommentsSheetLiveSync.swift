@@ -59,8 +59,8 @@ struct CommentsSheetLiveSync: ViewModifier {
             // jamais le delta de sa PROPRE réaction — dès que la base était
             // rafraîchie (loadReplies, refetch), `likes` incluait déjà le like et
             // l'affichage `likes + delta` comptait DOUBLE. « Mon cœur » dérive de
-            // `aggregation.userIds` (User.id des réacteurs), PAS de `hasCurrentUser`
-            // qui est calculé relativement à l'ACTEUR de l'événement côté gateway.
+            // l'ACTEUR et de la DIRECTION du geste (#20410) — jamais d'un roster de
+            // réacteurs, jamais de `hasCurrentUser` (calculé pour l'ACTEUR).
             .onReceive(
                 SocialSocketManager.shared.commentReactionAdded
                     .receive(on: DispatchQueue.main)
@@ -70,7 +70,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds,
+                    wireAction: event.action,
                     actorUserId: event.userId
                 )
             }
@@ -83,7 +83,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds,
+                    wireAction: event.action,
                     actorUserId: event.userId
                 )
             }
@@ -192,11 +192,12 @@ struct CommentsSheetLiveSync: ViewModifier {
     }
 
     /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
-    /// pose `likes = count` (top-level ou réponse), purge le delta optimiste et
-    /// dérive « mon cœur » de la liste des réacteurs. Miroir de
-    /// `PostDetailViewModel.applyCommentReactionAggregate`.
-    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        let resolvedCount = hearts.reconcile(commentId: commentId, count: count, reactorUserIds: reactorUserIds,
+    /// pose `likes = count` (top-level ou réponse) et laisse le registre décider
+    /// de « mon cœur », depuis l'ACTEUR et la DIRECTION du geste (#20410).
+    /// Miroir de `PostDetailViewModel.applyCommentReactionAggregate`.
+    private func applyCommentReactionAggregate(commentId: String, count: Int, wireAction: String, actorUserId: String) {
+        let resolvedCount = hearts.reconcile(commentId: commentId, count: count,
+                                             change: CommentHeartLedger.HeartChange(wireAction: wireAction),
                                              actorUserId: actorUserId, myUserId: AuthManager.shared.currentUser?.id)
         var current = liveComments ?? post.comments
         if let idx = current.firstIndex(where: { $0.id == commentId }) {

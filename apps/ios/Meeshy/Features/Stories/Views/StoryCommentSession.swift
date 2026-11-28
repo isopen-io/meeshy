@@ -221,7 +221,8 @@ final class StoryCommentSession: ObservableObject {
         let commentId = event.commentId
         let resolved = hearts.reconcile(
             commentId: commentId, count: event.aggregation.count,
-            reactorUserIds: event.aggregation.userIds, actorUserId: event.userId,
+            change: CommentHeartLedger.HeartChange(wireAction: event.action),
+            actorUserId: event.userId,
             myUserId: AuthManager.shared.currentUser?.id)
         if let index = thread.roots.firstIndex(where: { $0.id == commentId }) {
             thread.roots[index].likes = resolved
