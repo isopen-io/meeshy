@@ -49,6 +49,14 @@
  * actif de la communauté n'y entre pas : il ne coûte rien ; un identifiant
  * sans compte coûte une unité, comme un compte non ajoutable.
  *
+ * L'invitation dans un appel (`call:invite-participant`) s'y ajoute depuis
+ * #20740 : le transport socket atteint ces seaux par le serveur posé au
+ * montage de Socket.IO (`setCommunityAdmissionBudgetHost`). Et un débit
+ * accepté pour une écriture qui n'a PAS lieu — course de bannissement, ligne
+ * disparue, écriture qui lève — se REND ; une tentative vers un compte non
+ * ajoutable, jamais. Le débannissement et l'entrée par lien en sont dispensés
+ * par décision écrite (`decisions/2026-11-28-…-20740.md`).
+ *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau
  * de la cible, et son refus ne touche pas ce dernier. Un administrateur qui

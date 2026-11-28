@@ -1030,3 +1030,13 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - #20744 : `dev` (`92950be45`) fusionnée dans la branche ; seul conflit, ce journal, résolu à la main en gardant les deux entrées. Les changements de `dev` depuis la tête prouvée `7395c2b20` sont disjoints des fichiers du lot (passerelle appels/salons, stories iOS).
 - Preuve sur `7395c2b20` : `ci.yml` 46101680199, `android.yml` 46101684010, `sdk-tests.yml` 46101686163 verts ; `ios.yml` 46101682003 (voir l'issue #20664 pour le verdict final).
 - Prochain lot recommandé : #20740, puis #19813 (décision produit).
+
+## 2026-11-28 — réveil 07:37 UTC
+
+- Début du run : aucune PR de la routine ouverte (#20744 fusionnée à 05:55, `7a954d6d8`). Aucune branche vivante sur `call-invite-events.ts`, `memberAdmission.ts`, `sharing-invite.ts` ni `core-lifecycle.ts`.
+- Lot : #20740 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : l'invitation dans un appel (`call:invite-participant`) paie le budget des ajouts : `setCommunityAdmissionBudgetHost(fastify)` au montage de Socket.IO, `hostedCommunityAdmissionBudget()` lu par `callInviteDependencies` (injectable). Mêmes seaux que les routes (même serveur, même Redis). Refus ⇒ ack `RATE_LIMITED` (code déjà au contrat), sur les deux chemins (groupe et bascule).
+- Un débit accepté pour une écriture qui n'a pas lieu SE REND : `spendCommunitySalonAdmissionUndoable` / `spendCommunityAdditionOfTargetsUndoable` / `givenBackOnFailure`, branchés sur la course de bannissement (`commitParticipantRejoin` → `banned` / `vanished`) et l'exception de création, aux deux portes une par une (`admitConversationMember`, `POST …/invite`), et sur `conversation.create` qui lève (`POST /conversations`). Une tentative vers un compte non ajoutable ne se rend jamais.
+- Décision écrite : le débannissement et l'entrée par lien ne paient pas (`services/gateway/decisions/2026-11-28-le-debannissement-et-l-entree-par-lien-ne-paient-pas-le-budget-des-ajouts-20740.md`).
+- Témoins : `salon-entry-addition-budget-20703.test.ts` (+4, les deux portes), `community-salon-addition-budget-20464.test.ts` (+1), `call-invite-community-budget-20740.test.ts` (7, neuf), `call-invite-events.test.ts` (+2). Rouges prouvés sur l'arbre sans le code : 4, 1 et 3 échecs.
+- Gates locaux : `tsc --noEmit` passerelle exit 0 ; conversations, communautés, socketio : 403 suites, 4 900 tests verts.
