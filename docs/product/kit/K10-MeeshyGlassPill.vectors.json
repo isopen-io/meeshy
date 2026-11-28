@@ -334,6 +334,18 @@
         "accepts": false
       },
       {
+        "presence": "stowed",
+        "stowedFor": -0.05,
+        "reduceMotion": false,
+        "accepts": false
+      },
+      {
+        "presence": "stowed",
+        "stowedFor": -0.05,
+        "reduceMotion": true,
+        "accepts": false
+      },
+      {
         "presence": "withoutRow",
         "stowedFor": 5,
         "reduceMotion": false,
