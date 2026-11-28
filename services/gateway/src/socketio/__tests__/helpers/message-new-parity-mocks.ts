@@ -206,6 +206,7 @@ jest.mock('../../CallEventsHandler', () => ({
     mockCallEventsHandlerInstance = {
       setMessageBroadcaster: jest.fn(),
       setMessageUpdateBroadcaster: jest.fn(),
+      setMessageMeasuresBroadcaster: jest.fn(),
       setNotificationService: jest.fn(),
       setPushNotificationService: jest.fn(),
       setZmqClient: jest.fn(),
