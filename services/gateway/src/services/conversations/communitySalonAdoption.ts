@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { applyCommunityAdmission } from './communityMembershipSync';
-import { exitCommunitySalons, type SalonExitDeps } from './communitySalonExit';
-import { participationEstVivante } from '../../routes/conversations/utils/access-control';
+import { exitCommunitySalonsOf, type SalonExitDeps } from './communitySalonExit';
+import { PARTICIPATION_VIVANTE, participationEstVivante } from '../../routes/conversations/utils/access-control';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { scheduleCommunityAddedAnnouncement } from '../notifications/community-added';
 import type { CommunityMemberAnnounce } from '../community-member-broadcast';
@@ -90,13 +90,7 @@ export async function admitSalonOccupantsUnderBudget(
   });
   if (salons.length === 0) return { kind: 'admitted', outsiders: [] };
 
-  const occupations = await prisma.participant.findMany({
-    where: { conversationId: { in: salons.map((salon) => salon.id) }, isActive: true, type: 'user' },
-    select: { userId: true, isActive: true, bannedAt: true },
-  });
-  const occupants = [...new Set(occupations
-    .filter((o) => participationEstVivante(o))
-    .flatMap((o) => (o.userId ? [o.userId] : [])))]
+  const occupants = (await readSalonOccupants(prisma, salons.map((salon) => salon.id)))
     .filter((userId) => userId !== request.createdBy);
   if (occupants.length === 0) return { kind: 'admitted', outsiders: [] };
 
@@ -123,6 +117,36 @@ export async function admitSalonOccupantsUnderBudget(
   // #18052 — qui entre l'apprend, au nom du créateur dont l'autorité l'a fait entrer.
   scheduleCommunityAddedAnnouncement(prisma, { communityId: request.communityId, actorId: request.createdBy, recipientIds: admitted });
   return { kind: 'admitted', outsiders: [...former, ...strangers.filter((userId) => !addable.has(userId))] };
+}
+
+/** La taille d'une page d'occupants (#16740) : une grande communauté ne se charge jamais d'un bloc. */
+export const SALON_OCCUPANT_PAGE = 1000;
+
+/**
+ * Les occupants INSCRITS et vivants des salons (#16740), lus par pages de
+ * `SALON_OCCUPANT_PAGE` en suivant l'identifiant de ligne : seule la liste des
+ * comptes distincts reste en mémoire, jamais les lignes d'une communauté de
+ * dix mille occupants d'un coup.
+ */
+async function readSalonOccupants(
+  prisma: SalonAdoptionPrisma,
+  salonIds: string[],
+  after?: string,
+  seen: ReadonlySet<string> = new Set(),
+): Promise<readonly string[]> {
+  const page = await prisma.participant.findMany({
+    where: { conversationId: { in: salonIds }, type: 'user', ...PARTICIPATION_VIVANTE },
+    select: { id: true, userId: true, isActive: true, bannedAt: true },
+    orderBy: { id: 'asc' },
+    take: SALON_OCCUPANT_PAGE,
+    ...(after === undefined ? {} : { cursor: { id: after }, skip: 1 }),
+  });
+  const next = new Set([
+    ...seen,
+    ...page.filter((o) => participationEstVivante(o)).flatMap((o) => (o.userId ? [o.userId] : [])),
+  ]);
+  if (page.length < SALON_OCCUPANT_PAGE) return [...next];
+  return readSalonOccupants(prisma, salonIds, page[page.length - 1].id, next);
 }
 
 /**
@@ -186,19 +210,18 @@ export async function closeSalonsAfterSwitch(
 }
 
 /**
- * Ceux qui n'ont pas pu entrer sortent de chaque salon, par la loi de #16704.
- * Contrat : NE REJETTE JAMAIS — la bascule est déjà écrite, et un 500 nierait
- * un fait durable.
+ * Ceux qui n'ont pas pu entrer sortent de chaque salon, par la loi de #16704,
+ * en UNE passe (#16740) : les salons se lisent une fois pour tous les exclus,
+ * jamais une fois par exclu. Contrat : NE REJETTE JAMAIS — la bascule est déjà
+ * écrite, et un 500 nierait un fait durable.
  */
 export async function exitSalonOutsiders(
   deps: SalonExitDeps,
   request: { readonly communityId: string; readonly userIds: readonly string[]; readonly now: Date },
 ): Promise<void> {
-  for (const userId of request.userIds) {
-    try {
-      await exitCommunitySalons(deps, { communityId: request.communityId, userId, now: request.now });
-    } catch (error) {
-      logger.error('Salon outsider exit failed', { communityId: request.communityId, error });
-    }
+  try {
+    await exitCommunitySalonsOf(deps, request);
+  } catch (error) {
+    logger.error('Salon outsider exit failed', { communityId: request.communityId, error });
   }
 }

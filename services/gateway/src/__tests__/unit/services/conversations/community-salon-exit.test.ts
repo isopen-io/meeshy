@@ -59,6 +59,8 @@ jest.mock('../../../../utils/logger-enhanced', () => ({
 import {
   communityGuardsItsSalons,
   exitCommunitySalons,
+  exitCommunitySalonsOf,
+  SALON_EXIT_BATCH,
 } from '../../../../services/conversations/communitySalonExit';
 
 const COMMUNITY = '507f1f77bcf86cd799439044';
@@ -100,7 +102,8 @@ function prismaDouble(monde: Monde = {}) {
   const liens = monde.liens ?? [];
   const participant = {
     findMany: jest.fn<any>(async (args: any) => lignes
-      .filter((l) => (args.where.userId === undefined || l.userId === args.where.userId))
+      .filter((l) => (args.where.userId === undefined
+        || (typeof args.where.userId === 'string' ? l.userId === args.where.userId : args.where.userId.in.includes(l.userId))))
       .filter((l) => (args.where.isActive === undefined || l.isActive === args.where.isActive))
       .filter((l) => (args.where.conversationId === undefined
         || (typeof args.where.conversationId === 'string'
@@ -448,5 +451,109 @@ describe('exitCommunitySalons — le partant sort de chaque salon de la communau
     });
     expect(result.exitedConversationIds).toEqual([]);
     await expect(result.announcements).resolves.toBeUndefined();
+  });
+});
+
+describe('exitCommunitySalonsOf — tous les exclus sortent en UNE passe (#16740)', () => {
+  const TROISIEME = '507f1f77bcf86cd799439055';
+  const sortirTous = async (...args: Parameters<typeof exitCommunitySalonsOf>) => {
+    const result = await exitCommunitySalonsOf(...args);
+    pending.push(result.announcements);
+    return result;
+  };
+
+  it('lit les salons UNE fois, les lignes de tous les exclus UNE fois, et les coupe en UNE écriture', async () => {
+    const prisma = prismaDouble({
+      lignes: [
+        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
+        ligne({ id: 'p-b', conversationId: SALON_B, userId: PARTANT }),
+        ligne({ id: 't-a', conversationId: SALON_A, userId: TROISIEME }),
+        ligne({ id: 'r-a', conversationId: SALON_A, userId: RESTANT }),
+      ],
+    });
+
+    const result = await sortirTous({ prisma: prisma as never, socketIOHandler: null }, {
+      communityId: COMMUNITY, userIds: [PARTANT, TROISIEME], now: NOW,
+    });
+
+    expect(prisma.conversation.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.updateMany).toHaveBeenCalledTimes(1);
+    expect([...fermees(prisma)].sort()).toEqual(['p-a', 'p-b', 't-a']);
+    expect(fermees(prisma)).not.toContain('r-a');
+    expect([...result.exitedConversationIds].sort()).toEqual([SALON_A, SALON_A, SALON_B].sort());
+  });
+
+  it('borne chaque lecture : au-delà d\'un lot, les exclus se lisent par tranches, les salons une seule fois', async () => {
+    const prisma = prismaDouble({ lignes: [] });
+    const userIds = Array.from({ length: SALON_EXIT_BATCH * 2 + 1 }, (_, i) => `u${i.toString(16).padStart(23, '0')}`);
+
+    await sortirTous({ prisma: prisma as never, socketIOHandler: null }, { communityId: COMMUNITY, userIds, now: NOW });
+
+    expect(prisma.conversation.findMany).toHaveBeenCalledTimes(1);
+    expect(prisma.participant.findMany).toHaveBeenCalledTimes(3);
+    const tranches = prisma.participant.findMany.mock.calls.map((c: any) => c[0].where.userId.in as string[]);
+    expect(tranches.every((t) => t.length <= SALON_EXIT_BATCH)).toBe(true);
+    expect(tranches.flat().sort()).toEqual([...userIds].sort());
+  });
+
+  it('chaque créateur sortant passe par SA succession, et l\'annonce le nomme lui', async () => {
+    const prisma = prismaDouble({
+      lignes: [
+        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
+        ligne({ id: 't-b', conversationId: SALON_B, userId: TROISIEME, role: 'creator' }),
+      ],
+    });
+    resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'transfer', successor: { id: 'r-b', userId: RESTANT } });
+
+    const result = await sortirTous({ prisma: prisma as never, socketIOHandler }, {
+      communityId: COMMUNITY, userIds: [PARTANT, TROISIEME], now: NOW,
+    });
+    await result.announcements;
+
+    expect(resoudreSuccessionDuCreateur).toHaveBeenCalledTimes(1);
+    expect(resoudreSuccessionDuCreateur).toHaveBeenCalledWith(prisma, { conversationId: SALON_B, sortantUserId: TROISIEME });
+    expect(fermees(prisma)).toEqual(['p-a']);
+    expect(announceParticipantRoleWithCapabilities).toHaveBeenCalledWith(prisma, expect.objectContaining({
+      payload: { conversationId: SALON_B, userId: RESTANT, newRole: 'creator', updatedBy: TROISIEME },
+    }));
+    expect(endConversationMembership).toHaveBeenCalledWith(expect.objectContaining({ conversationId: SALON_A, userId: PARTANT }));
+    expect(endConversationMembership).toHaveBeenCalledWith(expect.objectContaining({ conversationId: SALON_B, userId: TROISIEME }));
+  });
+
+  it('personne à faire sortir : rien n\'est lu', async () => {
+    const prisma = prismaDouble();
+    const result = await sortirTous({ prisma: prisma as never, socketIOHandler: null }, { communityId: COMMUNITY, userIds: [], now: NOW });
+    expect(result.exitedConversationIds).toEqual([]);
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+  });
+
+  it('ne rejette jamais : une tranche perdue n\'empêche pas les autres de sortir', async () => {
+    const prisma = prismaDouble({ lignes: [ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT })] });
+    const userIds = [...Array.from({ length: SALON_EXIT_BATCH }, (_, i) => `u${i.toString(16).padStart(23, '0')}`), PARTANT];
+    prisma.participant.findMany.mockImplementationOnce(async () => { throw new Error('tranche perdue'); });
+
+    const result = await sortirTous({ prisma: prisma as never, socketIOHandler: null }, { communityId: COMMUNITY, userIds, now: NOW });
+
+    expect(fermees(prisma)).toEqual(['p-a']);
+    await expect(result.announcements).resolves.toBeUndefined();
+  });
+
+  it("une écriture groupée qui échoue n'empêche pas les créateurs de la même tranche de sortir", async () => {
+    const prisma = prismaDouble({
+      lignes: [
+        ligne({ id: 'p-a', conversationId: SALON_A, userId: PARTANT }),
+        ligne({ id: 't-b', conversationId: SALON_B, userId: TROISIEME, role: 'creator' }),
+      ],
+    });
+    prisma.participant.updateMany.mockImplementationOnce(async () => { throw new Error('écriture perdue'); });
+    resoudreSuccessionDuCreateur.mockResolvedValue({ kind: 'close' });
+
+    const result = await sortirTous({ prisma: prisma as never, socketIOHandler: null }, {
+      communityId: COMMUNITY, userIds: [PARTANT, TROISIEME], now: NOW,
+    });
+
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 't-b' }, data: { isActive: false, leftAt: NOW } });
+    expect(result.exitedConversationIds).toEqual([SALON_B]);
   });
 });

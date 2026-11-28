@@ -3,10 +3,11 @@ import MeeshySDK
 
 /// **Le retrait de la pilule** : rangée, elle sort par son bord et fond ; elle
 /// répond jusqu'au terme du fondu (`MeeshyGlassPillPresenceRule`), et un toucher
-/// reçu pendant le retrait appelle `onRevive` sans prendre le toucher. Au terme,
-/// son contenu est RETIRÉ du rendu (`hidden` garde sa place) : dans un
-/// conteneur de verre, le système ignore l'opacité des enfants, et la pilule
-/// resterait dessinée mais sourde.
+/// reçu pendant le retrait appelle `onRevive` sans prendre le toucher. La grâce
+/// se mesure sur l'horloge monotone (`ContinuousClock`), jamais sur l'heure
+/// murale, qui peut reculer pendant le fondu. Au terme, son contenu est RETIRÉ
+/// du rendu (`hidden` garde sa place) : dans un conteneur de verre, le système
+/// ignore l'opacité des enfants, et la pilule resterait dessinée mais sourde.
 ///
 /// Seules la translation et l'opacité s'animent. La hauteur n'est lue qu'au
 /// changement de taille ; la translation ne la change pas.
@@ -17,8 +18,8 @@ struct MeeshyGlassPillStowModifier: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
     @Environment(\.meeshyForceReduceMotion) private var userReduceMotion
     @Environment(\.meeshyGlassPillStowMargin) private var margin
-    @State private var stowedAt: Date?
-    @State private var clock = Date()
+    @State private var stowedAt: ContinuousClock.Instant?
+    @State private var clock = ContinuousClock().now
     @State private var extent: CGFloat = 0
 
     func body(content: Content) -> some View {
@@ -26,7 +27,7 @@ struct MeeshyGlassPillStowModifier: ViewModifier {
         let isStowed = presence.isStowed
         let accepts = MeeshyGlassPillPresenceRule.acceptsTouches(
             presence: presence,
-            stowedFor: stowedAt.map { clock.timeIntervalSince($0) } ?? .infinity,
+            stowedFor: MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: clock),
             reduceMotion: reduceMotion
         )
         let leaves = MeeshyGlassPillPresenceRule.leavesByItsEdge(presence: presence, reduceMotion: reduceMotion)
@@ -49,14 +50,14 @@ struct MeeshyGlassPillStowModifier: ViewModifier {
         .accessibilityHidden(isStowed)
         .animation(.easeInOut(duration: duration), value: isStowed)
         .adaptiveOnChange(of: isStowed) { _, nowStowed in
-            let now = Date()
+            let now = ContinuousClock().now
             stowedAt = nowStowed ? now : nil
             clock = now
         }
         .task(id: stowedAt) {
             guard stowedAt != nil else { return }
             guard await cancellableSleep(for: .seconds(duration)), !Task.isCancelled else { return }
-            clock = Date()
+            clock = ContinuousClock().now
         }
     }
 }
