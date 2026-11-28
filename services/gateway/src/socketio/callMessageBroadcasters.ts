@@ -12,6 +12,7 @@ type MessageBroadcaster = (message: unknown, conversationId: string) => Promise<
 export interface CallMessageBroadcastTarget {
   setMessageBroadcaster(broadcaster: MessageBroadcaster): void;
   setMessageUpdateBroadcaster(broadcaster: MessageBroadcaster): void;
+  setMessageMeasuresBroadcaster(broadcaster: MessageBroadcaster): void;
 }
 
 /** `User.id` de l'initiateur (l'auteur du message d'appel), sinon son `Participant.id`. */
@@ -25,7 +26,7 @@ function callActorKey(message: unknown): string | null {
 }
 
 /**
- * **LES DEUX DIFFUSEURS DES MESSAGES D'APPEL — et l'activité qui les suit.**
+ * **LES TROIS DIFFUSEURS DES MESSAGES D'APPEL — et l'activité qui suit les deux premiers.**
  *
  * P3 — le résumé d'appel part par le chemin canonique de diffusion d'un message
  * (`message:new`) ; le message « en cours » s'édite en place à la fin de l'appel
@@ -42,6 +43,11 @@ function callActorKey(message: unknown): string | null {
  * L'annonce part même si la diffusion lève : le réessai de l'appelant relit un
  * appel déjà terminal et ne rediffuse rien, la remontée serait perdue. Elle
  * reste hors du chemin de l'erreur — la diffusion rend la sienne, intacte.
+ *
+ * #20747 — le troisième rediffuse une édition de MESURES (octets, qualité d'un
+ * relevé tardif) : même `message:edited`, même charge, mais ni annonce
+ * d'activité (la conversation ne remonte pas) ni miroir d'origine (le
+ * rafraîchisseur édite lui-même la bulle d'origine).
  */
 export function wireCallMessageBroadcasters(params: {
   readonly handler: CallMessageBroadcastTarget;
@@ -88,4 +94,5 @@ export function wireCallMessageBroadcasters(params: {
 
   handler.setMessageBroadcaster(withActivity(params.broadcastMessage));
   handler.setMessageUpdateBroadcaster(withActivity(params.broadcastMessageEdited));
+  handler.setMessageMeasuresBroadcaster(params.broadcastMessageEdited);
 }
