@@ -13,3 +13,10 @@ L'état se lit dans l'issue. Ce fichier ne le recopie pas.
 | #20734 | le plan de contrôle `.amsf/` entre ou non dans le dépôt | 2026-11-27 |
 
 Issues préexistantes dont ces lots dépendent : #6235 (unité des bornes zod), #11546 (lockfile de l'image passerelle).
+
+## Passe du 2026-11-28 — modern-web-guidance sur `apps/web`
+
+| Issue | Objet |
+|---|---|
+| #20752 | l'Entrée qui confirme une saisie japonaise, chinoise ou coréenne n'envoie plus le message |
+| #20753 | politique de navigateurs du web, et constats du balayage livrés ou refusés un par un |
