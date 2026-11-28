@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "locationMap.motion.walking",
+          "androidName": "location_map_motion_walking",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "locationMap.motion.running",
+          "androidName": "location_map_motion_running",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "locationMap.motion.cycling",
+          "androidName": "location_map_motion_cycling",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "locationMap.motion.automotive",
+          "androidName": "location_map_motion_automotive",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

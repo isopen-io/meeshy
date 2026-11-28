@@ -4994,7 +4994,7 @@ describe('CallService - persistCallStats', () => {
     // Should NOT throw — the .catch swallows the error
     await expect(
       callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
   it('catches and logs when update fails with non-Error — String(error) branch', async () => {
@@ -5007,7 +5007,7 @@ describe('CallService - persistCallStats', () => {
 
     await expect(
       callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
   });
 
   it('returns early with no-op when data object is empty (no valid stats)', async () => {
@@ -5139,7 +5139,7 @@ describe('CallService - persistCallStats', () => {
 
     await expect(
       callService.persistCallStats('call-123', { bytesSent: 500, bytesReceived: 600 })
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
 
     expect(mockPrisma.callSession.updateMany).toHaveBeenCalledWith({
       where: expect.objectContaining({ id: 'call-123', AND: expect.arrayContaining([{ OR: [{ bytesSent: 0 }] }]) }),

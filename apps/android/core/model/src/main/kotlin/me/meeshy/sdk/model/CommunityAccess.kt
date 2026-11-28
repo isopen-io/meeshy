@@ -37,6 +37,12 @@ data class CommunityAccess(
     val canJoin: Boolean get() = !isMember
     val canSeeMembers: Boolean get() = isMember || !isPrivate
 
+    /**
+     * Les publications d'une communauté privée sont réservées à ses membres (la passerelle refuse le reste,
+     * `chargerCommunity`) : l'onglet ne les demande donc qu'à qui peut les lire (#16879).
+     */
+    val canReadPosts: Boolean get() = isMember || !isPrivate
+
     /** Le menu « … » de l'en-tête : réglages pour le créateur, sortie pour un admin qui ne l'est pas. */
     val showsHeaderMenu: Boolean get() = isAdmin && (canEditSettings || canLeave)
 

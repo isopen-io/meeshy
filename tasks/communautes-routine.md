@@ -945,6 +945,18 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Suivi #20694 (même milestone) : rattacher un salon à une communauté privée et passer une communauté en privée font entrer tous les occupants sans débit ; entrées une par une (`memberAdmission`, débannissement, partage, lien, appel) ; budget non rendu si la création échoue plus loin.
 - Prochain lot recommandé : #20694, puis #19813.
 
+## 2026-11-27 — réveil 13:01 UTC
+
+- Le run du 2026-11-25 05:37 a été coupé avant toute écriture : rien à reprendre.
+- Début du run : aucune PR de la routine ouverte. #20464 (prochain lot recommandé) déjà réservé par deux branches vivantes poussées à 13:03 et 13:04 (`claude/communautes-budget-salon`, `claude/communautes-salon-budget`) : cédé. #19811 et #19813 sont des `décision-produit` qui attendent le porteur.
+- Lot : #16879 — les publications d'une communauté se lisent dans son détail sur Android (miroir de #16878 iOS et #6379 web).
+- `:core:network` : `PostApi.getCommunityFeed` lit l'adresse canonique `GET /social/posts?scope=community&communityId=` (#4346), jamais l'alias déprécié. `:sdk-core` : `PostRepository.getCommunityPostsPage` (page + curseur) ; `UserPostsCacheRepository.cachedCommunity` / `persistCommunity` sous `profile_posts:community:{id}`, donc atteints par `patchEverywhere` / `removeEverywhere` (même préfixe). `:core:model` : `CommunityAccess.canReadPosts` (membre, ou communauté publique) — l'onglet ne demande pas ce que la passerelle refuserait.
+- `:feature:feed` : `CommunityPostsViewModel` (cache d'abord, copie périmée revalidée en silence, squelette sur cache vide seulement, échec dit seulement sans copie, « Réessayer », défilement infini, suppression / j'aime / commentaires en direct, gestes du fil par `ListedPostActions`) et `rememberCommunityPostsItems` (éléments versés dans le défilement unique du détail, carte du fil). Phrases adoptées du catalogue iOS (`community.posts.empty.title`, `.failed.title`, `.loading`, `common.retry`), manifeste `feed.d/publications-de-communaute-16879.json`, sept langues générées.
+- `:feature:community` : `CommunityDetailNavigation.postsItems`, injecté par `:app` (`CommunityDestinations`), la feature restant isolée de celle du fil ; sans slot ou sans droit de lecture, l'onglet garde son état vide.
+- Témoins : `sdk-core` `CommunityPostsPageTest` (4), `UserPostsCacheRepositoryTest` (+2) ; `feature/feed` `CommunityPostsViewModelTest` (9) ; `core/model` `CommunityAccessTest` (+1). `./meeshy.sh jvm-check` ne tourne pas en conteneur (le proxy refuse `build-artifacts.signal.org`) : preuve par `android.yml` sur la PR. `./meeshy.sh i18n` : 7 fichiers écrits.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde touchée (le contrôle d'accès est celui de `chargerCommunity`).
+- Reste (suivis) : une publication créée dans la communauté n'arrive pas en direct (`post:created` non suivi par l'onglet) ; l'action « Créer une publication » de l'état vide iOS n'a pas de miroir.
+
 ## 2026-11-27 — réveil 13:00 UTC
 
 - Début du run : aucune PR de la routine ouverte ; le réveil du 2026-11-24 a été coupé avant toute écriture. #20464 (le lot recommandé) a été réservé à 13:03 par une autre session de la même routine (`claude/communautes-budget-salon`) : cédé (« celui qui n'a rien écrit cède »). #19813 et #19811 attendent une décision produit.

@@ -943,10 +943,11 @@ export function registerInteractionRoutes(
       // aplatissement des mentions (la clé exposée est `mentions`, même vide)
       // ET même hoist du lieu, que ce chemin ne posait pas — un repost servait
       // `metadata.location` sans `location`, ni `repostOf.location`.
-      const payload = servePublishedPost({
+      const payload = await servePublishedPost({
         post: repost as unknown as Record<string, unknown>,
         references: undefined,
         request,
+        prisma,
       });
       const broadcastPayload = withMentions(hoistLocation(repost as unknown as Record<string, unknown>), WIRE_BROADCAST);
 

@@ -667,6 +667,17 @@ class PostRepository @Inject constructor(
         foldPostPage(rawApiCall { postApi.getUserPosts(userId, cursor, limit) })
 
     /**
+     * #16879 — une page des publications d'une communauté, avec son curseur, par la portée canonique
+     * `scope=community`. Le détail de la communauté tient l'accumulation et son cache.
+     */
+    suspend fun getCommunityPostsPage(
+        communityId: String,
+        cursor: String? = null,
+        limit: Int = USER_POSTS_PAGE_SIZE,
+    ): NetworkResult<PostPage> =
+        foldPostPage(rawApiCall { postApi.getCommunityFeed(communityId = communityId, cursor = cursor, limit = limit) })
+
+    /**
      * A single cursor page of posts near ([lat], [lng]) within [radiusKm]
      * (`GET /social/posts?scope=nearby`), carrying the `nextCursor`/`hasMore` watermark
      * the same way [getBookmarksPage]/[getUserPostsPage] do. The Nearby screen owns the

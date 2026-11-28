@@ -12,11 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,7 +21,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import java.util.Locale
-import kotlinx.coroutines.delay
 import me.meeshy.feature.contacts.R
 import me.meeshy.sdk.model.relation.NearbyCircleFilter
 import me.meeshy.sdk.model.relation.NearbyPlacement
@@ -54,8 +49,6 @@ import me.meeshy.ui.component.kit.MeeshyStateBlockSize
 import me.meeshy.ui.component.kit.MeeshyStateArt
 import me.meeshy.ui.icons.MeeshyIcons
 import me.meeshy.ui.theme.MeeshyPalette
-
-private const val TICK_MS = 15_000L
 
 /**
  * LA FEUILLE BASSE de la carte (#18890) : la personne regardée (lieu, fraîcheur, temps restant, itinéraire, partager la
@@ -96,18 +89,6 @@ internal fun LocationMapSheet(
 }
 
 @Composable
-private fun rememberNowMillis(): Long {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(TICK_MS)
-            now = System.currentTimeMillis()
-        }
-    }
-    return now
-}
-
-@Composable
 private fun PersonSheet(
     pin: SharedLocationPin,
     updatedAtMillis: Long?,
@@ -119,7 +100,7 @@ private fun PersonSheet(
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         MeeshyPersonRow(
             title = pin.name ?: stringResource(R.string.circles_locations_someone),
-            subtitle = stringResource(precisionRes(pin.precision)),
+            subtitle = withMotion(pin, now, stringResource(precisionRes(pin.precision))),
             size = MeeshyPersonRowSize.Header,
             showsDivider = false,
             avatar = { InitialsBubble(pin.initials) },
@@ -248,7 +229,7 @@ private fun NearbyList(pins: List<SharedLocationPin>, onSelect: (String) -> Unit
             val window = SharedLocationWindow.of(pin.deadlineMillis, now)
             MeeshyPersonRow(
                 title = pin.name ?: stringResource(R.string.circles_locations_someone),
-                subtitle = stringResource(precisionRes(pin.precision)),
+                subtitle = withMotion(pin, now, stringResource(precisionRes(pin.precision))),
                 meta = remainingText(window),
                 size = MeeshyPersonRowSize.Regular,
                 showsDivider = false,
