@@ -196,9 +196,9 @@ describe('persistCallStats — les octets et la qualité réseau s’écrivent s
 
     await expect(
       persistCallStats(prisma as never, CALL_ID, { bytesSent: THREE_GB, bytesReceived: ONE_GB, level: 'good' })
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual(expect.any(Boolean));
 
-    expect(qualityWrite(prisma)).toEqual({ where: { id: CALL_ID }, data: { networkQuality: 'good' } });
+    expect(qualityWrite(prisma)).toMatchObject({ where: { id: CALL_ID }, data: { networkQuality: 'good' } });
   });
 
   it('la qualité réseau est persistée même quand le CAS des octets perd la course', async () => {

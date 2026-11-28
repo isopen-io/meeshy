@@ -13,11 +13,14 @@ import { announceConversationLanguageChange } from '../message-translation/conve
 import { CerclesAchievements } from '../achievements/CerclesAchievements';
 import type { EngagementService } from '../engagement/EngagementService';
 import type { NotificationService } from '../notifications/NotificationService';
-import { applyCommunityAdmission, planSalonEntry, type SalonCommunity } from './communityMembershipSync';
+import { applyCommunityAdmission, planSalonEntry, type CommunityAdmission, type SalonCommunity } from './communityMembershipSync';
+import type { CommunityAdditionVerdict } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerOverIO } from '../community-member-broadcast';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'ConversationMemberAdmission' });
+
+const UNKNOWN_ACCOUNT_ATTEMPT: CommunityAdmission = { kind: 'refused', reason: 'not-addable', attempted: 1 };
 
 /** Ce qui est arrivé à UN identifiant du lot. */
 export type ParticipantAdmissionVerdict = {
@@ -27,9 +30,19 @@ export type ParticipantAdmissionVerdict = {
    * PRIVÉE dont la personne n'est pas membre, et l'appelant n'y fait entrer
    * personne (ni créateur, ni administrateur, ni modérateur de la communauté).
    */
-  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found' | 'community-forbidden';
+  readonly outcome: 'new' | 'rejoin' | 'already-member' | 'banned' | 'not-found' | 'community-forbidden' | 'throttled';
   readonly participantId?: string;
+  /** `throttled` (#20703) : le budget des ajouts sans accord est épuisé — dans combien de secondes réessayer. */
+  readonly retryAfter?: number;
 };
+
+/**
+ * Le budget des ajouts sans accord (#19812) que paie une entrée dans un salon
+ * d'une communauté privée (#20703) — `spendCommunitySalonAdmission` liée à
+ * son serveur. `null` : la porte n'en a pas encore (l'invitation dans un
+ * appel, qui n'a pas de serveur Fastify à qui demander ses seaux).
+ */
+export type CommunityAdmissionBudget = (actorId: string, admission: CommunityAdmission) => Promise<CommunityAdditionVerdict>;
 
 /** Ce que l'admission demande au moteur d'engagement (#8959) — un double en test. */
 export type ParticipantInviteEngagement = Pick<EngagementService, 'recordActivity'>;
@@ -43,6 +56,7 @@ export type MemberAdmissionPorts = {
   readonly broadcastMessage?: (message: unknown, conversationId: string) => Promise<void>;
   readonly notificationService: Pick<NotificationService, 'createAddedToConversationNotification' | 'createMemberJoinedNotificationsBatch'> | null | undefined;
   readonly engagement: ParticipantInviteEngagement;
+  readonly communityBudget: CommunityAdmissionBudget | null;
 };
 
 export type MemberAdmissionOptions = {
@@ -92,7 +106,15 @@ export async function admitConversationMember(
   if (conversation && newMemberRefusal(conversation)) return { userId, outcome: 'not-found' };
 
   const userToAdd = await prisma.user.findFirst({ where: { id: userId } });
-  if (!userToAdd) return { userId, outcome: 'not-found' };
+  if (!userToAdd) {
+    // #20703 — un identifiant sans compte se paie comme un compte non
+    // ajoutable : sans quoi la différence de débit dirait lequel existe.
+    const budget = community && currentUserId && ports.communityBudget
+      ? await ports.communityBudget(currentUserId, UNKNOWN_ACCOUNT_ATTEMPT)
+      : null;
+    if (budget && !budget.allowed) return { userId, outcome: 'throttled', retryAfter: budget.retryAfter };
+    return { userId, outcome: 'not-found' };
+  }
   // #14107 (MSG-03, RG-22) — un groupe ne débloque rien : un membre ajouté par
   // quelqu'un qui n'est pas au moins sa Connaissance entre par sa boîte de demandes.
   const opening = currentUserId ? await decideDirectOpening(prisma, { senderId: currentUserId, recipientId: userId }) : { kind: 'direct' as const };
@@ -111,6 +133,13 @@ export async function admitConversationMember(
 
   // #16695 — entrer dans un salon d'une communauté privée, c'est y être admis.
   const communityAdmission = await planSalonEntry(prisma, community, { kind: 'registered', userId });
+  // #20703 — y entrer sans son accord est un ajout : il se paie AVANT d'écrire,
+  // une tentative vers un compte non ajoutable comprise ; un refus
+  // d'autorisation et un membre déjà actif ne coûtent rien.
+  const budget = community && currentUserId && ports.communityBudget
+    ? await ports.communityBudget(currentUserId, communityAdmission)
+    : null;
+  if (budget && !budget.allowed) return { userId, outcome: 'throttled', retryAfter: budget.retryAfter };
   if (communityAdmission.kind === 'refused') {
     return { userId, outcome: communityAdmission.reason === 'invite-forbidden' ? 'community-forbidden' : 'not-found' };
   }

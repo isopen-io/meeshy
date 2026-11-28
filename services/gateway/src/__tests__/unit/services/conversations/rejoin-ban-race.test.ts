@@ -116,7 +116,7 @@ describe('#19688 — une rentrée ne rallume pas une ligne bannie dans sa fenêt
     } as never;
 
     const verdict = await admitConversationMember(
-      { prisma, io: undefined as never, joinRoom: null, notificationService: null, engagement: { recordActivity: jest.fn(async () => undefined) } as never },
+      { prisma, io: undefined as never, joinRoom: null, notificationService: null, engagement: { recordActivity: jest.fn(async () => undefined) } as never, communityBudget: null },
       { conversationId: CONV_ID, conversation: LIVE_CONVERSATION, userId: TARGET_ID, currentUserId: ACTOR_ID, addedBy: { id: ACTOR_ID, displayName: 'Ana' } as never, community: null }
     );
 

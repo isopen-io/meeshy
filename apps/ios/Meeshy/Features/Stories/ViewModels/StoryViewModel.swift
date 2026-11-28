@@ -586,10 +586,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .sink { [weak self] viewedData in
                 guard let self else { return }
                 guard StoryTrayRules.applyViewed(viewedData, to: &self.storyGroups) else { return }
-                // Re-sort: `hasUnviewed` may flip when the last
-                // unviewed story is consumed, dropping the group
-                // below the "fresh" bubbles.
-                self.sortStoryGroupsInPlace()
+                // Aucun re-tri : cet événement n'apporte qu'un compteur
+                // (#20457, voir `applyViewed`) — aucun critère de
+                // `StoryTrayRules.sort` ne bouge.
                 self.persistStoryCache()
             }
             .store(in: &socketCancellables)

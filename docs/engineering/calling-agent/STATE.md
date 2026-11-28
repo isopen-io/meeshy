@@ -2873,3 +2873,82 @@ socket jusqu'au client.
 0. **PR #20710** : lire le Verdict du run 46067733063. S'il est vert, fusionner `origin/dev` dans la branche (règle #18654 ; les commits récents ne touchent pas les fichiers d'appel), puis fusionner la PR. S'il est rouge, comparer avec la tête de `dev`.
 1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20726** (une seule source de la grâce), **#20335** (iOS, à coordonner avec la routine iOS).
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 83 — 2026-11-27 / 28
+
+- **Base** : `origin/dev` @ `a6d6fc9da`, puis `9611f7271` (fusion de #20710).
+- **PR #20710 (cycle 80, #20459) : fusionnée** dans `dev` (`9611f7271`). Tous les jobs du `ci.yml` 46067733063 étaient verts (seul « Verdict CI » attendait un runner). `dev` @`a6d6fc9da` a été fusionnée dans la branche sans conflit, puis 55 suites et 745 tests d'appel, `tsc-never-loaded-tests-ratchet` compris, et `tsc` à 0 ont été rejoués sur l'arbre fusionné. #20459 est fermée. La branche distante `claude/determined-volta-4f5f06` n'a pas pu être supprimée (le proxy refuse `DELETE refs`). Elle est contenue dans `dev`.
+- **Branche** : `claude/determined-volta-20709`.
+- **Objectif** : **#20709**. La bulle de résumé d'appel reçoit le relevé tardif, et la qualité d'un appel terminé suit une règle explicite.
+- **Livré** (`services/gateway/` seulement) :
+  - `services/calls/callSummaryLateRefresh.ts` (nouveau) : un relevé tardif (`departed`) qui change les mesures persistées réédite en place la bulle terminale (`{...metadata, bytesTotal, bytesEstimated, networkQuality}`, même jeu de clés) et part par le même `message:edited` que la bascule « en cours » → terminal.
+    - Rien si rien n'a changé.
+    - Écriture conditionnée par `updatedAt`, P2025 ⇒ renonce.
+    - Bulle effacée ou encore « call-live » non touchée.
+    - Regroupement par appel : au plus une édition en cours et un rattrapage.
+  - `services/calls/callSummaryFacts.ts` (nouveau) : projection lue par la pose et par le rafraîchissement, extraite de `CallService`.
+  - `callStatsPersistence.ts` : `persistCallStats` rend « a changé ». Deux règles nommées : `liveReportOverwritesQuality` (appel en cours : le dernier relevé fait foi, comme avant) et `endedCallReportOnlyDegradesQuality` (appel `ended`/`missed`/`rejected`/`failed` : un relevé ne peut que dégrader).
+  - `CallService.ts` −34 lignes, `CallEventsHandler.ts` −1 : câblage seul. Aucun payload ni événement nouveau.
+- **Tests** :
+  - Rouge prouvé (`dc88bfa16`, tests seuls) : 7 échecs sur 11.
+  - 4 suites neuves, dont celle de la QA (`callSummaryLateRefresh-qa.test.ts`).
+  - Sur l'arbre fusionné avec `9611f7271` : `[Cc]all|orphaned-sender-repair-surface-guard|gateway-file-size-budget|tsc-never-loaded-tests-ratchet` donne **188 suites et 2 201 tests verts**, et `tsc` sort en 0. L'orchestrateur a rejoué les 3 suites du lot : 19 sur 19.
+- **QA** (`auditeur-adversarial`, indépendante) : **favorable avec réserves**. Mutations : 9 attrapées par le lot, 4 survivantes tuées par les témoins QA (`db20ecccc`), 1 quasi équivalente.
+  - R6 corrigée : un `every` sur un tableau vide dans `CallService.summary.test.ts`.
+  - R1 à R4 ouvertes dans **#20747** :
+    - R1 : course pendant la pose du résumé ;
+    - R2 : lecture de la `CallSession` avant le `Message`, entre deux instances ;
+    - R3 : `withActivity` rejoué, bulle miroir non mise à jour ;
+    - R4 : scellé d'obsolescence non consulté.
+  - R5 (gonflement des octets, préexistant) reste borné par le limiteur.
+- **Limites** :
+  - Requêtes Prisma non exercées sur un vrai MongoDB (`update` avec `updatedAt` dans un `where` unique, `isSet: false`, `notIn`).
+  - Aucune recette staging. Rendu de la bulle éditée non vérifié sur les clients.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de #20709 n'est pas fusionnée : lire son `ci.yml` en `workflow_dispatch`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20747** (R1 et R2 d'abord : ce sont elles qui rouvrent le critère de #20709), **#20726**, **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging, à étendre au relevé tardif), #11932, #12236, #16933.
+
+## Cycle 84 — 2026-11-28
+
+- **Base** : `origin/dev` @ `829707d07`. La PR #20749 du cycle 83 (#20709) était ouverte.
+- **PR #20749 (cycle 83, #20709) : fusionnée** (`1d56c70f6`).
+  - `ci.yml` 46086638764 sur `3f287416c` : succès, sur tous les jobs.
+  - `dev` @`829707d07` a été fusionnée dans la branche sans conflit (`62d12e989`). Les nouveaux commits de `dev` ne touchent que les posts et les relations.
+  - Rejoué sur l'arbre fusionné : `tsc` sort en 0, et on obtient 189 suites et 2 209 tests verts.
+  - #20709 est fermée.
+- **Branche** : `claude/determined-volta-20747`.
+- **Objectif** : **#20747**, les réserves R1 à R4 de la bulle de résumé tardive.
+- **Livré** (`services/gateway/` seulement) :
+  - **R1** : après une pose réussie et non scellée, `postCallSummary` relance le rafraîchisseur. Un relevé persisté pendant la pose n'est donc plus perdu.
+  - **R2** : `refreshEndedCallSummaryMeasures` lit les données dans cet ordre :
+    1. l'ancre de la `CallSession` (`conversationId`, `originConversationId`) ;
+    2. les bulles et leur `updatedAt` ;
+    3. les faits.
+
+    Si les faits relus portent une autre conversation que l'ancre, rien n'est fait. La garde est conservée parce que `callConversationRebranch` peut déplacer une session vivante.
+  - **CAS perdu** (réserve 1 de la QA) : une passe qui reçoit `P2025` se relance, au plus deux fois (`MAX_CONFLICT_RERUNS`). Avec un P2025 permanent, il y a 3 écritures tentées, puis on renonce sans diffuser.
+  - **R3** :
+    - un troisième diffuseur (`setMessageMeasuresBroadcaster`) émet le même `message:edited`, sans `announceConversationActivity`. Une édition de mesures ne remonte donc plus la conversation dans la liste.
+    - La bulle miroir de la conversation d'origine (#19650) reçoit les mêmes mesures, avec le même CAS, quand elle est terminale.
+    - La bascule « en cours » → terminal garde son annonce d'activité.
+  - **R4** : le scellé d'obsolescence (#14643) est consulté avant chaque rediffusion.
+  - `CallEventsHandler.ts` : solde de −2 lignes. Aucun payload, événement ni schéma ne change.
+- **Tests** :
+  - Rouge constaté : 10 échecs sur 37 (`1d4e63d4b`), puis 2 sur 26 pour la relance bornée (`e60000dcd`).
+  - Sur l'arbre fusionné avec `dev` @`c5d6abae4`, avec le motif `[Cc]all|MeeshySocketIOManager|message-new|orphaned-sender-repair-surface-guard|gateway-file-size-budget|gateway-test-file-size-budget|tsc-never-loaded-tests-ratchet` : **200 suites et 2 693 tests verts**, et `tsc` sort en 0. Résultat rejoué par l'orchestrateur.
+- **QA** (`auditeur-adversarial`, indépendante) : **favorable avec réserves**.
+  - 8 mutations : 6 attrapées par le lot, M2 (ordre des lectures) attrapée par le témoin QA (`67246cc5c`), et M7 (garde d'ancre) attrapée par le témoin ajouté ensuite.
+  - Réserves 1 (CAS perdu) et 3 (garde sans témoin) : corrigées dans le lot (`9345ae88f`).
+  - Réserve 4 (pas de relance sur une pose nulle, un diffuseur absent ou un réessai) : choix assumé, documenté dans `callSummaryLateRefresh.ts`. Le rattrapage repose alors sur le prochain relevé tardif.
+- **Limites** :
+  - Le CAS `update({ where: { id, updatedAt } })` n'a pas été exercé sur un vrai MongoDB. Deux écritures dans la même milliseconde le rendraient inopérant.
+  - Aucun essai sur plusieurs instances, ni en staging.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de #20747 n'est pas fusionnée : lire son `ci.yml` en `workflow_dispatch`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20726** (une seule source de la grâce, iOS et SDK), **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging, à étendre à la bulle tardive et à son miroir), #11932, #12236, #16933.
