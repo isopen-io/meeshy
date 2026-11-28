@@ -59,6 +59,14 @@ class CommunityAccessTest {
     }
 
     @Test
+    fun `les publications d'une communaute privee ne se demandent qu'a ses membres (#16879)`() {
+        assertThat(access(null, isPrivate = true).canReadPosts).isFalse()
+        assertThat(access("member", isPrivate = true).canReadPosts).isTrue()
+        assertThat(access(null, isPrivate = true, me = "owner").canReadPosts).isTrue()
+        assertThat(access(null).canReadPosts).isTrue()
+    }
+
+    @Test
     fun `la rangee d'actions suit l'ordre de l'ecran`() {
         assertThat(CommunityAccess.resolve("me", false, "me", emptyList()).detailActions)
             .containsExactly(

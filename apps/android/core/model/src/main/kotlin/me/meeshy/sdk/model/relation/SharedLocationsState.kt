@@ -9,6 +9,7 @@ public data class SharedLocationEntry(
     val circle: SharedLocationCircle?,
     val updatedAtMillis: Long,
     val deadlineMillis: Long,
+    val motion: SharedLocationMotion? = null,
 )
 
 /**
@@ -55,6 +56,7 @@ public data class SharedLocationsState(
             circle = location.circle,
             updatedAtMillis = location.updatedAtMillis,
             deadlineMillis = deadline,
+            motion = location.motion,
         )
         return copy(byUser = byUser + (location.userId to entry), arrivals = arrival, arrivedAt = arrivedAt + (location.userId to arrival))
     }

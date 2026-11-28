@@ -22,6 +22,7 @@ import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { MediaMirrorFollowJob, processMediaMirrorFollowJob } from './media-mirror-follow';
 import { RelationWeeklyJob } from './relation-weekly';
+import type { RelationIo } from '../socketio/relationEvents';
 import { createE2EEEnvelopeRelay } from '../services/e2ee/E2EEEnvelopeRelay';
 import { sweepDevicesOfEndedSessions } from '../services/e2ee/device-retirement';
 import { deviceTrustRuntime } from '../services/e2ee/device-trust-runtime';
@@ -88,7 +89,12 @@ export class BackgroundJobsManager {
 
   private prismaClient: PrismaClient;
 
-  constructor(prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+  constructor(
+    prisma: PrismaClient,
+    emailService: EmailService,
+    deliveryQueue?: RedisDeliveryQueue,
+    options: { readonly resolveIO?: () => RelationIo | undefined } = {},
+  ) {
     this.prismaClient = prisma;
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
@@ -111,7 +117,7 @@ export class BackgroundJobsManager {
     this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
     this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
     this.mediaMirrorFollowJob = processMediaMirrorFollowJob(prisma, logger);
-    this.relationWeeklyJob = new RelationWeeklyJob(prisma);
+    this.relationWeeklyJob = new RelationWeeklyJob(prisma, { resolveIO: options.resolveIO });
   }
 
   /**

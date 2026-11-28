@@ -25,6 +25,8 @@ import me.meeshy.app.community.CommunityInviteScreen
 import me.meeshy.app.community.CommunityListScreen
 import me.meeshy.app.community.CommunityMembersScreen
 import me.meeshy.app.community.CommunitySettingsScreen
+import me.meeshy.app.feed.CommunityPostsNavigation
+import me.meeshy.app.feed.rememberCommunityPostsItems
 import me.meeshy.app.navigation.Routes
 
 /** Les routes de l'espace Communautés — une liste, un détail par identifiant, et leurs écrans fils. */
@@ -115,6 +117,18 @@ class CommunityDestinations @Inject constructor() : NavGraphContributor {
                     onInvite = { navController.pushFrom(entry, CommunityRoutes.invite(it)) },
                     onOpenSettings = { navController.pushFrom(entry, CommunityRoutes.settings(it)) },
                     addChannelSheet = { id, onAdded, onDismiss -> CommunityAddChannelSheet(id, onAdded, onDismiss) },
+                    postsItems = { id, snackbar ->
+                        rememberCommunityPostsItems(
+                            communityId = id,
+                            snackbar = snackbar,
+                            navigation = CommunityPostsNavigation(
+                                onOpenPost = { postId -> navController.pushFrom(entry, Routes.postDetail(postId)) },
+                                onOpenReel = { postId -> navController.pushFrom(entry, Routes.reels(seed = postId)) },
+                                onOpenProfile = { userId -> navController.pushFrom(entry, Routes.profile(userId)) },
+                                onOpenHashtag = { tag -> navController.pushFrom(entry, Routes.hashtag(tag)) },
+                            ),
+                        )
+                    },
                 ),
             )
         }

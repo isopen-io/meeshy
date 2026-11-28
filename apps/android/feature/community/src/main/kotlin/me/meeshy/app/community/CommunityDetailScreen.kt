@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,6 +28,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
@@ -83,6 +86,12 @@ data class CommunityDetailNavigation(
     val onInvite: ((String) -> Unit)? = null,
     val onOpenSettings: ((String) -> Unit)? = null,
     val addChannelSheet: (@Composable (communityId: String, onAdded: () -> Unit, onDismiss: () -> Unit) -> Unit)? = null,
+    /**
+     * L'onglet Publications (#16879), injecté par `:app` depuis la feature du fil : il rend les éléments à verser
+     * dans le défilement du détail. [SnackbarHostState] reçoit les retours des gestes des cartes. Absent, l'onglet
+     * garde son état vide.
+     */
+    val postsItems: (@Composable (communityId: String, snackbar: SnackbarHostState) -> (LazyListScope.() -> Unit))? = null,
 )
 
 /**
@@ -99,6 +108,7 @@ fun CommunityDetailScreen(
     val toasts = remember { MutableSharedFlow<FeedbackToastRequest>(extraBufferCapacity = 1) }
     var confirmLeave by remember { mutableStateOf(false) }
     var showAddChannel by remember { mutableStateOf(false) }
+    val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(viewModel) {
         viewModel.effects.collect { effect ->
@@ -126,6 +136,7 @@ fun CommunityDetailScreen(
                 onJoin = viewModel::join,
                 onLeave = { confirmLeave = true },
                 onAddChannel = { showAddChannel = true },
+                snackbar = snackbar,
             )
             state.showError -> state.failure?.let { failure ->
                 LoadFailureState(failure = failure, onRetry = viewModel::retry, onBack = navigation.onBack)
@@ -143,6 +154,7 @@ fun CommunityDetailScreen(
             )
         }
         FeedbackToastHost(toasts = toasts, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
+        SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
 
     if (confirmLeave) {
@@ -178,8 +190,11 @@ private fun LoadedDetail(
     onJoin: () -> Unit,
     onLeave: () -> Unit,
     onAddChannel: () -> Unit,
+    snackbar: SnackbarHostState,
 ) {
     val accentHex = state.appearance?.color ?: "6366F1"
+    val postsSlot = navigation.postsItems
+    val posts = if (state.tab == CommunityDetailTab.FEED && access.canReadPosts && postsSlot != null) postsSlot(community.id, snackbar) else null
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 32.dp)) {
         item(key = "header", contentType = "header") { DetailHeader(community, accentHex) }
         item(key = "stats", contentType = "stats") { StatsRow(community) }
@@ -198,7 +213,7 @@ private fun LoadedDetail(
         item(key = "tabs", contentType = "tabs") { TabPicker(state.tab, onTab) }
         when (state.tab) {
             CommunityDetailTab.CHANNELS -> channelsSection(state, access, onAddChannel, navigation.onOpenChannel)
-            CommunityDetailTab.FEED -> item(key = "feed", contentType = "feed") {
+            CommunityDetailTab.FEED -> if (posts != null) posts() else item(key = "feed", contentType = "feed") {
                 MeeshyEmptyState(
                     icon = MeeshyIcons.PhotoLibrary,
                     title = stringResource(R.string.community_detail_posts_empty_title),

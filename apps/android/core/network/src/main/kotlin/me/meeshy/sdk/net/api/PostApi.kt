@@ -399,6 +399,19 @@ interface PostApi {
         @Query("limit") limit: Int? = null,
     ): ApiResponse<List<ApiPost>>
 
+    /**
+     * Les publications d'une communauté (`GET /social/posts?scope=community`) — l'adresse canonique
+     * (#4346), jamais l'alias déprécié [getCommunityPosts]. La passerelle y pose le contrôle d'accès
+     * de la communauté (privée réservée aux membres, désactivée muette, auteurs bloqués exclus).
+     */
+    @GET("social/posts")
+    suspend fun getCommunityFeed(
+        @Query("scope") scope: String = "community",
+        @Query("communityId") communityId: String,
+        @Query("cursor") cursor: String? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiPost>>
+
     @GET("posts/community/{communityId}")
     suspend fun getCommunityPosts(
         @Path("communityId") communityId: String,
