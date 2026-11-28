@@ -559,12 +559,21 @@ export class SocialEmissionCore {
    * **LA SÉPARATION AUTOUR D'UNE ACTIVITÉ DE COMMENTAIRE** (#20236), résolue
    * par l'APPELANT, AVANT sa mutation, et passée aux deux diffusions.
    *
-   * Ce n'est pas une commodité : rendre ces diffusions asynchrones décorrélait
-   * l'ORDRE du fil de l'ordre des écritures, et leur charge est ABSOLUE
-   * (`likeCount`) — un `comment:unliked` qui double son `comment:liked` fige
-   * chez le lecteur un compteur que la base contredit, et iOS le PERSISTE.
-   * Résolue avant l'écriture, l'émission redevient synchrone juste après elle
-   * (audit adversarial du lot).
+   * **Elle est lue avant parce que ce chemin le PEUT, pas pour acheter un
+   * ordre** (#20414). Sa charge est ABSOLUE (`likeCount`), elle ne porte aucun
+   * curseur `_seq`, et iOS la PERSISTE — mais lire la séparation avant
+   * l'écriture n'ordonne rien : l'ordre de résolution de deux promesses
+   * d'écriture concurrentes n'est pas l'ordre des commits, et l'adaptateur
+   * Redis n'ordonne rien entre deux instances. La fenêtre existe à zéro
+   * `await` ajouté.
+   *
+   * Ce chemin et celui du ROSTER (`CommentReactionHandler.separationAround`,
+   * qui lit APRÈS parce qu'il le DOIT) écrivent les MÊMES lignes
+   * `commentReaction` : deux transports d'une seule mutation. L'ordre y est au
+   * mieux ; ce qui garantit est la convergence — compteur absolu qui BORNE,
+   * relecture autoritaire qui CORRIGE. Décision, avec la mesure et l'état du
+   * chemin de resynchronisation :
+   * {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md}
    */
   commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
     return this.activitySeparation(actorId, commentAuthorId);

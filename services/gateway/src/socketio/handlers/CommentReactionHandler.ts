@@ -107,10 +107,21 @@ export class CommentReactionHandler {
    * Nommer le roster EXIGE de lire après lui, puisque lui seul le produit.
    *
    * La fenêtre de réordonnancement s'élargit donc d'un `await` ; elle ne
-   * s'ouvre pas. Ces deux événements voyagent sans curseur `_seq` et portent
-   * un compteur ABSOLU — deux lectures concurrentes rendent le même total
-   * final, et un client qui doute resynchronise (`comment:reaction-request-sync`).
-   * L'`unchanged`/`!removed` en dispense : un no-op ne lit rien.
+   * s'ouvre pas. L'`unchanged`/`!removed` en dispense : un no-op ne lit rien.
+   *
+   * **Deux phrases de ce doc-comment étaient fausses, et #20414 les corrige.**
+   * « Deux lectures concurrentes rendent le même total final » : non — chacune
+   * rend le total à l'instant où elle tourne, et c'est la LIVRAISON qui peut
+   * les inverser. « Un client qui doute resynchronise
+   * (`comment:reaction-request-sync`) » : **aucun client ne le fait** — relevé
+   * exhaustif, l'événement n'a zéro appelant applicatif sur iOS et Android et
+   * n'existe pas côté web, et le sujet iOS qui porterait son ACK n'a aucun
+   * producteur. Ce qui corrige un total périmé aujourd'hui est la relecture
+   * REST du fil.
+   *
+   * Ce que l'ordre garantit, ce que la convergence garantit, et ce que le
+   * chemin de resynchronisation vaut :
+   * {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md}
    */
   private async separationAround(
     actorId: string,

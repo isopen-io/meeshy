@@ -147,9 +147,12 @@ export class PostReactionHandler {
     }
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
     /* La SEPTIÈME famille de #20338, et la seule hors de `SocialEventsHandler`.
-       `separated` est résolu par l'APPELANT, AVANT sa mutation : la charge porte
-       un agrégat ABSOLU, donc un réordonnancement fige un compteur faux chez le
-       lecteur. `null` ⇒ on n'annonce rien. */
+       `separated` est résolu par l'APPELANT, AVANT sa mutation — parce que ce
+       chemin le PEUT (aucun roster à nommer), pas pour acheter un ordre
+       (#20414). La charge porte un agrégat ABSOLU et aucun curseur `_seq` :
+       l'ordre de livraison est AU MIEUX, et ce qui garantit est la convergence
+       (le total absolu BORNE l'erreur à « périmée », la relecture autoritaire
+       la CORRIGE). `null` ⇒ on n'annonce rien. */
     if (separated === null) return;
     const target = this.io.to(ROOMS.post(postId));
     emitServerEvent(separated.length > 0 ? target.except([...separated]) : target, event, updateEvent);
@@ -224,9 +227,11 @@ export class PostReactionHandler {
       // #9584 — venue d'une republication simple, la réaction la crédite
       // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
       /* AVANT la mutation (#20338) : `target.authorId` est en main depuis
-         `resolveInteractionTarget`, et la charge de la diffusion porte un
-         agrégat ABSOLU — résolue après, elle décorrélait l'ordre du fil de
-         l'ordre des écritures. */
+         `resolveInteractionTarget`, donc rien n'oblige à lire après. Ce n'est
+         pas une garantie d'ordre (#20414) — l'ordre de résolution de deux
+         écritures concurrentes n'est pas l'ordre des commits, et l'adaptateur
+         Redis n'ordonne rien entre deux instances :
+         {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md} */
       const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const reaction = await this.postReactionService.addReaction({
         postId: targetPostId,
