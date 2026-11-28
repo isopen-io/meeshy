@@ -49,6 +49,18 @@
  * actif de la communauté n'y entre pas : il ne coûte rien ; un identifiant
  * sans compte coûte une unité, comme un compte non ajoutable.
  *
+ * L'invitation dans un appel (`call:invite-participant`) s'y ajoute depuis
+ * #20740 : le transport socket atteint ces seaux par le serveur posé au
+ * montage de Socket.IO (`setCommunityAdmissionBudgetHost`). Et un débit
+ * accepté pour une écriture qui n'a PAS lieu — course de bannissement, ligne
+ * disparue, écriture qui lève — se REND ; une tentative vers un compte non
+ * ajoutable, jamais. Le débannissement le paie quand il fait RENTRER dans la
+ * communauté ; l'entrée par lien, volontaire, en est dispensée
+ * (`decisions/2026-11-28-…-20740.md`). Depuis #20795, un refus de l'appel vers
+ * un compte non ajoutable se paie comme à la route, et l'accusé dit quand
+ * réessayer ; l'invité d'un seul appel (`legacy-guest`) n'entre nulle part et
+ * ne paie rien.
+ *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau
  * de la cible, et son refus ne touche pas ce dernier. Un administrateur qui
@@ -58,7 +70,9 @@
  * Redis en panne : `consume` rend `null` et le geste PASSE (fail-open), le même
  * choix que `middleware()` et `contact-identifier-budget.ts` — un débit est une
  * borne d'abus, pas une garde d'autorisation, et les refus d'accès restent en
- * amont.
+ * amont. Un débit que la panne n'a pas COMPTÉ ne se rend jamais (#20795) :
+ * rendu après le retour de Redis, il décrémenterait des clés que d'autres
+ * gestes ont comptées entre-temps.
  *
  * Le refus est un 429 dans l'enveloppe `sendError`, `code`
  * `COMMUNITY_ADDITION_BUDGET_EXCEEDED`, avec `Retry-After`. Le même code sert
@@ -132,6 +146,35 @@ function verdictOf(infos: ReadonlyArray<RateLimitInfo | null>): CommunityAdditio
   return { allowed: false, retryAfter: Math.max(...depasses) };
 }
 
+/** Un seau que `consume` a COMPTÉ — `null` est une panne du magasin, rien n'y a été pris (#20795). */
+type Pris = { readonly seau: RateLimiter; readonly cle: string };
+
+async function prendre(seau: RateLimiter, cle: string, unites: number): Promise<{ readonly info: RateLimitInfo | null; readonly pris: readonly Pris[] }> {
+  const info = await seau.consume(cle, unites);
+  return { info, pris: info ? [{ seau, cle }] : [] };
+}
+
+const rendreSur = (pris: readonly Pris[], unites: number): Promise<unknown> =>
+  Promise.all(pris.map(({ seau, cle }) => seau.release(cle, unites)));
+
+/** Un débit de l'acteur qui sait où il a été PRIS (#20795). */
+type DebitActeur = { readonly verdict: CommunityAdditionVerdict; rendre(unites: number): Promise<void> };
+
+async function debiterActeur(fastify: FastifyInstance, actorId: string, attempts: number): Promise<DebitActeur> {
+  const { acteurHeure, acteurJour } = seaux(fastify);
+  const cle = `user:${actorId}`;
+  const [heure, jour] = await Promise.all([prendre(acteurHeure, cle, attempts), prendre(acteurJour, cle, attempts)]);
+  const pris = [...heure.pris, ...jour.pris];
+  const verdict = verdictOf([heure.info, jour.info]);
+  if (!verdict.allowed && attempts > 1) await rendreSur(pris, attempts - 1);
+  return {
+    verdict,
+    rendre: async (unites) => {
+      await rendreSur(pris, unites);
+    },
+  };
+}
+
 /**
  * Débite une tentative d'ajout sur les deux fenêtres de l'ACTEUR. Les deux sont
  * débitées même quand l'une refuse : une tentative refusée a été REÇUE. Mais un
@@ -144,24 +187,20 @@ export async function spendCommunityAdditionByActor(
   actorId: string,
   attempts: number = 1
 ): Promise<CommunityAdditionVerdict> {
-  const { acteurHeure, acteurJour } = seaux(fastify);
-  const cle = `user:${actorId}`;
-  const verdict = verdictOf(await Promise.all([acteurHeure.consume(cle, attempts), acteurJour.consume(cle, attempts)]));
-  if (!verdict.allowed && attempts > 1) {
-    await Promise.all([acteurHeure.release(cle, attempts - 1), acteurJour.release(cle, attempts - 1)]);
-  }
-  return verdict;
+  return (await debiterActeur(fastify, actorId, attempts)).verdict;
 }
 
-/** Rend `units` débits pris sur l'acteur par un geste que la suite a refusé (#20464). */
-export async function refundCommunityAdditionByActor(
+/**
+ * `spendCommunityAdditionByActor`, dont les `attempts` unités se rendent là où
+ * elles ont été PRISES (#20795) — jamais sur une fenêtre que la panne n'a pas
+ * comptée. Un geste refusé n'a plus qu'une unité à rendre.
+ */
+export async function spendCommunityAdditionByActorUndoable(
   fastify: FastifyInstance,
   actorId: string,
-  units: number
-): Promise<void> {
-  const { acteurHeure, acteurJour } = seaux(fastify);
-  const cle = `user:${actorId}`;
-  await Promise.all([acteurHeure.release(cle, units), acteurJour.release(cle, units)]);
+  attempts: number
+): Promise<DebitActeur> {
+  return debiterActeur(fastify, actorId, attempts);
 }
 
 const canonique = (id: string) => id.trim().toLowerCase();
@@ -176,22 +215,23 @@ type DebitCible = { readonly verdict: CommunityAdditionVerdict; rendre(): Promis
 async function debiterCible(fastify: FastifyInstance, targetId: string, actorId: string): Promise<DebitCible> {
   const { cibleJour, paireJour } = seaux(fastify);
   const cible = canonique(targetId);
-  const clePaire = `pair:${canonique(actorId)}:${cible}`;
-  const cleCible = `user:${cible}`;
-  const paire = verdictOf([await paireJour.consume(clePaire, 1)]);
-  if (!paire.allowed) {
-    await paireJour.release(clePaire, 1);
-    return { verdict: paire, rendre: async () => undefined };
+  const paire = await prendre(paireJour, `pair:${canonique(actorId)}:${cible}`, 1);
+  const deLaPaire = verdictOf([paire.info]);
+  if (!deLaPaire.allowed) {
+    await rendreSur(paire.pris, 1);
+    return { verdict: deLaPaire, rendre: async () => undefined };
   }
-  const deCible = verdictOf([await cibleJour.consume(cleCible, 1)]);
-  if (!deCible.allowed) {
-    await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
-    return { verdict: deCible, rendre: async () => undefined };
+  const deCible = await prendre(cibleJour, `user:${cible}`, 1);
+  const pris = [...paire.pris, ...deCible.pris];
+  const verdict = verdictOf([deCible.info]);
+  if (!verdict.allowed) {
+    await rendreSur(pris, 1);
+    return { verdict, rendre: async () => undefined };
   }
   return {
-    verdict: deCible,
+    verdict,
     rendre: async () => {
-      await Promise.all([paireJour.release(clePaire, 1), cibleJour.release(cleCible, 1)]);
+      await rendreSur(pris, 1);
     },
   };
 }
@@ -223,16 +263,38 @@ export async function spendCommunityAdditionOfTargets(
   targetIds: readonly string[],
   actorId: string
 ): Promise<CommunityAdditionVerdict> {
+  return (await spendCommunityAdditionOfTargetsUndoable(fastify, targetIds, actorId)).verdict;
+}
+
+/** Un débit accepté que le geste peut encore RENDRE s'il n'écrit rien (#20740). */
+export type UndoableCommunityAddition = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };
+
+/**
+ * `spendCommunityAdditionOfTargets`, dont le débit accepté se REND quand
+ * l'écriture qui le justifiait n'a pas lieu (#20740) : une course de
+ * bannissement, une ligne disparue, une écriture qui lève. Sans quoi le seau de
+ * la cible compterait un ajout qui n'a jamais eu lieu.
+ */
+export async function spendCommunityAdditionOfTargetsUndoable(
+  fastify: FastifyInstance,
+  targetIds: readonly string[],
+  actorId: string
+): Promise<UndoableCommunityAddition> {
   const pris: DebitCible[] = [];
   for (const targetId of targetIds) {
     const debit = await debiterCible(fastify, targetId, actorId);
     if (!debit.verdict.allowed) {
       await Promise.all(pris.map((p) => p.rendre()));
-      return debit.verdict;
+      return { verdict: debit.verdict, rendre: async () => undefined };
     }
     pris.push(debit);
   }
-  return { allowed: true, retryAfter: 0 };
+  return {
+    verdict: { allowed: true, retryAfter: 0 },
+    rendre: async () => {
+      await Promise.all(pris.map((p) => p.rendre()));
+    },
+  };
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {

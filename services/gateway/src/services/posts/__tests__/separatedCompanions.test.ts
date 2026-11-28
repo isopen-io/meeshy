@@ -54,13 +54,37 @@ describe('withMentions — ce qu’un blocage retire du post servi', () => {
     expect(served.repostOf).toBeNull();
   });
 
-  it('la colonne de décision snapshotAuthorId ne part jamais sur le fil, séparation ou non', () => {
+  /**
+   * **CE TÉMOIN A CHANGÉ DE PORTÉE, PAS DE GARANTIE** (#20711).
+   *
+   * Il disait « jamais sur le fil, séparation ou non », et il comptait la
+   * composition d'une DIFFUSION parmi les charges servies. Mesuré : elle ne
+   * l'est pas — une diffusion compose sa charge dans la route, très en amont de
+   * son audience, et la résolution par lecteur n'arrive qu'au moment d'émettre.
+   * Retirer la colonne ICI la rendait invisible au résolveur, et la moitié
+   * « copie d'un contenu éphémère » de la loi était morte sur les cinq chemins
+   * de production.
+   *
+   * La garantie « jamais sur le fil » est donc tenue à son vrai endroit, et
+   * elle y est tenue par son propre témoin — `emitPostToAudience` retire la
+   * colonne sur CHACUNE de ses charges
+   * (`post-compagnons-separes-20711.test.ts` § « la COPIE d'un contenu
+   * éphémère »). Ce qui se garde ici est ce qui reste vrai ici : toute charge
+   * SERVIE la retire, et la diffusion la garde EXPRÈS.
+   */
+  it('la colonne de décision snapshotAuthorId ne part sur aucune charge SERVIE', () => {
     const copy = { id: 'copie', content: 'story copiée', author: person(FRIEND), snapshotAuthorId: AUTHOR, postMentions: [] };
-    for (const reader of [separatedFrom(BLOCKED), { broadcast: true }, undefined]) {
+    for (const reader of [separatedFrom(BLOCKED), undefined]) {
       const served = withMentions(post({ repostOf: copy }), reader) as { repostOf: Record<string, unknown> };
       expect(served.repostOf.id).toBe('copie');
       expect('snapshotAuthorId' in served.repostOf).toBe(false);
     }
+  });
+
+  it('une DIFFUSION la garde, parce que sa résolution par lecteur en a besoin', () => {
+    const copy = { id: 'copie', content: 'story copiée', author: person(FRIEND), snapshotAuthorId: AUTHOR, postMentions: [] };
+    const diffusee = withMentions(post({ repostOf: copy }), { broadcast: true }) as { repostOf: Record<string, unknown> };
+    expect(diffusee.repostOf.snapshotAuthorId).toBe(AUTHOR);
   });
 
   it('sans séparation déclarée (diffusion), rien n’est retiré', () => {

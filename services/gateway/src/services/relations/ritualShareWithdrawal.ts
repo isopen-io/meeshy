@@ -117,11 +117,16 @@ const SHARES_OFF_DATA = Object.fromEntries(RELATION_RITUAL_SHARES.map((share) =>
  * Un compte part (désactivation, suppression) : tout partage du rituel qu'il avait consenti
  * ou qu'on lui avait consenti s'éteint (#14924), sans date — ce n'est le geste de personne.
  * Aucune ligne n'est créée ; une réactivation ne rallume rien.
+ *
+ * Les alertes « un Sang s'approche » qui le nomment, chez chacun de ses Sangs, et celles de sa
+ * cloche s'effacent d'abord (#20688), dans le même ordre que `withdrawRitualSharesBetween` : un
+ * effacement en panne lève et laisse les partages allumés, que le retour du compte rejoue.
  */
 export async function withdrawRitualSharesOfUser(
-  prisma: Pick<PrismaClient, 'relationFeatureSetting'>,
+  prisma: RitualSharesWithdrawalDb,
   params: { readonly userId: string },
 ): Promise<void> {
+  await bloodProximityRetractorOf(prisma)({ kind: 'everywhere', ownerId: params.userId });
   const pairs = { OR: [{ ownerId: params.userId }, { otherId: params.userId }] };
   await prisma.relationFeatureSetting.updateMany({ where: pairs, data: { ...SHARES_OFF_DATA, ...BUNDLE_FORGOTTEN } });
   await prisma.relationFeatureSetting.updateMany({ where: { ...pairs, batteryShared: true }, data: { batteryShared: null } });

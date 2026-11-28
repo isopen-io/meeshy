@@ -56,6 +56,7 @@ function makePrisma(overrides: Record<string, any> = {}) {
       update: jest.fn<any>().mockResolvedValue({ id: USER_ID }),
     },
     relationFeatureSetting: { updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    notification: { findRaw: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
     $transaction: jest.fn<any>().mockResolvedValue([]),
     ...overrides,
   } as any;

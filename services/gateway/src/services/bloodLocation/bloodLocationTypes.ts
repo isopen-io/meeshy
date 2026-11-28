@@ -13,6 +13,11 @@ export type BloodProximityNotice = {
   readonly distanceMeters: number;
 };
 
+/** `admits` relit la paire juste avant l'écriture (#20689) : `false` ⇒ rien ne s'écrit. */
+export type BloodProximityNoticeOptions = {
+  readonly admits?: () => Promise<boolean>;
+};
+
 export type BloodLocationDeps = {
   readonly prisma: BloodLocationDb;
   readonly io: ServerEmitIO | undefined;
@@ -38,7 +43,7 @@ export type BloodLocationDeps = {
    * pour une app fermée. Appelée là où `location:blood-proximity` part, sous ses gardes et sa
    * cadence déjà prise. Absente, rien ne part ; un échec n'arrête jamais l'alerte.
    */
-  readonly notifyProximity?: (notice: BloodProximityNotice) => Promise<unknown>;
+  readonly notifyProximity?: (notice: BloodProximityNotice, options?: BloodProximityNoticeOptions) => Promise<unknown>;
   /**
    * Retire les notifications `blood_proximity` d'une portée (#20542) : l'effacement de l'historique
    * les emporte avec les points. REQUISE et stricte — une dépendance absente laisserait l'effacement

@@ -24,7 +24,7 @@ import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 import { loadSalonCommunity } from '../../services/conversations/communityMembershipSync';
-import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { communityAdmissionBudgetOf } from '../../services/conversations/communitySalonAdmissionBudget';
 import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
@@ -402,7 +402,7 @@ export function registerParticipantWriteRoutes(
         broadcastMessage: (message, target) => socketManager?.broadcastMessage(message as never, target) ?? Promise.resolve(),
         notificationService: fastify.notificationService,
         engagement,
-        communityBudget: (actorId, admission) => spendCommunitySalonAdmission(fastify, actorId, admission),
+        communityBudget: communityAdmissionBudgetOf(fastify),
       };
       const results: ParticipantAdmissionVerdict[] = [];
       for (const userId of demandes.userIds) {

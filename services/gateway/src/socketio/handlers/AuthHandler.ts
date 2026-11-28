@@ -932,17 +932,25 @@ export class AuthHandler {
 
   // Engine-level pong (Socket.IO ping/pong, every ~25s on EVERY client
   // platform — `pingInterval: 25000`). C'est le SEUL chemin de rafraichissement
-  // de presence sur lequel on puisse compter pour tous les clients : Android
-  // n'a jamais emis de heartbeat applicatif, et sans ce chemin un
-  // connecte-passif tomberait au-dela de la garde anti-stale de 5 min de la
-  // regle de presence 1/3/5 — affiche hors ligne alors que sa socket est vivante.
+  // de presence sur lequel on puisse compter pour TOUS les clients, le WEB
+  // compris : sans lui, un connecte-passif tomberait au-dela de la garde
+  // anti-stale de 5 min de la regle de presence 1/3/5 — affiche hors ligne
+  // alors que sa socket est vivante.
   // Throttled 60s inside StatusService: at most one DB write + broadcast/min.
   //
-  // `CLIENT_EVENTS.HEARTBEAT` ci-dessus ne subsiste que pour iOS (30s, AVEC
-  // `clientTime`), qui s'en sert pour le RTT rendu dans `heartbeat:ack`. Le web
-  // en emettait un a 90s, NU : aucun `latencyHintMs` calculable, aucun ecouteur
-  // pour l'ack, et un `noteHeartbeat` que ce pong-ci avait deja appele 3,6x plus
-  // souvent. Il a ete retire (cycle 78) ; la presence web ne tient plus qu'ici.
+  // `CLIENT_EVENTS.HEARTBEAT` ci-dessus a DEUX emetteurs, pas un (#20791) :
+  // `MessageSocketManager.swift` (`safeEmit("heartbeat", ["clientTime": …])`,
+  // 30s) et `SocketManager.kt` (`socket.emit(EVENT_HEARTBEAT, …)`, avec son
+  // ecoute de `heartbeat:ack`). Les deux passent `clientTime`, donc les deux
+  // obtiennent le RTT rendu dans l'ack. Ce commentaire affirmait le contraire
+  // — « Android n'a jamais emis de heartbeat applicatif » et « ne subsiste que
+  // pour iOS » — et c'etait MESURE FAUX : un balayage du contrat montant l'a
+  // releve en inventoriant `heartbeat` comme un canal sans emetteur, ce qu'il
+  // n'est pas. Le web, lui, en emettait un a 90s, NU : aucun `latencyHintMs`
+  // calculable, aucun ecouteur pour l'ack, et un `noteHeartbeat` que ce pong-ci
+  // avait deja appele 3,6x plus souvent. Il a ete retire (cycle 78) ; la
+  // presence web ne tient plus qu'ici — ce qui reste vrai, et c'est la seule
+  // moitie de la phrase d'origine qui l'etait.
   handleEnginePong(socket: Socket): void {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;

@@ -1,5 +1,8 @@
 /**
- * **LES ROOMS PERSONNELLES QU'UNE DIFFUSION DOIT TAIRE** (#20236).
+ * **LES ROOMS PERSONNELLES QU'UNE DIFFUSION DOIT TAIRE** (#20236) — et, depuis
+ * #20711, **DE QUOI chaque lecteur est séparé** (`pairsAround`), parce qu'une
+ * charge peut porter le contenu d'un tiers sans que le lecteur perde le reste.
+ * Les deux questions partagent LA MÊME lecture et LE MÊME cache.
  *
  * #20216 a fermé les diffusions qui portent le CONTENU d'un commentaire : un
  * compte qu'un blocage sépare du commentateur ne les reçoit plus. Restaient
@@ -75,7 +78,17 @@ export const DEFAULT_TTL_MS = 5_000;
 /** Un cache qui grandit avec le trafic est une fuite : au plafond, il ÉVINCE. */
 const MAX_ENTRIES = 512;
 
-type Entry = { readonly expiresAt: number; readonly subjects: readonly string[]; readonly ids: readonly string[] };
+/**
+ * `pairs` porte la relation PAR LECTEUR — « de quels sujets ce compte est-il
+ * séparé ? ». `ids` (les lecteurs à taire, tous sujets confondus) s'en DÉRIVE
+ * au lieu d'être stocké à côté : deux champs qui disent la même chose sous deux
+ * formes divergent, et celui qui divergerait ici est une garde.
+ */
+type Entry = {
+  readonly expiresAt: number;
+  readonly subjects: readonly string[];
+  readonly pairs: ReadonlyMap<string, readonly string[]>;
+};
 
 /** PARTAGÉ par tout le processus : une seule chose à invalider quand un blocage bouge. */
 const cache = new Map<string, Entry>();
@@ -141,6 +154,9 @@ export function separationCacheStats(): { readonly size: number; readonly max: n
   return { size: cache.size, max: MAX_ENTRIES, evictions };
 }
 
+/** Par lecteur, les sujets dont un blocage le sépare — dans un sens ou l'autre. */
+export type SeparationPairs = ReadonlyMap<string, readonly string[]>;
+
 export type SeparatedRoomsResolver = {
   /**
    * Les rooms `user:<id>` à EXCLURE d'une diffusion qui nomme ces sujets, ou
@@ -155,6 +171,29 @@ export type SeparatedRoomsResolver = {
     subjects: readonly (string | null | undefined)[],
     options?: { readonly keep?: string | null; readonly cached?: boolean },
   ): Promise<readonly string[] | null>;
+
+  /**
+   * **LA MÊME LECTURE, RENDUE PAR LECTEUR** (#20711) — « de quels sujets ce
+   * compte-là est-il séparé ? », et non « qui faut-il taire ? ».
+   *
+   * `roomsAround` suffit quand la réponse est une EXCLUSION : le lecteur séparé
+   * ne reçoit rien. Elle ne suffit pas quand le sujet n'est qu'un COMPAGNON de
+   * la charge — la source republiée, l'aperçu des commentaires : le lecteur a
+   * droit au post, et seul le compagnon se tait. Il faut alors savoir LEQUEL,
+   * sans quoi un lecteur séparé d'UN commentateur perdrait l'aperçu entier.
+   *
+   * Même coût, et c'est le point : **deux lectures, quel que soit le nombre de
+   * sujets** — le sens « qui a bloqué un sujet » projette en plus la colonne
+   * `blockedUserIds` qu'il filtrait déjà, et le sens inverse la projetait déjà.
+   *
+   * `null` ⇒ la séparation n'a pas pu être lue, et l'appelant se tait (voir
+   * § FERMÉ). Une carte VIDE veut dire « personne n'est séparé », ce qui n'est
+   * pas `null`.
+   */
+  pairsAround(
+    subjects: readonly (string | null | undefined)[],
+    options?: { readonly cached?: boolean },
+  ): Promise<SeparationPairs | null>;
 };
 
 const normalize = (subjects: readonly (string | null | undefined)[]): string[] =>
@@ -187,50 +226,96 @@ export function createSeparatedRoomsResolver(deps: {
   const ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
   const now = deps.now ?? Date.now;
 
-  /** Les DEUX sens, pour TOUS les sujets, en deux lectures — jamais deux par sujet. */
-  const read = async (subjects: string[]): Promise<readonly string[]> => {
+  /**
+   * Les DEUX sens, pour TOUS les sujets, en deux lectures — jamais deux par
+   * sujet. Rendu PAR LECTEUR : `roomsAround` n'a plus qu'à en prendre les clés,
+   * et `pairsAround` la carte entière. Une seule lecture pour deux questions,
+   * donc une seule chose à garder juste.
+   */
+  const read = async (subjects: string[]): Promise<SeparationPairs> => {
+    const wanted = new Set(subjects);
     const [blockers, rows] = await Promise.all([
-      deps.prisma.user.findMany({ where: { blockedUserIds: { hasSome: subjects } }, select: { id: true } }),
-      deps.prisma.user.findMany({ where: { id: { in: subjects } }, select: { blockedUserIds: true } }),
+      deps.prisma.user.findMany({
+        where: { blockedUserIds: { hasSome: subjects } },
+        select: { id: true, blockedUserIds: true },
+      }),
+      deps.prisma.user.findMany({ where: { id: { in: subjects } }, select: { id: true, blockedUserIds: true } }),
     ]);
-    const related = new Set<string>();
-    for (const row of blockers) related.add(row.id);
-    for (const row of rows) for (const id of (row.blockedUserIds ?? []) as string[]) related.add(id);
-    return [...related];
+    const pairs = new Map<string, Set<string>>();
+    const link = (reader: string, subject: string) => {
+      const held = pairs.get(reader) ?? new Set<string>();
+      held.add(subject);
+      pairs.set(reader, held);
+    };
+    /* Sens « ce compte a bloqué un sujet » : les sujets qu'il a bloqués sont
+       l'INTERSECTION de sa liste avec ceux qu'on interroge — sa liste entière
+       nommerait des comptes dont cette diffusion ne parle pas.
+
+       **Le `where` PROUVE déjà la relation ; la colonne n'en donne que le
+       détail.** `hasSome` garantit que cette ligne a bloqué AU MOINS un sujet,
+       quoi que la projection rende. Une intersection vide est donc le signe
+       d'une colonne manquante, jamais d'une absence de blocage : on retombe
+       alors sur TOUS les sujets interrogés — fail-closed, et `roomsAround`
+       (qui ne lit que les CLÉS) rend la même réponse dans les deux cas. */
+    for (const row of blockers) {
+      const held = ((row.blockedUserIds ?? []) as string[]).filter((id) => wanted.has(id));
+      for (const id of held.length > 0 ? held : subjects) link(row.id, id);
+    }
+    /* Sens « un sujet a bloqué ce compte » : le sujet est la LIGNE, le lecteur
+       est dans sa liste. */
+    for (const row of rows) {
+      for (const id of (row.blockedUserIds ?? []) as string[]) link(id, row.id);
+    }
+    return new Map([...pairs].map(([reader, held]) => [reader, [...held]]));
+  };
+
+  /**
+   * La lecture, le cache et sa fermeture — partagés par les DEUX questions.
+   *
+   * `cached: false` : un ensemble de sujets qui CHANGE à chaque événement a des
+   * clés à usage unique : le cacher ne rend jamais un hit, et il pousse les
+   * entrées des appelants STABLES vers la sortie, dont les sept diffusions de
+   * CONTENU pour lesquelles ce cache a été écrit (#20337, audit adversarial).
+   * Mesuré : trois réactions sur le même commentaire rendaient six lectures et
+   * aucun hit. La pression coûte UNE entrée par insertion et non les 512
+   * (#20415, {@link evictForInsert}) — raison d'évincer plutôt que de vider,
+   * jamais raison de revenir sur un `cached: false`. C'est ce que
+   * `SocialEmissionCore.companionSeparation` pose, ses sujets faisant une clé
+   * par publication (#20711).
+   */
+  const resolve = async (ids: string[], useCache: boolean): Promise<SeparationPairs | null> => {
+    const key = ids.join('\u0000');
+    const at = now();
+    if (useCache) {
+      const cached = cache.get(key);
+      if (cached !== undefined && cached.expiresAt > at) return cached.pairs;
+    }
+    try {
+      const pairs = await read(ids);
+      if (useCache) {
+        evictForInsert(at);
+        cache.set(key, { expiresAt: at + ttlMs, subjects: ids, pairs });
+      }
+      return pairs;
+    } catch (error) {
+      logger.error('diffusion — lecture des blocages impossible, émission abandonnée', { subjects: ids.length, error });
+      return null;
+    }
   };
 
   return {
     async roomsAround(subjects, options) {
       const ids = normalize(subjects);
       if (ids.length === 0) return [];
-      const key = ids.join('\u0000');
-      const at = now();
-      const served = (related: readonly string[]): readonly string[] =>
-        related.filter((id) => id !== options?.keep).map((id) => ROOMS.user(id));
-      /* `cached: false` — un ensemble de sujets qui CHANGE à chaque événement a
-         des clés à usage unique : le cacher ne rend jamais un hit, et il pousse
-         les entrées des appelants STABLES vers la sortie, dont les sept
-         diffusions de CONTENU pour lesquelles ce cache a été écrit (#20337,
-         audit adversarial). Mesuré : trois réactions sur le même commentaire
-         rendaient six lectures et aucun hit. La pression coûte désormais UNE
-         entrée par insertion et non les 512 (#20415) — raison d'évincer plutôt
-         que de vider, jamais raison de revenir sur ce `cached: false`. */
-      const useCache = options?.cached !== false;
-      if (useCache) {
-        const cached = cache.get(key);
-        if (cached !== undefined && cached.expiresAt > at) return served(cached.ids);
-      }
-      try {
-        const related = await read(ids);
-        if (useCache) {
-          evictForInsert(at);
-          cache.set(key, { expiresAt: at + ttlMs, subjects: ids, ids: related });
-        }
-        return served(related);
-      } catch (error) {
-        logger.error('diffusion — lecture des blocages impossible, émission abandonnée', { subjects: ids.length, error });
-        return null;
-      }
+      const pairs = await resolve(ids, options?.cached !== false);
+      if (pairs === null) return null;
+      return [...pairs.keys()].filter((id) => id !== options?.keep).map((id) => ROOMS.user(id));
+    },
+
+    async pairsAround(subjects, options) {
+      const ids = normalize(subjects);
+      if (ids.length === 0) return new Map();
+      return resolve(ids, options?.cached !== false);
     },
   };
 }
