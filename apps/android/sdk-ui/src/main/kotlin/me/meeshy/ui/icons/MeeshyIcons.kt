@@ -7,6 +7,9 @@ import androidx.compose.material.icons.automirrored.filled.Article as AfArticle
 import androidx.compose.material.icons.automirrored.filled.Backspace as AfBackspace
 import androidx.compose.material.icons.automirrored.filled.CallMade as AfCallMade
 import androidx.compose.material.icons.automirrored.filled.Chat as AfChat
+import androidx.compose.material.icons.automirrored.filled.DirectionsBike as AfDirectionsBike
+import androidx.compose.material.icons.automirrored.filled.DirectionsRun as AfDirectionsRun
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk as AfDirectionsWalk
 import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft as AfFormatAlignLeft
 import androidx.compose.material.icons.automirrored.filled.Forward as AfForward
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft as AfKeyboardArrowLeft
@@ -77,6 +80,7 @@ import androidx.compose.material.icons.filled.Description as FiDescription
 import androidx.compose.material.icons.filled.Devices as FiDevices
 import androidx.compose.material.icons.filled.Diamond as FiDiamond
 import androidx.compose.material.icons.filled.Directions as FiDirections
+import androidx.compose.material.icons.filled.DirectionsCar as FiDirectionsCar
 import androidx.compose.material.icons.filled.Done as FiDone
 import androidx.compose.material.icons.filled.DoneAll as FiDoneAll
 import androidx.compose.material.icons.filled.Download as FiDownload
@@ -336,6 +340,7 @@ public object MeeshyIcons {
     public val ChevronBackward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowLeft
     public val ChevronForward: ImageVector get() = Icons.AutoMirrored.Filled.AfKeyboardArrowRight
     public val Computer: ImageVector get() = Icons.Filled.FiComputer
+    public val Cycling: ImageVector get() = Icons.AutoMirrored.Filled.AfDirectionsBike
     public val Dictionary: ImageVector get() = Icons.AutoMirrored.Filled.AfMenuBook
     public val Forward: ImageVector get() = Icons.AutoMirrored.Filled.AfArrowForward
     public val ForwardMessage: ImageVector get() = Icons.AutoMirrored.Filled.AfForward
@@ -343,6 +348,8 @@ public object MeeshyIcons {
     public val ListChecklist: ImageVector get() = Icons.AutoMirrored.Filled.AfListAlt
     public val MessageFilled: ImageVector get() = Icons.AutoMirrored.Filled.AfMessage
     public val Notes: ImageVector get() = Icons.AutoMirrored.Filled.AfNotes
+    public val Running: ImageVector get() = Icons.AutoMirrored.Filled.AfDirectionsRun
+    public val Walking: ImageVector get() = Icons.AutoMirrored.Filled.AfDirectionsWalk
     public val OpenExternal: ImageVector get() = Icons.AutoMirrored.Filled.AfOpenInNew
     public val PhoneAndroid: ImageVector get() = Icons.Filled.FiPhoneAndroid
     public val QueueMusic: ImageVector get() = Icons.AutoMirrored.Filled.AfQueueMusic
@@ -419,6 +426,7 @@ public object MeeshyIcons {
     public val Diamond: ImageVector get() = Icons.Outlined.OuDiamond
     public val DiamondFilled: ImageVector get() = Icons.Filled.FiDiamond
     public val Directions: ImageVector get() = Icons.Filled.FiDirections
+    public val CarFilled: ImageVector get() = Icons.Filled.FiDirectionsCar
     public val Document: ImageVector get() = Icons.Filled.FiDescription
     public val Done: ImageVector get() = Icons.Filled.FiDone
     public val DoneAll: ImageVector get() = Icons.Filled.FiDoneAll

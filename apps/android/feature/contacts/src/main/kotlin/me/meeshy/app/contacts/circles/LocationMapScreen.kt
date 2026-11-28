@@ -209,6 +209,7 @@ private fun SharedTransitionScope.MapStage(
             pins.map { (at[it.userId] ?: it.point) to it }
         }
         val byPoint = remember(placed) { placed.toMap() }
+        val now = rememberNowMillis()
         TileMapView(
             center = center,
             zoom = zoom,
@@ -222,6 +223,7 @@ private fun SharedTransitionScope.MapStage(
                     PersonPin(
                         pin = pin,
                         zoom = zoom,
+                        nowMillis = now,
                         isSelected = pin.userId == selectedId,
                         travels = pin.userId == focusUserId,
                         arrived = arrived,
@@ -253,6 +255,7 @@ private fun SharedTransitionScope.MapStage(
 private fun SharedTransitionScope.PersonPin(
     pin: SharedLocationPin,
     zoom: Int,
+    nowMillis: Long,
     isSelected: Boolean,
     travels: Boolean,
     arrived: Boolean,
@@ -268,13 +271,15 @@ private fun SharedTransitionScope.PersonPin(
         SharedLocationPrecision.NEIGHBORHOOD -> MeeshyMapPinPrecision.Area(radiusDp)
         SharedLocationPrecision.CITY -> MeeshyMapPinPrecision.Wide(radiusDp)
     }
+    val motion = pin.drawnMotion(nowMillis)
     MeeshyMapPin(
-        label = pinLabel(pin),
+        label = pinLabel(pin, nowMillis),
         modifier = modifier,
         tint = tint,
         precision = precision,
         isSelected = isSelected,
         onPress = onPress,
+        badge = if (motion != null) { { LocationMotionBadge(motion) } } else null,
     ) {
         if (travels) {
             AnimatedVisibility(visible = arrived, enter = EnterTransition.None, exit = ExitTransition.None) {
