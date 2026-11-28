@@ -139,6 +139,14 @@ class CallStatValueTest {
         }
     }
 
+    @Test
+    fun `a remote rtt of zero is a measure and ends the fallback`() {
+        val stats = CallStats.reduce(
+            listOf(electedPair(emptyMap()), remoteInbound("RA", "audio", 0.0), remoteInbound("RB", "audio", 0.2)),
+        )
+        assertThat(stats.roundTripTimeMs).isEqualTo(0.0)
+    }
+
     // --- reduce : gigue -----------------------------------------------------
 
     @Test

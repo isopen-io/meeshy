@@ -623,6 +623,16 @@ final class CallStatsEstimateAndRemoteRttTests: XCTestCase {
         }
     }
 
+    func test_reduce_remoteRttOfZero_isAMeasureAndEndsTheFallback() {
+        let stats = CallStats.reduce(entries: [
+            elected(),
+            remoteInbound("RA", kind: "audio", rtt: 0),
+            remoteInbound("RB", kind: "audio", rtt: 0.2)
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 0)
+    }
+
     func test_rawProjection_readsTheRemoteInboundRoundTripTime() {
         let entry = CallStats.RawEntry(id: "RA", type: "remote-inbound-rtp",
                                        raw: ["kind": "audio" as NSString, "roundTripTime": NSNumber(value: 0.12)])

@@ -271,5 +271,10 @@ describe('une estimation hors bornes et un RTT absent de la paire se lisent comm
   test('un RTT du pair non fini ou négatif est sauté au profit du suivant', () => {
     expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: Number.NaN }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
     expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: -1 }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: Number.POSITIVE_INFINITY }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
+  });
+
+  test('un RTT du pair à 0 est une mesure : il arrête le repli, comme sur iOS et Android', () => {
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0 }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBe(0);
   });
 });
