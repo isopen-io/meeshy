@@ -25,6 +25,14 @@ declare module 'bun:test' {
    * `tsc` refuse — l'écart que ce fichier existe pour fermer.
    */
   export function test(name: string, body: () => void | Promise<void>, timeoutMs?: number): void;
+  export namespace test {
+    /**
+     * `test.skipIf` (#20748) — saute le témoin quand `condition` est vraie,
+     * employé par `timezone-isolation.test.ts` pour ne pas se rejouer à
+     * l'infini sous le fuseau de sonde qu'il lance lui-même (#20729).
+     */
+    function skipIf(condition: boolean): (name: string, body: () => void | Promise<void>, timeoutMs?: number) => void;
+  }
   /**
    * `describe.each` (#7142) — le même corps de témoins rejoué sur une TABLE de
    * cas, le nom recevant les valeurs par `%s`.
