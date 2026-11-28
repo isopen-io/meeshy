@@ -209,10 +209,33 @@ ce lot, et les deux sont réparés :
 
 Les dix-sept autres sont les six suites de conversion d'image (HEIF, AVIF,
 EXIF/rotation JPEG) : **mesurées rouges sur l'arbre SANS ce lot** (`git stash`,
-11 rouges sur les deux suites rejouées). Elles dépendent des codecs compilés
-dans `sharp`, absents de ce conteneur — la CI compile les siens. Confronté à
-l'ARBRE avant d'être attribué à quoi que ce soit, comme le `CLAUDE.md` racine le
-prescrit pour cette classe de rouge.
+11 rouges sur les deux suites rejouées). Confrontées à l'ARBRE avant d'être
+attribuées à quoi que ce soit, comme le `CLAUDE.md` racine le prescrit pour
+cette classe de rouge.
+
+**Et la CAUSE a été nommée pendant ce cycle, par un autre lot, mieux que ce
+journal ne l'avait écrite.** Il disait « elles dépendent des codecs compilés dans
+`sharp` » — faux sur le mécanisme. `dev` a reçu dans la même journée la ligne qui
+dit vrai (`CLAUDE.md` racine, § « Local Test Parity ») : **ce ne sont pas des
+artefacts, ce sont des BINAIRES SYSTÈME absents.** La CI installe `ffmpeg`,
+`jpegtran`, `avifenc` et `heif-convert` ; les conteneurs de session n'ont que le
+premier. Vérifié ici :
+
+```
+heif-convert   ABSENT
+avifenc        ABSENT
+jpegtran       ABSENT
+ffmpeg         présent
+```
+
+> **Un rouge reproductible sur `dev` nu n'accuse pas un lot — mais il n'accuse
+> pas forcément l'ARBRE non plus.** La règle qu'on applique d'abord envoie
+> vérifier les artefacts ; quand ils sont tous à jour, la question suivante est
+> **« qu'est-ce que la CI INSTALLE que je n'ai pas ? »**, et elle se répond dans
+> le workflow, jamais dans le dépôt. Ce journal avait la bonne CONCLUSION
+> (« pas ce lot », mesurée par `git stash`) et le mauvais MÉCANISME — et une
+> conclusion juste pour une raison fausse envoie le cycle suivant chercher au
+> mauvais endroit.
 
 **Deux des dix mutations étaient VERTES avant la seconde passe**, dont l'une est
 un fail-open. C'est la mesure la plus utile du cycle, et c'est la deuxième fois
