@@ -47,6 +47,7 @@ function table(rows: Row[]) {
     findMany: jest.fn(async (args?: { where?: Record<string, unknown> }) =>
       state.rows.filter((row) => matches(row, args?.where))),
     updateMany: jest.fn(async () => ({ count: 0 })),
+    findRaw: jest.fn(async () => []),
     findUnique: jest.fn(async () => null),
     count: jest.fn(async () => 0),
     deleteMany: jest.fn(async (args?: { where?: Record<string, unknown> }) => {
