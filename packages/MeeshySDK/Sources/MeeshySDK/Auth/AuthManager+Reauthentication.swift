@@ -35,10 +35,12 @@ extension AuthManager {
     ///
     /// `generation` est celle de la session sous laquelle la requête refusée
     /// est partie (`sessionGeneration` lue AVANT l'appel).
-    func requireReauthentication(userId: String, generation: UInt64) {
+    /// `false` : le refus ne visait pas la session ouverte, rien n'a changé.
+    @discardableResult
+    func requireReauthentication(userId: String, generation: UInt64) -> Bool {
         // #10482 — un compte que la passerelle a dit supprimé n'est pas une
         // session à rouvrir : son retrait la démonte, sans inviter à se reconnecter.
-        guard !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
+        guard !AccountDeletedSignal.isAwaitingRetirement(userId) else { return false }
         guard Self.reauthenticationApplies(
             refusedUserId: userId,
             refusedGeneration: generation,
@@ -47,7 +49,7 @@ extension AuthManager {
             isLeavingActiveSession: isLeavingActiveSession
         ) else {
             Logger.auth.info("Authentication refusal ignored: it belongs to a session that is being left or was replaced")
-            return
+            return false
         }
         // startup-03 — signal AVANT tout flip pour que le hook outbox
         // (DependencyContainer) distingue une session invalidée par le
@@ -69,5 +71,16 @@ extension AuthManager {
         isAuthenticated = false
         APIClient.shared.authToken = nil
         APIClient.shared.registeredSessionToken = nil
+        // Hors `leaveActiveSession` : même purge de ce qui n'a pas de propriétaire.
+        dropPendingProfile(of: userId)
+        UnownedSessionPurge.shared.dropStores()
+        UnownedSessionPurge.shared.scheduleQueueDrop()
+        return true
+    }
+
+    /// U3 — l'édition optimiste en attente ne passe pas au compte suivant.
+    func dropPendingProfile(of userId: String) {
+        pendingOptimisticProfile = nil
+        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
     }
 }

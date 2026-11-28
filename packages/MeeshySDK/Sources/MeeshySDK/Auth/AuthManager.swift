@@ -457,8 +457,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
         guard let userId = activeUserId, !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
         Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
+        guard requireReauthentication(userId: userId, generation: sessionGeneration) else { return }
         sessionRevocationNotice = SessionRevocationNotice(reason: reason)
-        requireReauthentication(userId: userId, generation: sessionGeneration)
     }
 
     /// L'utilisateur a lu l'avis de fermeture.

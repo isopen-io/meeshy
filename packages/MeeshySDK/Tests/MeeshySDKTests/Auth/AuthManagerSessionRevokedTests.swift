@@ -59,6 +59,8 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
         AuthManager.shared.isAuthenticated = originalIsAuthenticated
         APIClient.shared.authToken = originalAuthToken
         AuthManager.shared.acknowledgeSessionRevocationNotice()
+        await UnownedSessionPurge.shared.settle()
+        await SettingsActionQueue.shared.clearAll()
         try await super.tearDown()
     }
 
@@ -123,6 +125,68 @@ final class AuthManagerSessionRevokedTests: XCTestCase {
             "`/auth/refresh` rend un JWT neuf sans vérifier la session : le rafraîchir ici prolongerait de 24 h " +
             "la session que le serveur vient de révoquer"
         )
+    }
+
+    // MARK: - Ce que la session fermée laisse à la suivante
+
+    /// La file des réglages persiste endpoint et corps sans nom de compte, et
+    /// son rejeu part sous le jeton du moment : laissée là, le `PATCH` du
+    /// compte fermé s'appliquerait au compte ouvert ensuite.
+    func test_handleSessionRevoked_dropsTheQueuedSettingsActions() async throws {
+        await SettingsActionQueue.shared.clearAll()
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+        await SettingsActionQueue.shared.enqueue(
+            SettingsAction(
+                endpoint: APIClient.shared.legacyPath(for: UsersEndpoint.me),
+                httpMethod: "PATCH",
+                payload: Data(#"{"displayName":"Compte fermé"}"#.utf8)
+            )
+        )
+        let seeded = await SettingsActionQueue.shared.count
+        XCTAssertEqual(seeded, 1, "précondition : une mutation de réglages en attente")
+
+        AuthManager.shared.handleSessionRevoked()
+        await UnownedSessionPurge.shared.settle()
+
+        let remaining = await SettingsActionQueue.shared.count
+        XCTAssertEqual(remaining, 0, "la file du compte fermé ne se rejoue sous aucun autre compte")
+    }
+
+    /// L'édition optimiste du profil fermé ne se pose pas sur le profil du
+    /// compte qui se connecte ensuite.
+    func test_handleSessionRevoked_thenAnotherAccountSignsIn_keepsItsOwnProfile() throws {
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+        AuthManager.shared.pendingOptimisticProfile = ProfileSnapshot(
+            displayName: "Compte fermé", bio: "bio du compte fermé", avatarUrl: nil)
+
+        AuthManager.shared.handleSessionRevoked()
+
+        XCTAssertNil(AuthManager.shared.pendingOptimisticProfile)
+        let other = MeeshyUser(
+            id: "user-suivant", username: "suivant", email: "suivant@test.com",
+            displayName: "Compte suivant",
+            role: "USER", systemLanguage: "fr",
+            createdAt: "2024-01-01T00:00:00.000Z",
+            updatedAt: "2024-01-01T00:00:00.000Z"
+        )
+        try AuthManager.shared.applySession(token: "tok-next", sessionToken: "sess-next", user: other)
+        XCTAssertEqual(AuthManager.shared.currentUser?.displayName, "Compte suivant")
+        AuthManager.shared.handleSessionRevoked()
+    }
+
+    /// Un refus ignoré (sortie de session en cours) ne ferme rien : aucun avis
+    /// de fermeture ne s'affiche devant une session restée ouverte.
+    func test_handleSessionRevoked_whileLeavingTheSession_setsNoNotice() throws {
+        try AuthManager.shared.applySession(token: "tok-live", sessionToken: "sess-live", user: makeUser())
+        AuthManager.shared.acknowledgeSessionRevocationNotice()
+        AuthManager.shared.activeSessionExits += 1
+
+        AuthManager.shared.handleSessionRevoked(reason: .adminRevoke)
+        AuthManager.shared.activeSessionExits -= 1
+
+        XCTAssertTrue(AuthManager.shared.isAuthenticated, "le refus ne visait pas cette session")
+        XCTAssertNil(AuthManager.shared.sessionRevocationNotice)
+        AuthManager.shared.handleSessionRevoked()
     }
 
     // MARK: - Aucune session

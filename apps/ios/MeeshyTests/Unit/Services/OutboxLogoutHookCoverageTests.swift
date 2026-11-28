@@ -165,6 +165,9 @@ final class OutboxLogoutHookCoverageTests: XCTestCase {
             // #8286 — la sortie de session (déconnexion ET changement de compte)
             // vit dans l'extension `leaveActiveSession(endingIt:)`.
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift"),
+            // #20760 — la purge de ce qui ne porte pas le nom du compte, commune
+            // à toute sortie de session, session fermée par le serveur comprise.
+            racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Auth/UnownedSessionPurge.swift"),
             racine.appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift"),
         ]
         let texteDesCablages = try cablages.map { try String(contentsOf: $0, encoding: .utf8) }.joined(separator: "\n")

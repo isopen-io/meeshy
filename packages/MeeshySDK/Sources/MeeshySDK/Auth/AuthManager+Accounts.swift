@@ -119,6 +119,7 @@ extension AuthManager {
         // #10482 — le compte touché pendant le retrait du compte actif est
         // ouvert une fois le retrait fini, jamais démonté par lui.
         guard await awaitActiveAccountRetirementEnd() else { return false }
+        await UnownedSessionPurge.shared.settle()
         guard !isSwitchingAccount else { return false }
         guard hasPreservedSession(for: userId) else { return false }
         isSwitchingAccount = true
@@ -236,28 +237,14 @@ extension AuthManager {
         NotificationCoordinator.shared.reset(purgingDeliveredNotifications: SessionExitNotificationPolicy.purgesDelivered(endingIt: endingIt, retiringActiveAccount: isRetiringActiveAccount))
         NotificationToastManager.shared.reset()
         PushNotificationManager.shared.resetSession()
-        await BlockService.shared.reset()
-        StoryService.shared.reset()
-        // E9 — le brouillon de story et la queue de publication appartiennent
-        // au compte sortant : le compte suivant ne doit ni les voir, ni les
-        // publier sous sa session.
-        StoryDraftStore.shared.clear()
-        await StoryPublishQueue.shared.clearAll()
-        await ConversationStore.shared.reset()
-        await UserCategoryStore.shared.reset()
-        UserPreferencesManager.shared.resetSession()
-        FriendshipCache.shared.clear()
-        // A5 — le curseur de séquence est per-user.
-        Task { await SyncSeqTracker.shared.reset() }
+        dropPendingProfile(of: userId)
+        UnownedSessionPurge.shared.dropStores()
+        await UnownedSessionPurge.shared.dropQueues()
 
         if endingIt {
             [tokenKey(for: userId), sessionTokenKey(for: userId), userKey(for: userId), tokenDateUDKey(for: userId)]
                 .forEach { keychain.delete(forKey: $0, account: nil) }
         }
-        // La file des réglages vient d'être vidée : une édition optimiste en
-        // attente ne sera jamais confirmée, sa garde ne doit pas survivre.
-        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
-
         activeUserId = nil
         currentUser = nil
         APIClient.shared.authToken = nil

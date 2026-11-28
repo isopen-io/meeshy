@@ -195,7 +195,7 @@
     "apps/ios/MeeshyNotificationExtension/NSEMessagePrePersister.swift::NSEMessagePrePersister.prePersist": 105,
     "apps/ios/MeeshyNotificationExtension/NotificationService.swift::NotificationService.applyCommunicationIntent": 143,
     "packages/MeeshySDK/Sources/MeeshySDK/Audio/AudioEditEngine.swift::AudioEditEngine.render": 99,
-    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift::AuthManager.leaveActiveSession": 96,
+    "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager+Accounts.swift::AuthManager.leaveActiveSession": 82,
     "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift::AuthManager.applySession": 90,
     "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift::AuthManager.refreshSession": 83,
     "packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift::MeeshyUser.init": 81,
