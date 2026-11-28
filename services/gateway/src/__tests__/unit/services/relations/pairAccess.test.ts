@@ -200,7 +200,7 @@ describe('pairAccessAmong — un compte inutilisable n\'ouvre rien (#20679)', ()
 
   it('une feature à consentement reste fermée même accordée, et la raison ne dit pas pourquoi (ni blocage ni départ)', async () => {
     const verdicts = await pairAccessAmong(db(sangs()), { feature: 'location.temporary', subjectId: SANG, otherIds: hors, subjectIs: 'target', consentOf: () => 'granted' });
-    expect([...verdicts.values()].map((v) => [v.allowed, v.reason])).toEqual([[false, 'level'], [false, 'level'], [false, 'level']]);
+    expect([...verdicts.values()].map((v) => [v.allowed, v.reason, v.requiresConsent])).toEqual([[false, 'level', false], [false, 'level', false], [false, 'level', false]]);
   });
 
   it('une ligne de compte absente ferme aussi', async () => {

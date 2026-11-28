@@ -176,6 +176,13 @@ describe('le fantôme — indétectable', () => {
     expect(fantome).toEqual({ kind: 'ok', items: [] });
   });
 
+  it('un fantôme ciblé se pose même vers un Sang désactivé : il le retrouvera à son retour (#20679)', async () => {
+    const w = bloodWorldAvecConsentements({
+      users: [MOI, SANG, AUTRE_SANG, PROCHE, AMI].map((id) => ({ id, birthDate: ADULT_BIRTH, ...(id === MOI ? { isActive: false, deactivatedAt: new Date('2026-11-01T00:00:00.000Z') } : {}) })),
+    });
+    await expect(updateBloodLocationSettings(w.deps, SANG, { ghost: true, userId: MOI })).resolves.toEqual({ ok: true });
+  });
+
   it('ciblé : un seul lecteur est masqué, et la période reste cachée même après la levée', async () => {
     process.env.SECRETS_AT_REST_KEY = KEY;
     const w = bloodWorldAvecConsentements({});

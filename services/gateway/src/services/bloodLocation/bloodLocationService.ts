@@ -197,11 +197,13 @@ export const clampRadius = (meters: number): number => Math.min(BLOOD_PROXIMITY_
 /**
  * La loi ouvrirait-elle la position du Sang entre les deux, consentement mis à part ? Un réglage
  * pour un inconnu, un compte inexistant ou un Proche n'a pas lieu d'être : il ne crée aucune ligne.
+ * Le lien seul décide (`link-only`, #20679) : un fantôme ou un rayon posé vers un Sang parti
+ * l'attend à son retour, au lieu d'être refusé.
  */
 async function locationMayOpenWith(deps: BloodLocationDeps, ownerId: string, otherId: string): Promise<boolean> {
   const verdicts = await Promise.all(
     (['location.history', 'location.proximity'] as const).map((feature) =>
-      pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: [otherId], subjectIs: 'target', now: new Date(deps.now()), consentOf: () => 'granted' }),
+      pairAccessAmong(deps.prisma, { feature, subjectId: ownerId, otherIds: [otherId], subjectIs: 'target', now: new Date(deps.now()), consentOf: () => 'granted', accountState: 'link-only' }),
     ),
   );
   return verdicts.some((verdict) => verdict.get(otherId)?.allowed === true);

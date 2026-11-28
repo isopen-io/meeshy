@@ -65,6 +65,21 @@ const demandeEnAttente = (overrides: Row = {}): Row[] => [
 ];
 
 describe('decideDirectOpening — direct dès Connaissance, demande en dessous (MSG-01)', () => {
+  it.each([
+    ['désactivé', { isActive: false, deactivatedAt: new Date('2026-11-01T00:00:00.000Z') }],
+    ['supprimé en attente de purge', { isActive: false, deletedAt: new Date('2026-11-01T00:00:00.000Z') }],
+  ])('vers un Ami %s, l\'ouverture reste celle du lien : directe, jamais une demande filtrée qui révélerait son départ (#20679)', async (_etat, compte) => {
+    const AMI = '6200000000000000000000a7';
+    const world = monde({ links: [[ALICE, AMI, 'FRIEND']], users: [{ id: AMI, birthDate: ADULT_BIRTH, createdAt: new Date('2025-01-01T00:00:00.000Z'), ...compte }] });
+    await expect(decideDirectOpening(db(world), { senderId: ALICE, recipientId: AMI, now: NOW })).resolves.toEqual({ kind: 'direct' });
+  });
+
+  it('un expéditeur désactivé vers son Ami ouvre aussi en direct (#20679)', async () => {
+    const PARTI = '6200000000000000000000a8';
+    const world = monde({ links: [[PARTI, CONNAISSANCE, 'FRIEND']], users: [{ id: PARTI, birthDate: ADULT_BIRTH, createdAt: new Date('2025-01-01T00:00:00.000Z'), isActive: false, deactivatedAt: new Date('2026-11-01T00:00:00.000Z') }] });
+    await expect(decideDirectOpening(db(world), { senderId: PARTI, recipientId: CONNAISSANCE, now: NOW })).resolves.toEqual({ kind: 'direct' });
+  });
+
   it('une Connaissance écrit directement', async () => {
     await expect(decideDirectOpening(db(monde()), { senderId: ALICE, recipientId: CONNAISSANCE, now: NOW })).resolves.toEqual({ kind: 'direct' });
   });

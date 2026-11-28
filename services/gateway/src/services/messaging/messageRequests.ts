@@ -121,7 +121,10 @@ export async function decideOpenings(
   const now = params.now ?? new Date();
   const ids = [...new Set(params.recipientIds)].filter((id) => id && id !== params.senderId);
   if (ids.length === 0) return new Map();
-  const among = { subjectId: params.senderId, otherIds: ids, subjectIs: 'viewer' as const, now };
+  // `link-only` (#20679) : l'ouverture se décide sur le lien. Fermer pour un compte parti rangerait le
+  // tête-à-tête d'un Ami en demande filtrée et couperait les médias de l'expéditeur — un état durable
+  // qui révèle le départ et que la restauration ne défait pas. L'état du compte est l'affaire de l'appelant.
+  const among = { subjectId: params.senderId, otherIds: ids, subjectIs: 'viewer' as const, now, accountState: 'link-only' as const };
   const [direct, request, sender, recipients] = await Promise.all([
     pairAccessAmong(prisma, { ...among, feature: 'dm.direct' }),
     pairAccessAmong(prisma, { ...among, feature: 'dm.request' }),
@@ -299,7 +302,7 @@ export async function acceptMessageRequest(
  * bouclier : seul « Accepter » le fait (#16053, audit C1).
  */
 async function stillContained(prisma: MessageRequestDb, requesterId: string, recipientId: string, now: Date): Promise<boolean> {
-  const verdicts = await pairAccessAmong(prisma, { subjectId: requesterId, otherIds: [recipientId], subjectIs: 'viewer', now, feature: 'dm.request' });
+  const verdicts = await pairAccessAmong(prisma, { subjectId: requesterId, otherIds: [recipientId], subjectIs: 'viewer', now, feature: 'dm.request', accountState: 'link-only' });
   return verdicts.get(recipientId)?.allowed !== true;
 }
 

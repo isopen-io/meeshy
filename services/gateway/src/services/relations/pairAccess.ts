@@ -44,6 +44,13 @@ export type PairAccessAmongParams = {
    * d'un partage) est mineure déclarée. Absent, la loi refuse
    * toute feature à consentement (`reason: 'consent'`).
    */
+  /**
+   * `judged` (défaut) : un compte inutilisable des deux côtés ferme tout (#20679). `link-only` : le
+   * verdict ne lit que le lien — pour une décision qui ÉCRIT un état durable sans rien servir à
+   * l'autre (l'ouverture d'un tête-à-tête, un réglage qui protège), où fermer pour un compte parti
+   * graverait un faux état que la restauration ne défait pas, et que l'expéditeur pourrait lire.
+   */
+  readonly accountState?: 'judged' | 'link-only';
   readonly consentOf?: (otherId: string, effectiveLevel: RelationLevel, ages: { readonly targetMinor: boolean; readonly minorProtected: boolean; readonly realLevel: RelationLevel }) => RelationConsent | undefined;
 };
 
@@ -118,7 +125,7 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
         feature,
       };
       const probe = resolveRelationAccess({ ...input, consent: 'unknown' });
-      if (!people.get(subjectId)?.usable || !people.get(id)?.usable) return [id, unusableVerdict(probe)];
+      if (params.accountState !== 'link-only' && (!people.get(subjectId)?.usable || !people.get(id)?.usable)) return [id, UNUSABLE_VERDICT];
       const consentOf = params.consentOf;
       return [id, !probe.requiresConsent || !consentOf ? probe : resolveRelationAccess({ ...input, consent: consentOf(id, probe.effectiveLevel, { targetMinor: input.targetMinor === 'minor', realLevel: effectiveRelationLevel(input), minorProtected: minorProtectedBetween({ emitterBirthDate: people.get(targetId)?.birthDate, otherBirthDate: people.get(viewerId)?.birthDate, now }) }) })];
     }),
@@ -131,14 +138,10 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
  * (#20679). La suppression demandée par la personne écrit `{ isActive: false, deletedAt }`
  * sans `deactivatedAt` : un juge qui ne lisait que la désactivation laissait la fiche, la
  * position et l'écoute d'un compte parti à ses Sangs pendant toute la grâce. Le verdict
- * dit `level` et `PUBLIC`, comme une paire sans lien : il ne révèle ni un blocage ni un départ.
+ * dit `level`, `PUBLIC` et aucun consentement requis, exactement comme une paire sans lien : il ne
+ * révèle ni un blocage ni un départ.
  */
-const unusableVerdict = (probe: RelationAccess): RelationAccess => ({
-  allowed: false,
-  effectiveLevel: 'PUBLIC',
-  reason: 'level',
-  requiresConsent: probe.requiresConsent,
-});
+const UNUSABLE_VERDICT: RelationAccess = { allowed: false, effectiveLevel: 'PUBLIC', reason: 'level', requiresConsent: false };
 
 /** Le verdict de la loi pour UNE paire : `viewerId` voit ou agit envers `targetId`. */
 export async function pairAccess(
