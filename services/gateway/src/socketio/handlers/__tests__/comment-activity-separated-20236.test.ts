@@ -108,9 +108,15 @@ function fauxIo(emissions: Emission[]) {
 /** Les deux diffusions REST (SocialEventsHandler) et les deux socket (CommentReactionHandler), sous une seule forme. */
 /**
  * `like` et `unlike` passent par le MÊME chemin que la production : la
- * séparation se résout AVANT la mutation (ici : avant l'émission), puis
- * l'émission est SYNCHRONE — c'est ce qui rend à ces deux événements l'ordre
- * que leur charge absolue exige.
+ * séparation se résout AVANT la mutation (ici : avant l'émission).
+ *
+ * **Ce harnais n'atteste AUCUN ordre, et il faut le dire ici parce qu'il a
+ * affirmé le contraire** (« c'est ce qui rend à ces deux événements l'ordre que
+ * leur charge absolue exige ») : une émission synchrone après un `await` ne
+ * garantit pas que deux gestes concurrents arrivent dans l'ordre de leurs
+ * écritures. Lire avant RESSERRE la fenêtre, elle ne se ferme pas, et c'est une
+ * relecture autoritative qui rattrape l'écart (décision du 2026-11-27, #20414). Ce
+ * que ces témoins gardent est l'AUDIENCE — à qui l'activité se tait.
  */
 const like = async (prisma: PrismaClient, io: any, sens: 'liked' | 'unliked'): Promise<void> => {
   const handler = new SocialEventsHandler({ io, prisma });

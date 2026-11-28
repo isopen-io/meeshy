@@ -6,10 +6,21 @@
  * ré-exporte ; aucun de ses appelants ne change.
  */
 
+/**
+ * LA LOI DU PLANCHER — secondes entières à partir d'une durée fractionnaire :
+ * on PLANCHE (`.down`, parité iOS `MediaFormat.duration` défaut `rounding: .down`),
+ * jamais on arrondit, et une valeur non finie ou négative rend `0`. Source UNIQUE
+ * de ce comportement : `formatMediaTime` (l'œil `m:ss`) comme tout parlé `m:ss s`
+ * (l'oreille, p. ex. le minuteur vocal `composer-tray.tsx`) en dérivent, pour que
+ * l'œil et l'oreille d'une même durée ne divergent jamais au passage de la demi-seconde.
+ */
+export function floorMediaSeconds(seconds: number): number {
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : 0;
+}
+
 /** `formatMediaDuration` — `m:ss`, les minutes sans plafond (une heure s'écrit « 60:00 »). Une valeur inconnue rend « 0:00 », jamais « NaN:NaN ». */
 export function formatMediaTime(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
-  const total = Math.floor(seconds);
+  const total = floorMediaSeconds(seconds);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
