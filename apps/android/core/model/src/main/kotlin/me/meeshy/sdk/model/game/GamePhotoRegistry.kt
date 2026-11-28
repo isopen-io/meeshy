@@ -155,7 +155,7 @@ private fun parsePhotoMomentRow(obj: JsonObject): GamePhotoMomentRow {
 }
 
 /** Un rang ou une division inconnus, un compteur négatif la rendent illisible, comme `servedBaseline` du web. */
-private fun parsePhotoBaseline(obj: JsonObject): GamePhotoBaseline = GamePhotoBaseline(
+internal fun parsePhotoBaseline(obj: JsonObject): GamePhotoBaseline = GamePhotoBaseline(
     rank = obj.reqEnum("rank"),
     division = obj.nullableInt("division")?.also { if (it !in 1..5) throw GameParseException("division") },
     levelRecord = obj.reqCount("levelRecord"),
