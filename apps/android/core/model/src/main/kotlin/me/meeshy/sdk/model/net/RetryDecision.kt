@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.net
 
+import me.meeshy.sdk.model.CommunityAdditionBudget
 import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
@@ -23,13 +24,15 @@ public object RetryDecision {
     /**
      * Une limite QUOTIDIENNE de gestes tient jusqu'à `resetAt`, le mode lent des
      * nouveaux comptes et le plafond des personnes choisies sans lien ([OnlyUnlinkedRefusal])
-     * se DISENT à l'auteur : aucun ne se rejoue en silence.
+     * se DISENT à l'auteur : aucun ne se rejoue en silence. Le budget d'ajouts d'une communauté
+     * ([CommunityAdditionBudget], #20664) non plus : son `Retry-After` se compte en minutes.
      */
     public val NEVER_REPLAYED_429_CODES: Set<String> = setOf(
         "DAILY_COMMENT_LIMIT",
         "DAILY_REACTION_LIMIT",
         "NEWCOMER_SLOW_MODE",
         OnlyUnlinkedRefusal.CODE,
+        CommunityAdditionBudget.REFUSAL_CODE,
     )
 
     public fun shouldRetry(

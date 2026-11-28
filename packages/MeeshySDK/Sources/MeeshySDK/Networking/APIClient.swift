@@ -400,6 +400,9 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         statusCode: 429, code: limit.gesture.rawValue, message: message ?? "Limite du jour atteinte",
                         resetAt: limit.resetAt, limit: limit.limit))
                 }
+                if let code = APIRetryPolicy.neverReplayedCode(statusCode: 429, data: data) {
+                    throw MeeshyError.rejected(APIRejection(statusCode: 429, code: code, message: message ?? "Trop de requetes"))
+                }
                 throw MeeshyError.server(statusCode: 429, message: "Trop de requetes")
             default:
                 throw MeeshyError.server(statusCode: statusCode, message: message ?? "Erreur inconnue")

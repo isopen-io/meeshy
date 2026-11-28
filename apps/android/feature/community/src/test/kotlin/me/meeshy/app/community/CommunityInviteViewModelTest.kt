@@ -101,6 +101,32 @@ class CommunityInviteViewModelTest {
     }
 
     @Test
+    fun `the addition budget says try again later and leaves the person invitable`() = runTest {
+        coEvery { repository.invite(any(), any()) } returns NetworkResult.Failure(
+            ApiError("Trop d'ajouts", code = "COMMUNITY_ADDITION_BUDGET_EXCEEDED", httpStatus = 429),
+        )
+        val vm = viewModel()
+
+        vm.invite(user("u1"))
+
+        assertThat(vm.effects.first()).isEqualTo(CommunityInviteEffect.Throttled)
+        assertThat(vm.state.value.invitedIds).isEmpty()
+        assertThat(vm.state.value.recentlyInvited).isEmpty()
+        assertThat(vm.state.value.invitingId).isNull()
+        coVerify(exactly = 0) { cache.refreshMembers(any()) }
+    }
+
+    @Test
+    fun `a 429 without the budget code stays an ordinary failure`() = runTest {
+        coEvery { repository.invite(any(), any()) } returns NetworkResult.Failure(ApiError("Too many", httpStatus = 429))
+        val vm = viewModel()
+
+        vm.invite(user("u1"))
+
+        assertThat(vm.effects.first()).isEqualTo(CommunityInviteEffect.Failed)
+    }
+
+    @Test
     fun `after a refusal the same person can be invited again`() = runTest {
         coEvery { repository.invite("c1", "u1") } returnsMany listOf(
             NetworkResult.Failure(ApiError("503")),

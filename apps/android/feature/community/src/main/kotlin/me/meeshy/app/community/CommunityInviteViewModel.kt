@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.community.CommunityCacheRepository
 import me.meeshy.sdk.community.CommunityRepository
+import me.meeshy.sdk.model.CommunityAdditionBudget
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.UserSearchResult
 import me.meeshy.sdk.session.SessionRepository
@@ -38,6 +40,9 @@ data class CommunityInviteUiState(
 sealed interface CommunityInviteEffect {
     data object Invited : CommunityInviteEffect
     data object Failed : CommunityInviteEffect
+
+    /** Le budget d'ajouts sans accord est atteint (#20664) : « réessayez plus tard », rien n'est relu. */
+    data object Throttled : CommunityInviteEffect
 }
 
 /** Inviter des personnes (iOS `CommunityInviteViewModel`) : recherche différée dès deux caractères, une invitation unitaire par tap. */
@@ -81,7 +86,7 @@ class CommunityInviteViewModel @Inject constructor(
         if (user.id in current.invitedIds || current.invitingId != null) return
         _state.update { it.copy(invitingId = user.id) }
         viewModelScope.launch {
-            when (repository.invite(communityId, user.id)) {
+            when (val outcome = repository.invite(communityId, user.id)) {
                 is NetworkResult.Success -> {
                     _state.update { it.copy(invitingId = null, invitedIds = it.invitedIds + user.id, recentlyInvited = it.recentlyInvited + user) }
                     cache.refreshMembers(communityId)
@@ -89,11 +94,14 @@ class CommunityInviteViewModel @Inject constructor(
                 }
                 is NetworkResult.Failure -> {
                     _state.update { it.copy(invitingId = null) }
-                    _effects.send(CommunityInviteEffect.Failed)
+                    _effects.send(refusalEffect(outcome.error))
                 }
             }
         }
     }
+
+    private fun refusalEffect(error: ApiError): CommunityInviteEffect =
+        if (CommunityAdditionBudget.isThrottled(error.httpStatus, error.code)) CommunityInviteEffect.Throttled else CommunityInviteEffect.Failed
 
     private companion object {
         const val SEARCH_DEBOUNCE_MILLIS = 250L
