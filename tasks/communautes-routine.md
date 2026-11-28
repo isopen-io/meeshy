@@ -966,6 +966,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Mesure structurelle : pour N exclus, ~3N requêtes avant la réponse de `PUT /communities/:id` → 1 + 2·⌈N/500⌉ (10 000 exclus : ~30 000 → 41). Le p95 sur une vraie communauté de 10 000 occupants n'est PAS mesuré (aucune base ici) : suivi #20685.
 - Témoins : `community-salon-exit.test.ts` (+6), `community-salon-adoption.test.ts` (+1, 4 attentes réécrites : une passe au lieu d'une par exclu). Rouge prouvé : 9 + 1 échecs avant le code.
 - Revue adversariale : non bloquante ; corrigé dans le lot — une écriture groupée en échec emportait les créateurs de sa tranche. Restent (faibles) : un avis « X a quitté » possiblement doublé sur un départ concurrent ; les annonces relisent l'effectif par départ (hors réponse HTTP).
+- Fusion : PR #20695 fusionnée dans `dev` le 2026-11-27 à 22:45 UTC (`3752440f2`), branche à jour de `dev` `7e0ba3f7c` ; CI manuelle verte sur `66e6d91` (run 46065351920). En chemin : l'inventaire de la garde de forme Swift gardait `user:preferences-updated`, réparé par #16858 (« Tests · shared » rouge, retiré) ; #20694 a touché `communitySalonAdoption.ts` pendant le lot (fusion propre, un témoin venu de `dev` adapté à la sortie groupée) ; deux pannes de runner hors lot (Chromium absent pour Playwright, Maven Central en 429 pour l'APK), relancées. #16740 fermée ; le p95 reste à #20685.
 
 ## 2026-11-27 — réveil 13:01 UTC (bis, en parallèle du précédent)
 
@@ -1010,4 +1011,22 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : `tsc --noEmit` passerelle exit 0 ; `routes/conversations`, `services/conversations`, `socketio/__tests__`, `src/__tests__/*.test.ts`, `routes/__tests__` : 318 suites, 3 867 tests verts.
 - Témoins : `__tests__/unit/routes/conversations/salon-entry-addition-budget-20703.test.ts` (17, les deux portes ; rouge prouvé : 9 échecs 200 ≠ 429 avant l'implémentation).
 - Revue adversariale (non bloquante) : corrigé dans le lot — un identifiant SANS compte sortait en 404 avant le débit quand un compte désactivé ou bloquant le payait : la différence de débit disait si le compte existait (oracle). Il paie désormais la même unité, sur les deux portes (témoin +2, rouge prouvé). Suivis dans #20740 (même milestone) : invitation dans un appel, débannissement, entrée par lien (à décider), budget non rendu quand l'écriture n'a pas lieu après le débit. Fuite résiduelle connue et partagée avec `POST /communities/:id/invite` : un `throttled` isolé dans un lot laisse deviner qu'une cible est saturée.
+- Prochain lot recommandé : #20740, puis #19813 (décision produit).
+
+## 2026-11-27 — réveil 23:38 UTC
+
+- Début du run : trois PR de la routine attendent une CI en file (19 runs en attente dans le dépôt) : #20741 (#20703, `ci.yml` 46081470662 sans job depuis 23:14), #20682 (Android, `android.yml` vert, `ci.yml` 46078184876 en file), #20743 (journal seul, aucune CI lancée). Rien à y faire de plus ; #20740 touche les chemins de #20741 : non pris.
+- Lot : #20664 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »), iOS et Android — suite client de #20657 (web).
+- Défaut trouvé en plus du critère : les deux transports REJOUAIENT le 429 du budget (iOS `APIRetryPolicy`, Android `RetryDecision`), jusqu'à trois fois après un `Retry-After` plafonné à 30 s — l'auteur attendait jusqu'à une minute pour un refus certain. Et iOS ne disait RIEN d'une invitation refusée (journal seul).
+- SDK iOS : `CommunityAdditionBudget` (code + `isThrottled`) ; `APIRetryPolicy.neverReplayed429Codes` ; le 429 qui porte ce code est levé `MeeshyError.rejected(APIRejection(429, code:))` sur les deux chemins (`APIFailureVerdict`, `stringRequest`), au lieu de `.server(429, "Trop de requetes")`. MeeshyUI : `CommunityInviteNotice` (`.throttled` / `.failed`), ligne sous la recherche de la feuille « Inviter », annoncée à VoiceOver (`AdaptiveAccessibility.announce`, iOS 16 compris). Clés `community.invite.throttled` et `community.invite.failed`, sept langues, mêmes mots que le web.
+- Android : `CommunityAdditionBudget` (`:core:model`) dans `RetryDecision.NEVER_REPLAYED_429_CODES` ; `CommunityInviteEffect.Throttled` → toast `community_invite_throttled` (adoptée du catalogue iOS, manifeste `community.d/invitation-au-dela-du-budget-20664.json`). Un 429 sans le code reste `Failed`. La personne reste invitable, rien n'est relu.
+- Témoins : `APIRequestPipelineTests` (+2), `CommunityAdditionBudgetTests` (3, neuf), `CommunityInviteViewModelTests` iOS (+3, +1 attente) ; `RetryDecisionTest` (+1), `CommunityAdditionBudgetTest` (1, neuf), `CommunityInviteViewModelTest` Android (+2). iOS et Android ne compilent pas en conteneur (`jvm-check` refusé par le proxy sur `build-artifacts.signal.org`) : preuve par la CI de la PR.
+- Gardes locales : `check_house_rules` (42 tenues), `check_cohesion_budget`, `check_test_registration`, accent verts ; `./meeshy.sh i18n --check` vert.
+- Revue adversariale : non lancée — lot client seul, aucune route ni garde serveur touchée ; le transport ne rejoue plus un refus qu'il rejouait, ce qui ne peut que réduire les débits.
+
+## 2026-11-28 — réveil 05:37 UTC
+
+- Début du run : #20741 (#20703) et #20743 (journal) fusionnées dans `dev` (`4904876194`, `92950be45`). #20744 (#20664) seule PR ouverte de la routine, inactive depuis 03:12 : reprise. Aucun nouveau lot ouvert tant qu'elle attend.
+- #20744 : `dev` (`92950be45`) fusionnée dans la branche ; seul conflit, ce journal, résolu à la main en gardant les deux entrées. Les changements de `dev` depuis la tête prouvée `7395c2b20` sont disjoints des fichiers du lot (passerelle appels/salons, stories iOS).
+- Preuve sur `7395c2b20` : `ci.yml` 46101680199, `android.yml` 46101684010, `sdk-tests.yml` 46101686163 verts ; `ios.yml` 46101682003 (voir l'issue #20664 pour le verdict final).
 - Prochain lot recommandé : #20740, puis #19813 (décision produit).

@@ -86,14 +86,15 @@ const postedMetadata = buildCallSummaryMetadata({
   networkQuality: 'good',
 });
 
-function setup(options: { departed: boolean; statsChanged: boolean }) {
+function setup(options: { departed: boolean; statsChanged: boolean; postedAtSummary?: unknown }) {
   const leftAt = options.departed ? new Date(Date.now() - 3_000) : null;
   const getCallSession = jest.fn(async () => ({
     participants: [{ id: 'cp-1', participantId: 'participant-1', leftAt, participant: { userId: USER_ID } }],
   }));
   const persistCallStats = jest.fn(async () => options.statsChanged);
-  const callService = { getCallSession, persistCallStats, recordHeartbeat: jest.fn() } as unknown as CallService;
-  const state = { metadata: postedMetadata as unknown };
+  const state = { metadata: (options.postedAtSummary ?? postedMetadata) as unknown };
+  const createCallSummaryMessage = jest.fn(async () => ({ kind: 'created', message: message() }));
+  const callService = { getCallSession, persistCallStats, createCallSummaryMessage, recordHeartbeat: jest.fn() } as unknown as CallService;
   const message = () => ({
     id: 'message-summary-1',
     conversationId: CONVERSATION_ID,
@@ -105,6 +106,7 @@ function setup(options: { departed: boolean; statsChanged: boolean }) {
   });
   const prisma = {
     callSession: { findUnique: jest.fn(async () => callRow) },
+    conversation: { findUnique: jest.fn(async () => ({ deletedAt: null })) },
     message: {
       findFirst: jest.fn(async () => message()),
       update: jest.fn(async (args: { data: { metadata: unknown } }) => {
@@ -126,15 +128,17 @@ function setup(options: { departed: boolean; statsChanged: boolean }) {
   const handler = new CallEventsHandler(prisma as unknown as PrismaClient, callService);
   const edited = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
   const created = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
+  const measures = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
   handler.setMessageUpdateBroadcaster(edited);
   handler.setMessageBroadcaster(created);
+  handler.setMessageMeasuresBroadcaster(measures);
   handler.setupCallEvents(socket as never, io as never, () => USER_ID);
   const report = (payload: unknown) => {
     const listener = listeners.get(CALL_EVENTS.QUALITY_REPORT);
     if (!listener) throw new Error('quality-report listener missing');
     return listener(payload);
   };
-  return { report, edited, created, prisma };
+  return { report, edited, created, measures, prisma, handler, state };
 }
 
 describe('CallEventsHandler — un relevé tardif rafraîchit la bulle de résumé (#20709)', () => {
@@ -143,12 +147,13 @@ describe('CallEventsHandler — un relevé tardif rafraîchit la bulle de résum
   });
 
   it('édite le résumé et le rediffuse en message:edited quand le relevé tardif a changé une mesure', async () => {
-    const { report, edited, created } = setup({ departed: true, statsChanged: true });
+    const { report, edited, created, measures } = setup({ departed: true, statsChanged: true });
 
     await report(lateReport);
 
-    expect(edited).toHaveBeenCalledTimes(1);
-    const [served, conversationId] = edited.mock.calls[0];
+    expect(edited).not.toHaveBeenCalled();
+    expect(measures).toHaveBeenCalledTimes(1);
+    const [served, conversationId] = measures.mock.calls[0];
     expect(conversationId).toBe(CONVERSATION_ID);
     expect((served as { metadata: Record<string, unknown> }).metadata).toMatchObject({
       kind: 'call',
@@ -159,12 +164,13 @@ describe('CallEventsHandler — un relevé tardif rafraîchit la bulle de résum
   });
 
   it('ne touche pas au résumé quand le relevé tardif n’a rien changé', async () => {
-    const { report, edited, prisma } = setup({ departed: true, statsChanged: false });
+    const { report, edited, measures, prisma } = setup({ departed: true, statsChanged: false });
 
     await report(lateReport);
 
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(edited).not.toHaveBeenCalled();
+    expect(measures).not.toHaveBeenCalled();
   });
 
   it('un relevé d’appel en cours ne relit jamais le résumé', async () => {
@@ -174,5 +180,51 @@ describe('CallEventsHandler — un relevé tardif rafraîchit la bulle de résum
 
     expect(prisma.message.findFirst).not.toHaveBeenCalled();
     expect(edited).not.toHaveBeenCalled();
+  });
+});
+
+describe('CallEventsHandler — un relevé persisté PENDANT la pose du résumé n’est pas perdu (#20747)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('la pose relance le rafraîchissement : la bulle reçoit les mesures persistées entre la lecture et la création', async () => {
+    const { handler, created, measures, prisma } = setup({ departed: true, statsChanged: true });
+
+    await handler.postCallSummaryForTerminatedCall(CALL_ID);
+
+    expect(created).toHaveBeenCalledTimes(1);
+    expect(prisma.message.update).toHaveBeenCalledTimes(1);
+    expect(measures).toHaveBeenCalledTimes(1);
+    expect((measures.mock.calls[0][0] as { metadata: Record<string, unknown> }).metadata).toMatchObject({
+      bytesTotal: 12_000,
+      networkQuality: 'poor',
+    });
+  });
+
+  it('sans écart de mesures, la pose ne réécrit ni ne rediffuse rien de plus', async () => {
+    const fresh = buildCallSummaryMetadata({
+      status: 'ended', endReason: 'completed', callType: 'audio', durationSeconds: 60, callId: CALL_ID,
+      initiatorId: USER_ID, bytesSent: 4_000, bytesReceived: 8_000, networkQuality: 'poor',
+    });
+    const { handler, created, measures, prisma } = setup({ departed: true, statsChanged: true, postedAtSummary: fresh });
+
+    await handler.postCallSummaryForTerminatedCall(CALL_ID);
+
+    expect(created).toHaveBeenCalledTimes(1);
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(measures).not.toHaveBeenCalled();
+  });
+
+  it('un résumé scellé par l’obsolescence ne relance rien', async () => {
+    const { handler, created, measures, prisma } = setup({ departed: true, statsChanged: true });
+    prisma.conversation.findUnique.mockResolvedValue({ deletedAt: new Date('2026-11-27T09:02:00Z') } as never);
+    (prisma.message as unknown as { updateMany: unknown }).updateMany = jest.fn(async () => ({ count: 1 }));
+
+    await handler.postCallSummaryForTerminatedCall(CALL_ID);
+
+    expect(created).not.toHaveBeenCalled();
+    expect(prisma.message.update).not.toHaveBeenCalled();
+    expect(measures).not.toHaveBeenCalled();
   });
 });

@@ -26,10 +26,11 @@ const CONVERSATION_ID = '507f1f77bcf86cd799439011';
 const INITIATOR_USER_ID = '507f1f77bcf86cd799439022';
 
 function wire(overrides: { broadcastMessage?: Broadcaster; broadcastMessageEdited?: Broadcaster; mirrorOnOrigin?: (message: unknown) => Promise<{ conversationId: string; message: unknown } | null> } = {}) {
-  const installed: { created?: Broadcaster; updated?: Broadcaster } = {};
+  const installed: { created?: Broadcaster; updated?: Broadcaster; measures?: Broadcaster } = {};
   const handler = {
     setMessageBroadcaster: (b: Broadcaster) => { installed.created = b; },
     setMessageUpdateBroadcaster: (b: Broadcaster) => { installed.updated = b; },
+    setMessageMeasuresBroadcaster: (b: Broadcaster) => { installed.measures = b; },
   };
   const io = { to: jest.fn() };
   const prisma = {};
@@ -156,5 +157,33 @@ describe('wireCallMessageBroadcasters — la bulle du tête-à-tête d’origine
     await expect(failing.installed.updated!(callMessage(), CONVERSATION_ID)).resolves.toBeUndefined();
     await flush();
     expect(failing.broadcastMessageEdited).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('wireCallMessageBroadcasters — une édition de MESURES ne remonte pas la conversation (#20747)', () => {
+  beforeEach(() => {
+    mockAnnounce.mockReset();
+    mockAnnounce.mockResolvedValue(undefined);
+  });
+
+  it('rediffuse en message:edited, sans annonce d’activité ni miroir d’origine', async () => {
+    const mirrorOnOrigin = jest.fn(async (_message: unknown) => null);
+    const { installed, broadcastMessageEdited } = wire({ mirrorOnOrigin });
+
+    await installed.measures!(callMessage(), CONVERSATION_ID);
+    await flush();
+
+    expect(broadcastMessageEdited).toHaveBeenCalledWith(callMessage(), CONVERSATION_ID);
+    expect(mockAnnounce).not.toHaveBeenCalled();
+    expect(mirrorOnOrigin).not.toHaveBeenCalled();
+  });
+
+  it('la bascule « en cours » → terminal garde son annonce d’activité', async () => {
+    const { installed } = wire({ mirrorOnOrigin: async () => null });
+
+    await installed.updated!(callMessage(), CONVERSATION_ID);
+    await flush();
+
+    expect(mockAnnounce).toHaveBeenCalledTimes(1);
   });
 });

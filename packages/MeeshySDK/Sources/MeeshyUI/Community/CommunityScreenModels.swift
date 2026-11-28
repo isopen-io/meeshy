@@ -64,6 +64,27 @@ public protocol CommunityCreateModeling: ObservableObject {
     func createCommunity() async -> MeeshyCommunity?
 }
 
+/// Ce que la feuille « Inviter » dit après une invitation refusée (#20664,
+/// miroir de `inviteStatusOf` web) : le budget d'ajouts sans accord atteint
+/// (« réessayez plus tard », sans dire qui est saturé), ou une panne ordinaire.
+public enum CommunityInviteNotice: Equatable, Sendable {
+    case throttled
+    case failed
+
+    public var text: String {
+        switch self {
+        case .throttled:
+            String(localized: "community.invite.throttled", defaultValue: "Trop d’ajouts pour l’instant. Réessayez plus tard.", bundle: .module)
+        case .failed:
+            String(localized: "community.invite.failed", defaultValue: "L’invitation a échoué. Réessayez.", bundle: .module)
+        }
+    }
+
+    public static func of(_ error: Error) -> CommunityInviteNotice {
+        CommunityAdditionBudget.isThrottled(error) ? .throttled : .failed
+    }
+}
+
 @MainActor
 public protocol CommunityInviteModeling: ObservableObject {
     var searchText: String { get set }
@@ -72,6 +93,7 @@ public protocol CommunityInviteModeling: ObservableObject {
     var invitedUserIds: Set<String> { get }
     var recentlyInvited: [UserSearchResult] { get }
     var invitingUserId: String? { get }
+    var inviteNotice: CommunityInviteNotice? { get }
 
     func searchUsers() async
     func inviteUser(userId: String) async
