@@ -24,6 +24,8 @@ import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import { newMemberRefusal } from '../../services/conversations/newMemberAdmission';
 import { loadSalonCommunity } from '../../services/conversations/communityMembershipSync';
+import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -292,7 +294,7 @@ export function registerParticipantWriteRoutes(
                       userId: { type: 'string' },
                       outcome: {
                         type: 'string',
-                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found', 'community-forbidden'],
+                        enum: ['new', 'rejoin', 'already-member', 'banned', 'not-found', 'community-forbidden', 'throttled'],
                         description: 'What happened to THIS identifier'
                       },
                       // Produit par `admitOneParticipant`, porté par
@@ -323,6 +325,7 @@ export function registerParticipantWriteRoutes(
         403: errorResponseSchema,
         404: errorResponseSchema,
         410: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -399,6 +402,7 @@ export function registerParticipantWriteRoutes(
         broadcastMessage: (message, target) => socketManager?.broadcastMessage(message as never, target) ?? Promise.resolve(),
         notificationService: fastify.notificationService,
         engagement,
+        communityBudget: (actorId, admission) => spendCommunitySalonAdmission(fastify, actorId, admission),
       };
       const results: ParticipantAdmissionVerdict[] = [];
       for (const userId of demandes.userIds) {
@@ -416,6 +420,7 @@ export function registerParticipantWriteRoutes(
       // forme neuve ; l'ancienne le reçoit en plus, jamais à la place.
       if (demandes.single && results.length === 1) {
         const seul = results[0];
+        if (seul.outcome === 'throttled') return refuseCommunityAddition(reply, seul.retryAfter ?? 0);
         if (seul.outcome === 'not-found') return sendNotFound(reply, 'User not found');
         if (seul.outcome === 'community-forbidden') {
           return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
@@ -428,6 +433,10 @@ export function registerParticipantWriteRoutes(
         }
       }
 
+      // #20703 — le délai ne voyage pas par personne : il est dans l'en-tête,
+      // le plus long du lot, et le verdict ne dit pas quel seau a refusé.
+      const delais = results.flatMap((r) => (r.outcome === 'throttled' ? [r.retryAfter ?? 0] : []));
+      if (delais.length > 0) reply.header('Retry-After', String(Math.max(...delais)));
       const ajoutes = results.filter((r) => r.outcome === 'new' || r.outcome === 'rejoin').length;
       return sendSuccess(reply, {
         message: ajoutes === results.length

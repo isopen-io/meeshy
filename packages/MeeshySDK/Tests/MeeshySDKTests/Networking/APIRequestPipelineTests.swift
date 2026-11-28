@@ -108,6 +108,19 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertFalse(decide(500, 0))
     }
 
+    func test_shouldRetry_communityAdditionBudget_isNeverReplayed() {
+        let budget = Data(#"{"success":false,"error":"Trop d'ajouts","code":"COMMUNITY_ADDITION_BUDGET_EXCEEDED"}"#.utf8)
+        let bare = Data(#"{"success":false,"error":"Too many requests"}"#.utf8)
+
+        XCTAssertTrue(APIRetryPolicy.isNeverReplayed(statusCode: 429, data: budget))
+        XCTAssertFalse(APIRetryPolicy.isNeverReplayed(statusCode: 429, data: bare))
+        XCTAssertFalse(APIRetryPolicy.isNeverReplayed(statusCode: 503, data: budget))
+        XCTAssertFalse(APIRetryPolicy.shouldRetry(
+            statusCode: 429, attempt: 0, retryPolicy: .standard, hasDailyLimit: false, hasSlowMode: false,
+            isNeverReplayed: true
+        ))
+    }
+
     func test_delay() {
         XCTAssertEqual(APIRetryPolicy.delay(statusCode: 503, attempt: 1, retryAfter: "60"), 30)
         XCTAssertEqual(APIRetryPolicy.delay(statusCode: 503, attempt: 1, retryAfter: "2"), 2)
@@ -264,6 +277,15 @@ final class APIRequestPipelineTests: XCTestCase {
         XCTAssertEqual(rejection.code, "DAILY_REACTION_LIMIT")
         XCTAssertEqual(rejection.limit, 100)
         XCTAssertNotNil(rejection.resetAt)
+    }
+
+    func test_classify_429_communityAdditionBudget_isRejectedWithItsCode() {
+        let body = #"{"success":false,"error":"Trop d'ajouts pour l'instant","code":"COMMUNITY_ADDITION_BUDGET_EXCEEDED"}"#
+        guard case MeeshyError.rejected(let rejection)? = thrown(classify(status: 429, body: body)) else {
+            return XCTFail("le refus du budget d'ajouts doit garder son code")
+        }
+        XCTAssertEqual(rejection.statusCode, 429)
+        XCTAssertEqual(rejection.code, CommunityAdditionBudget.refusalCode)
     }
 
     func test_classify_bare429_isTooManyRequests() {

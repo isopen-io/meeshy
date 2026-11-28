@@ -21,6 +21,7 @@ import { linkVisitorFromRequest } from './links/utils/link-visitor';
 import { isShareLinkOpen } from '../services/conversationCard';
 import { AFFILIATE_INVITER_SELECT, affiliateInviterOf } from '../services/linkUnfurl/affiliate';
 import { affiliateReferralAnnouncer } from '../services/affiliate-referral-announce';
+import { affiliateFriendshipAnnouncer } from '../services/affiliate-friendship-announce';
 import { linkActivityRelayOf } from '../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
@@ -762,7 +763,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         token,
         referredUserId,
         sessionKey,
-        affiliateReferralAnnouncer({ prisma: fastify.prisma, relay: linkActivityRelayOf(fastify) })
+        affiliateReferralAnnouncer({ prisma: fastify.prisma, relay: linkActivityRelayOf(fastify) }),
+        affiliateFriendshipAnnouncer(fastify)
       );
 
       if (result.success) {

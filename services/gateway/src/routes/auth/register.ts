@@ -28,6 +28,7 @@ import { validatePasswordStrength } from '../../utils/password-strength';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { pendingSessionTokenForAccount } from '../../services/auth/email-verification-watch';
 import { affiliateReferralAnnouncer } from '../../services/affiliate-referral-announce';
+import { affiliateFriendshipAnnouncer } from '../../services/affiliate-friendship-announce';
 import { linkActivityRelayOf } from '../../socketio/linkActivityEvents';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
@@ -149,6 +150,7 @@ async function rattacherAuParrain(
       userId,
       affiliateSessionKey,
       affiliateReferralAnnouncer({ prisma: context.fastify.prisma, relay: linkActivityRelayOf(context.fastify) }),
+      affiliateFriendshipAnnouncer(context.fastify),
     );
     if (!resultat.success) {
       logger.info('code de parrainage ignoré à l\'inscription', { reason: resultat.error });
