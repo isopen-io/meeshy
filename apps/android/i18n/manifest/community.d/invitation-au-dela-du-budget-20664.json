@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:community": {
+      "resDir": "feature/community/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.throttled",
+          "androidName": "community_invite_throttled",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
