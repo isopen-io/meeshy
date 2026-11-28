@@ -2282,3 +2282,32 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
 - Fusion (2026-11-28, réveil de 1 h 13) : la CI `ci.yml` (`workflow_dispatch` 46079394825) est verte sur 345cdcf0c,
   26 tâches sur 26. `dev` (09436f271) fusionnée dans la branche, sans chemin commun ; rejoué sur l'arbre fusionné :
   relations + jobs 503/503, `tsc` 0. PR #20714 fusionnée dans `dev`, #19538 fermée.
+
+## 2026-11-27 — réveil de 21 h : un parrain voit son filleul en Ami sans relancer l'app (#19540)
+
+- Reprise : #20714 (#19538, Connaissance née toute seule) est ouverte, `mergeable` propre, sa CI de 20 h 38 en cours
+  sur la tête `eb4aa54cb` ; la session de 20 h 40 la mène (fusion de `dev` et redispatch). Ce réveil ne l'a pas touchée :
+  pousser une fusion de `dev` aurait annulé ce run (même groupe de concurrence). Aucune branche vivante sur l'affiliation.
+- Lot : #19540, passerelle. `convertAffiliateVisit` (inscription et `POST /affiliate/register`) nouait le lien FRIEND sans
+  aucun signal temps réel. Il signale désormais `onFriendshipLinked` (paire, montée réelle du lien, demande que la
+  conversion vient d'accepter) ; `affiliate-friendship-announce.ts` l'annonce comme une acceptation ordinaire :
+  `relation:level-raised` aux deux (si le lien est né ou a monté), `friend-request:accepted` à l'expéditeur de la demande
+  acceptée, caches d'amis oubliés (`forgetFriends`, ce que l'ancien chemin oubliait aussi), écoute, batterie et position
+  partagée rejouées pour la paire. Un refus ou un blocage antérieur (`linked = false`), une demande déjà acceptée sur un
+  lien inchangé : rien. Un écho qui lève ne fait pas échouer la conversion.
+- Laissé hors du lot : la notification persistée « X a accepté » (`createFriendAcceptedNotification`) — le parrainage a
+  déjà son propre écho (#19446), et l'issue ne la demandait pas.
+- Gates : `affiliate-friendship-live` 8/8 (2 rouges avant le branchement, le module d'annonce absent avant) ; affiliation,
+  `auth`, `directory`, gardes d'émission et de promesses détachées, `socketio`, `relations` : 185 suites, 1 892/1 892 ;
+  `tsc` passerelle 0 ; dette `any` inchangée (484).
+- Prochain lot : finir #20714 si elle est encore ouverte ; puis les lots iOS de la position après #20514, sinon un autre
+  lot serveur du jalon 1/2.
+
+## 2026-11-28 — réveil de 5 h 13 : fusion de #20738 (#19540)
+
+- Reprise : #20738 seule PR de la routine ouverte, CI `ci.yml` 46104019104 (`workflow_dispatch`, autre session) en cours
+  sur c67febb3a. Aucun nouveau lot ouvert : le run consiste à la mener à la fusion.
+- `dev` (60 commits de plus, aucun chemin commun) fusionnée localement ; rejoué sur l'arbre fusionné : affiliation,
+  inscription et relations 28 suites, 396/396 ; `tsc` passerelle 0.
+- Prochain lot : les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) dès que #20514 aura fusionné ;
+  sinon un lot serveur du jalon 1/2.
