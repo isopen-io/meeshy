@@ -14,6 +14,8 @@
  * voyagent que l'identité de l'autre (`actor`, `metadata.userId`) et ce palier : jamais une
  * coordonnée, une précision ou l'heure du point. La ligne expire avec
  * la cadence — passé 2 h, « est tout près, à 500 m » ne dit plus rien de vrai.
+ *
+ * `admits` (#20689) relit la paire JUSTE AVANT `createNotification` : refusée, rien ne s'écrit.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
@@ -24,7 +26,7 @@ import { notificationString } from '@meeshy/shared/utils/notification-strings';
 import { RELATION_THRESHOLDS } from '@meeshy/shared/utils/relation-levels';
 import { RECIPIENT_LANG_SELECT, recipientDateLocale, recipientLanguage } from '../../utils/recipient-language';
 import type { NotificationService } from '../notifications/NotificationService';
-import type { BloodProximityNotice } from './bloodLocationTypes';
+import type { BloodProximityNotice, BloodProximityNoticeOptions } from './bloodLocationTypes';
 
 export type BloodProximityNotifier = Pick<NotificationService, 'createNotification'>;
 
@@ -56,18 +58,19 @@ export function bloodProximityNotifierOf(params: {
   readonly prisma: Pick<PrismaClient, 'user'>;
   readonly notifications: BloodProximityNotifier | null;
   readonly now?: () => number;
-}): ((notice: BloodProximityNotice) => Promise<boolean>) | undefined {
+}): ((notice: BloodProximityNotice, options?: BloodProximityNoticeOptions) => Promise<boolean>) | undefined {
   const notifications = params.notifications;
   if (notifications === null) return undefined;
   const now = params.now ?? Date.now;
   const ttlMs = RELATION_THRESHOLDS.proximity.cooldownHours * 3_600_000;
 
-  return async (notice) => {
+  return async (notice, options) => {
     const [other, recipient] = await Promise.all([
       params.prisma.user.findUnique({ where: { id: notice.otherId }, select: ACTOR_SELECT }) as Promise<Person | null>,
       params.prisma.user.findUnique({ where: { id: notice.recipientId }, select: { id: true, ...RECIPIENT_LANG_SELECT } }),
     ]);
     if (!other || !recipient) return false;
+    if (options?.admits && !(await options.admits())) return false;
     const lang = recipientLanguage(recipient, 'fr');
     const metadata = bloodProximityNotificationMetadata({ userId: other.id, distanceMeters: notice.distanceMeters });
     const distance = proximityDistanceLabel(recipientDateLocale(recipient, 'fr'), metadata.distanceMeters);
