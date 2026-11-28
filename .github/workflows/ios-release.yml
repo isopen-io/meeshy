@@ -365,7 +365,15 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: andp-state
-          path: .andp
+          # `.andp/secrets.yml` porte la clé privée App Store Connect écrite
+          # deux étapes plus haut : elle ne part JAMAIS dans l'artefact. Le job
+          # `appstore-submit` la réécrit lui-même depuis les secrets du dépôt.
+          # `include-hidden-files` est requis : sans lui, `.andp` (dossier
+          # caché) ne rend aucun fichier et `if-no-files-found: error` échoue.
+          path: |
+            .andp
+            !.andp/secrets.yml
+          include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
 
