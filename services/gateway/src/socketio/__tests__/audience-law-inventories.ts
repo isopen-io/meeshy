@@ -176,9 +176,8 @@ export const MEASURED_FAMILIES: Readonly<Record<string, string>> = {
     'sonnerie (un banni apprend qu\'un appel a eu lieu) ; `AtlasService` tamponne une langue « reçue » ' +
     'dans le jeu (progression indue, aucun contenu) ; `membershipAdmissionFanOut` sert `participantIds` ' +
     'au SEUL arrivant — un annuaire affiché, qui basculerait en audience si un client s\'en servait pour ' +
-    'adresser des clés ; `communitySalonAdoption` est DÉJÀ conforme, mais en CODE ' +
-    '(`participationEstVivante` après lecture) et non dans son `where` — donc invisible au cliquet, et ' +
-    'c\'est la ligne qu\'il faut aligner, pas la règle.',
+    'adresser des clés. (`communitySalonAdoption`, qui jugeait la loi en CODE après lecture, l\'épelle ' +
+    'dans son `where` depuis #16740 et a quitté cet inventaire.)',
   'mesure-effectif-servi':
     'MESURE — un effectif ou une liste AFFICHÉS, pas une audience. Un banni-mais-actif y gonfle un nombre servi aux ' +
     'clients (fiche de lien, carte de conversation, feuille des participants, salon World Wide, ' +
@@ -261,7 +260,6 @@ export const MEASURED_NOT_INSTRUCTED: Readonly<Record<string, string>> = {
   'utils/callEndedFanout.ts#0': 'audience-a-instruire',
   'services/game/AtlasService.ts#0': 'audience-a-instruire',
   'routes/conversations/membershipAdmissionFanOut.ts#0': 'audience-a-instruire',
-  'services/conversations/communitySalonAdoption.ts#0': 'audience-a-instruire',
   'routes/anonymous.ts#0': 'mesure-effectif-servi',
   'routes/anonymous.ts#1': 'mesure-effectif-servi',
   'routes/anonymous.ts#2': 'mesure-effectif-servi',

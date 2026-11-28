@@ -80,4 +80,28 @@ class UserPostsCacheRepositoryTest {
         assertThat(cached.value.posts).hasSize(100)
         assertThat(cached.value.posts.first().id).isEqualTo("p1")
     }
+
+    @Test
+    fun `les publications d'une communaute ont leur propre cle, jamais celle d'un auteur`() = runTest {
+        val repo = repository()
+        repo.persistCommunity("c1", UserPostsSnapshot(listOf(post("p1")), nextCursor = "k"), ticket = null)
+
+        val cached = repo.cachedCommunity("c1") as CacheResult.Fresh
+        assertThat(cached.value.posts.map { it.id }).containsExactly("p1")
+        assertThat(repo.cached("c1")).isEqualTo(CacheResult.Empty)
+        assertThat(repo.cachedCommunity("c2")).isEqualTo(CacheResult.Empty)
+    }
+
+    @Test
+    fun `un geste en direct et une suppression atteignent aussi la page d'une communaute`() = runTest {
+        val repo = repository()
+        repo.persistCommunity("c1", UserPostsSnapshot(listOf(post("p1"), post("p2"))), ticket = null)
+
+        repo.patchEverywhere("p1", { it.copy(likeCount = 7) }, ticket = null)
+        repo.removeEverywhere("p2", ticket = null)
+
+        val cached = repo.cachedCommunity("c1") as CacheResult.Fresh
+        assertThat(cached.value.posts.map { it.id }).containsExactly("p1")
+        assertThat(cached.value.posts.single().likeCount).isEqualTo(7)
+    }
 }

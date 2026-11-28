@@ -47,6 +47,7 @@ import { isBlockedBetween } from '../../utils/blocking.js';
 import { getCacheStore } from '../CacheStore.js';
 import { invalidateFeedFriends } from '../posts/feedFriends.js';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { emitRelationLevelRaised, type RelationIo } from '../../socketio/relationEvents.js';
 import {
   isAutomaticAcquaintance,
   recordAcquaintance,
@@ -80,6 +81,12 @@ export type AutoAcquaintanceOutcome =
 export type AutoAcquaintanceDeps = {
   readonly prisma: Pick<PrismaClient, 'pairInteractionDay' | 'user' | 'userRelation' | 'userPreferences'>;
   readonly notify?: AcquaintanceNotifier;
+  /**
+   * Le lien né tout seul APPARAÎT chez les deux (#19538) : `relation:level-raised`
+   * est le seul déclencheur temps réel de relecture des cercles sur les trois
+   * clients. Absent (Socket.IO pas encore monté), le lien naît quand même.
+   */
+  readonly io?: RelationIo;
   readonly now?: () => Date;
   readonly thresholds?: RelationThresholds;
   /**
@@ -217,7 +224,10 @@ export async function evaluateAutoAcquaintance(
       await withdrawIfAutomatic(deps, pair, now);
       return 'opted-out';
     }
-    if (!reborn) await announce(deps.notify, pair.userLowId, pair.userHighId);
+    if (!reborn) {
+      emitRelationLevelRaised(deps.io, { userA: pair.userLowId, userB: pair.userHighId, level: 'ACQUAINTANCE', at: now });
+      await announce(deps.notify, pair.userLowId, pair.userHighId);
+    }
     return outcome;
   }
   return outcome === 'ignored' ? 'ignored' : 'unchanged';

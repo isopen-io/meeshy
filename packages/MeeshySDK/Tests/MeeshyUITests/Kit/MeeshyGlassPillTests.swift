@@ -110,6 +110,39 @@ struct MeeshyGlassPillTests {
         }
     }
 
+    @Test("#20715 — rangée, un intervalle négatif ou indéfini tient le retrait pour achevé ; montrée, elle répond toujours")
+    func presence_acceptsTouches_unreliableInterval() {
+        for reduce in [false, true] {
+            #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: -0.05, reduceMotion: reduce))
+            #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: -.infinity, reduceMotion: reduce))
+            #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: .nan, reduceMotion: reduce))
+            #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: .infinity, reduceMotion: reduce))
+            #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: 0, reduceMotion: reduce))
+            #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .shown, stowedFor: -0.05, reduceMotion: reduce))
+            #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .withoutRow, stowedFor: .nan, reduceMotion: reduce))
+        }
+        #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: 0.249))
+        #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: 0.25))
+        #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: 0.149, reduceMotion: true))
+        #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: 0.15, reduceMotion: true))
+    }
+
+    @Test("#20715 — le temps du retrait se lit sur l'horloge monotone : jamais rangée, infini ; un instant en arrière ne rouvre pas la grâce")
+    func presence_stowedFor_monotonic() {
+        let stowedAt = ContinuousClock().now
+        #expect(MeeshyGlassPillPresenceRule.stowedFor(since: nil, now: stowedAt) == .infinity)
+        #expect(MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: stowedAt) == 0)
+        let during = MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: stowedAt.advanced(by: .milliseconds(100)))
+        #expect(abs(during - 0.1) < 1e-9)
+        let after = MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: stowedAt.advanced(by: .milliseconds(250)))
+        #expect(abs(after - 0.25) < 1e-9)
+        #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: after))
+        let before = MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: stowedAt.advanced(by: .milliseconds(-50)))
+        #expect(before < 0)
+        #expect(!MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: before))
+        #expect(MeeshyGlassPillPresenceRule.acceptsTouches(presence: .stowed, stowedFor: during))
+    }
+
     @Test("la présence dit si la rangée est montrée et si la pilule est rangée")
     func presence_flags() {
         #expect(MeeshyGlassPillPresence.shown.showsRow && !MeeshyGlassPillPresence.shown.isStowed)
@@ -278,7 +311,18 @@ struct MeeshyGlassPillTests {
         #expect(code.contains(".opacity("))
         #expect(code.contains("MeeshyGlassPillPresenceRule.acceptsTouches("))
         #expect(code.contains("onRevive"))
+        #expect(code.contains("MeeshyGlassPillPresenceRule.stowedFor(since: stowedAt, now: clock)"))
         for word in [".blur(", ".shadow(", "scaleEffect", "GeometryReader"] {
+            #expect(!code.contains(word), "MeeshyGlassPillStow.swift contient \(word)")
+        }
+    }
+
+    @Test("#20715 — la grâce du retrait se mesure sur l'horloge monotone, jamais sur l'heure murale")
+    func source_stowReadsTheMonotonicClock() throws {
+        let code = try Self.code("MeeshyGlassPillStow.swift")
+        #expect(code.contains("@State private var stowedAt: ContinuousClock.Instant?"))
+        #expect(code.contains("ContinuousClock().now"))
+        for word in ["Date()", "Date.now", "timeIntervalSince", "Date?", "CFAbsoluteTime", "ProcessInfo"] {
             #expect(!code.contains(word), "MeeshyGlassPillStow.swift contient \(word)")
         }
     }

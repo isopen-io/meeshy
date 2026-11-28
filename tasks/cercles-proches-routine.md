@@ -2207,6 +2207,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   d'accent verts. iOS ne se compile pas en conteneur : la CI iOS de la PR fait foi.
 - Prochain lot : #20054, #20056 ; puis #13934 (écoute + titre défilant) selon la spec.
 
+## 2026-11-27 — réveil de 13 h : Android du mouvement sur la carte (#20665, tranche de #19887)
+
+- Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées. Aucune PR de la routine ouverte. D'autres sessions
+  vivantes tiennent l'iOS de #20416 (`claude/cercles-20416-ios*`), le web de la carte (`claude/cercles-19888-web`, #20658)
+  et « Ensemble » web (#17990) ; #20514 découpe `SharedLocationSharingCenter.swift` : les lots iOS #20308, #20054,
+  #20056 attendent.
+- Lot : #20665 (ouverte ce réveil). Android décode `motion`, le garde jusqu'à l'épingle, le vieillit à 5 min, ne
+  dessine pas l'immobile ; glyphe sur l'épingle (plein écran et fiche), mot dans TalkBack et dans « Autour de toi ».
+  Iso `LocationMotionGlyph` (iOS). Quatre rôles `MeeshyIcons`, quatre chaînes générées du catalogue iOS.
+- Audit adversarial : non requis (affichage d'un champ déjà tronqué par la passerelle).
+- Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationMotionTest` 6/6 (rouge à la compilation avant le code),
+  `SharedLocationsMapTest` 6/6, `SharedLocationTest` 12/12 ; i18n `--check` et verbosité verts ; Compose par
+  `android.yml` sur la PR #20690.
+- Suivi ouvert : #20692 (Android capte et envoie son mouvement).
+- Prochain lot : fusionner #20690 ; puis #20692, ou les lots iOS de position une fois #20514 et `cercles-20416-ios` fusionnés.
+
 ## 2026-11-27 — réveil de 13 h (troisième run, même heure) : la pastille « en ligne » s'éteint après une baisse ou une rupture (#19539)
 
 - Reprise : aucune PR de la routine ouverte depuis le 2026-11-23 (#20463 fusionnée). Les lots iOS de la position
@@ -2246,3 +2262,23 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   liste. Le lien n'est ni effacé ni baissé : la réactivation rend le niveau d'avant.
 - Prochain lot : les lots iOS de la position quand #20514 aura fusionné ; sinon un autre lot serveur du jalon (#19539,
   #19538, #19450).
+
+## 2026-11-27 — réveil de 17 h : une Connaissance née toute seule apparaît aussitôt dans « Mes cercles » (#19538)
+
+- Reprise : trois PR de cercles ouvertes, toutes menées par d'autres sessions (#20690 et #20691 repoussées à 17 h et
+  16 h 33 ; #20662 a une CI lancée à 16 h 41, en file) : ce réveil les cède et prend un lot serveur du jalon.
+- Lot : #19538, passerelle. `evaluateAutoAcquaintance` émet `relation:level-raised` (niveau ACQUAINTANCE) à la room
+  de chacune des deux personnes, avec l'identifiant de l'autre, quand le lien est créé ou relevé, au même endroit que
+  la notification et sous la même condition : une renaissance (préférence rallumée), un retrait silencieux ou une passe
+  sans changement n'émettent rien (RG-07). `RelationWeeklyJob` reçoit `resolveIO`, relu à chaque passe (le job démarre
+  avant Socket.IO) ; `BackgroundJobsManager` le relaie depuis `server.ts`. Un échec d'émission ne défait pas le lien.
+- Clients : aucun changement. Les trois relisent déjà leurs cercles sur `relation:level-raised` (web
+  `discover-circles.tsx`, iOS `CirclesViewModel` et `AvatarCircleDirectory`, Android `CirclesViewModel`), quel que soit
+  le niveau.
+- Gates : nouveau témoin 9/9 (3 rouges avant), passerelle relations + jobs 501/501, socketio + sécurité 3417/3417,
+  `tsc` 0.
+- Prochain lot : #19540 (le filleul apparaît en Ami chez son parrain, même manque d'émission) ; puis les lots iOS de
+  la position quand #20514 aura fusionné.
+- Fusion (2026-11-28, réveil de 1 h 13) : la CI `ci.yml` (`workflow_dispatch` 46079394825) est verte sur 345cdcf0c,
+  26 tâches sur 26. `dev` (09436f271) fusionnée dans la branche, sans chemin commun ; rejoué sur l'arbre fusionné :
+  relations + jobs 503/503, `tsc` 0. PR #20714 fusionnée dans `dev`, #19538 fermée.

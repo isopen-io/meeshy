@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -157,6 +158,7 @@ private fun SharedLocationsMapView(
             pins.map { (at[it.userId] ?: it.point) to it }
         }
         val byPoint = remember(placed) { placed.toMap() }
+        val now = rememberNowMillis()
         TileMapView(
             center = center,
             zoom = zoom,
@@ -164,20 +166,20 @@ private fun SharedLocationsMapView(
             onCenterChange = { center = it },
             onZoomChange = { zoom = it },
             markers = placed.map { it.first },
-            marker = { point -> byPoint[point]?.let { Pin(it, zoom) } },
+            marker = { point -> byPoint[point]?.let { Pin(it, zoom, now) } },
             modifier = Modifier.fillMaxWidth().height(MAP_HEIGHT),
         )
     }
 }
 
 @Composable
-private fun Pin(pin: SharedLocationPin, zoom: Int, modifier: Modifier = Modifier) {
+private fun Pin(pin: SharedLocationPin, zoom: Int, nowMillis: Long, modifier: Modifier = Modifier) {
     val level = pin.circle?.level
     val tint = level?.tint() ?: meeshyPresenceDotColor(rememberPresence(pin.userId)) ?: MeeshyPalette.Indigo500
     val radiusDp = SharedLocationsMap.radiusPixels(pin.radiusMeters, pin.point.latitude, zoom, SlippyMap.TILE_SIZE)
         .toFloat()
         .coerceAtMost(MAX_BLUR_RADIUS_DP)
-    val label = pinLabel(pin)
+    val label = pinLabel(pin, nowMillis)
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
@@ -205,6 +207,9 @@ private fun Pin(pin: SharedLocationPin, zoom: Int, modifier: Modifier = Modifier
                 fontWeight = FontWeight.Bold,
             )
         }
+        pin.drawnMotion(nowMillis)?.let { motion ->
+            LocationMotionBadge(motion, Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 4.dp))
+        }
     }
 }
 
@@ -213,7 +218,7 @@ private fun Pin(pin: SharedLocationPin, zoom: Int, modifier: Modifier = Modifier
  * Le cercle (#17013) n'est dit que s'il est servi : sans lui, l'épingle reste neutre.
  */
 @Composable
-internal fun pinLabel(pin: SharedLocationPin): String {
+internal fun pinLabel(pin: SharedLocationPin, nowMillis: Long): String {
     val context = LocalContext.current
     val name = pin.name ?: stringResource(R.string.circles_locations_someone)
     val precision = stringResource(
@@ -228,6 +233,6 @@ internal fun pinLabel(pin: SharedLocationPin): String {
         DateUtils.formatDateTime(context, pin.deadlineMillis, DateUtils.FORMAT_SHOW_TIME),
     )
     val circle = pin.circle?.let { stringResource(it.level.titleRes()) }
-    return listOfNotNull(name, circle, "$precision · $until").joinToString(", ")
+    return listOfNotNull(name, circle, "$precision · $until", motionWord(pin, nowMillis)).joinToString(", ")
 }
 
