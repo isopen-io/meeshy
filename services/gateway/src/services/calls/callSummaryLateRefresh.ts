@@ -47,6 +47,18 @@ const asTerminalSummary = (metadata: unknown): (Record<string, unknown> & Measur
     ? (metadata as Record<string, unknown> & Measures)
     : null;
 
+const CONFLICT = Symbol('call-summary-conflict');
+
+/** Relances d'une passe après un compare-and-set perdu : assez pour un concurrent, jamais une boucle. */
+const MAX_CONFLICT_RERUNS = 2;
+
+export type CallSummaryRefreshOutcome = {
+  readonly edited: ReadonlyArray<CallSummaryMessage>;
+  readonly conflicted: boolean;
+};
+
+const NOTHING: CallSummaryRefreshOutcome = { edited: [], conflicted: false };
+
 type PostedSummary = { readonly id: string; readonly updatedAt: Date; readonly metadata: Record<string, unknown> & Measures };
 
 async function postedSummary(
@@ -66,7 +78,7 @@ function rewriteMeasures(
   prisma: LateCallSummaryRefreshPrisma,
   posted: PostedSummary,
   fresh: Measures
-): Promise<CallSummaryMessage | null> {
+): Promise<CallSummaryMessage | typeof CONFLICT> {
   return prisma.message
     .update({
       where: { id: posted.id, updatedAt: posted.updatedAt },
@@ -74,7 +86,7 @@ function rewriteMeasures(
       include: CALL_SUMMARY_MESSAGE_INCLUDE
     })
     .catch((error: unknown) => {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return null;
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return CONFLICT;
       throw error;
     });
 }
@@ -86,29 +98,34 @@ function rewriteMeasures(
  * (aucun quand rien n'a changé, que le résumé n'existe pas encore, est encore
  * « en cours » ou a été effacé). Les bulles sont lues AVANT l'instantané des
  * mesures, et chaque écriture est conditionnée à l'`updatedAt` lu : une
- * écriture concurrente la fait renoncer (`P2025`), jamais écraser par un
- * relevé plus ancien (#20747).
+ * écriture concurrente la fait renoncer (`P2025`, `conflicted`), jamais
+ * écraser par un relevé plus ancien (#20747). Les faits relus pour une autre
+ * conversation que l'ancre (une bascule de groupe, `callConversationRebranch`,
+ * qui déplace la session) ne réécrivent rien.
  */
 export async function refreshEndedCallSummaryMeasures(
   prisma: LateCallSummaryRefreshPrisma,
   callId: string
-): Promise<ReadonlyArray<CallSummaryMessage>> {
+): Promise<CallSummaryRefreshOutcome> {
   const anchor = await prisma.callSession.findUnique({
     where: { id: callId },
     select: { conversationId: true, originConversationId: true }
   });
-  if (!anchor) return [];
+  if (!anchor) return NOTHING;
   const conversationIds = [anchor.conversationId, anchor.originConversationId].filter((id): id is string => typeof id === 'string');
   const posted = (await Promise.all(conversationIds.map((id) => postedSummary(prisma, id, callId))))
     .filter((summary): summary is PostedSummary => summary !== null);
-  if (posted.length === 0) return [];
+  if (posted.length === 0) return NOTHING;
   const call = await prisma.callSession.findUnique({ where: { id: callId }, select: CALL_SUMMARY_FACTS_SELECT });
   const fresh = call && call.conversationId === anchor.conversationId ? buildCallSummaryMetadata(callSummaryFacts(call)) : null;
-  if (!fresh) return [];
+  if (!fresh) return NOTHING;
   const edited = await Promise.all(
     posted.filter((summary) => !sameMeasures(summary.metadata, fresh)).map((summary) => rewriteMeasures(prisma, summary, fresh))
   );
-  return edited.filter((message): message is CallSummaryMessage => message !== null);
+  return {
+    edited: edited.filter((message): message is CallSummaryMessage => message !== CONFLICT),
+    conflicted: edited.includes(CONFLICT)
+  };
 }
 
 /**
@@ -117,6 +134,10 @@ export async function refreshEndedCallSummaryMeasures(
  * `message:edited` (noms des participants réhydratés, comme à la pose) par le
  * diffuseur d'édition de MESURES — qui ne remonte pas la conversation —, tait
  * celui qu'une conversation obsolète a scellé (#14643) et avale toute panne.
+ * Une passe dont une écriture a perdu son compare-and-set se relance, au plus
+ * `MAX_CONFLICT_RERUNS` fois. Choix assumé : quand la pose du résumé ne le
+ * relance pas (pose nulle, diffuseur absent, réessai de la pose), le
+ * rattrapage repose sur le prochain `call:quality-report` tardif.
  */
 export function createLateCallSummaryRefresher(deps: {
   readonly prisma: () => LateCallSummaryRefreshPrisma;
@@ -126,24 +147,31 @@ export function createLateCallSummaryRefresher(deps: {
   const running = new Map<string, Promise<void>>();
   const rerun = new Set<string>();
 
-  const refreshOnce = async (callId: string): Promise<void> => {
+  const refreshOnce = async (callId: string): Promise<boolean> => {
     const prisma = deps.prisma();
-    const edited = await refreshEndedCallSummaryMeasures(prisma, callId);
+    const { edited, conflicted } = await refreshEndedCallSummaryMeasures(prisma, callId);
     for (const message of edited) {
       const broadcast = deps.broadcastEdited();
       if (!broadcast || (await deps.sealed(message))) continue;
       const [served] = await withCallSummaryParticipantNames(prisma, [message]);
       await broadcast(served, message.conversationId);
     }
+    return conflicted;
   };
 
   const drain = async (callId: string): Promise<void> => {
     try {
+      let conflictReruns = 0;
       do {
         rerun.delete(callId);
-        await refreshOnce(callId).catch((error: unknown) => {
+        const conflicted = await refreshOnce(callId).catch((error: unknown) => {
           logger.warn('Late call summary refresh failed', { callId, error: error instanceof Error ? error.message : String(error) });
+          return false;
         });
+        if (conflicted && conflictReruns < MAX_CONFLICT_RERUNS) {
+          conflictReruns += 1;
+          rerun.add(callId);
+        }
       } while (rerun.has(callId));
     } finally {
       running.delete(callId);
