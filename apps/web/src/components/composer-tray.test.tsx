@@ -118,6 +118,23 @@ describe('RecordingBar — le seuil de 0,5 s (#5668, revue-correction)', () => {
     // Rien ne doit MASQUER ce contenu par un nom accessible calculé ailleurs.
     expect(timer.hasAttribute('aria-label')).toBe(false);
   });
+
+  /**
+   * #20606 (moitié `composer-tray`) — l'œil ET l'oreille PLANCHENT la durée,
+   * comme le socle `formatMediaTime` (`lib/view/seek-track.ts`) et iOS
+   * (`MediaFormat.duration`, défaut `rounding: .down`). Avant : `Math.round`
+   * — à .5 s le minuteur AVANÇAIT d'une seconde l'œil ET l'oreille. Axe
+   * discriminant : une fraction ≥ .5 s (90 500 ms), où `floor` (90) et `round`
+   * (91) divergent — le cas 65 000 ms ci-dessus est entier, floor == round.
+   */
+  test('à la demi-seconde, l’œil et l’oreille planchent ensemble (`1:30` / `1 min 30 s`, jamais `:31`)', () => {
+    const el = mountBar(90_500);
+    const timer = el.querySelector('[role="timer"]')!;
+    expect(timer.textContent).toContain('1:30');
+    expect(timer.textContent).toContain('1 min 30 s');
+    expect(timer.textContent).not.toContain('1:31');
+    expect(timer.textContent).not.toContain('1 min 31 s');
+  });
 });
 
 describe('ComposerTray — la bande d’avertissement (#5668, revue-correction)', () => {

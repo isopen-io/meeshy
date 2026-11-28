@@ -11,6 +11,7 @@ import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { floorMediaSeconds, formatMediaTime } from '@/lib/view/seek-track';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
 import { type PendingAttachment } from '@/lib/send/attachments';
@@ -95,16 +96,18 @@ export type ComposerNotice = {
 const REDUCED_MOTION = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /** `0:12` — miroir `formatDuration` (`+Recording.swift:405-407`) et
- * `Voice`/`message-blocks.tsx:346-348` (même écriture `m:ss`, pas `MM:SS`). */
+ * `Voice`/`message-blocks.tsx:346-348` (même écriture `m:ss`, pas `MM:SS`).
+ * Délègue au SOCLE `formatMediaTime` (#20606) : plancher (parité iOS) + garde
+ * non-fini, et l'œil ne diverge jamais de l'oreille à la demi-seconde. */
 function formatDuration(durationMs: number): string {
-  const seconds = Math.round(durationMs / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  return formatMediaTime(durationMs / 1000);
 }
 
 /** `1 min 12 s` — ce que le lecteur d'écran PRONONCE, là où `0:12` se lit à
- * l'œil (miroir `LocalizedNumber.spokenDuration`, `+Recording.swift:209`). */
+ * l'œil (miroir `LocalizedNumber.spokenDuration`, `+Recording.swift:209`).
+ * Plancher par la MÊME loi que l'œil (`floorMediaSeconds`, #20606). */
 function spokenDuration(durationMs: number, language: InterfaceLanguage): string {
-  const seconds = Math.round(durationMs / 1000);
+  const seconds = floorMediaSeconds(durationMs / 1000);
   const minutes = Math.floor(seconds / 60);
   const rest = String(seconds % 60);
   return minutes === 0
