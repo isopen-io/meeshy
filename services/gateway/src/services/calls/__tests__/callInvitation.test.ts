@@ -47,6 +47,8 @@ type World = {
   conversation: ConversationRow | null;
   blocked: Array<[string, string]>;
   privateCommunity: boolean;
+  communityRole?: string;
+  communityMembers?: Array<{ id: string; userId: string; isActive: boolean }>;
 };
 
 const USERS: Record<string, { id: string; username: string; displayName: string | null; avatar: string | null; [field: string]: string | boolean | Date | null }> = {
@@ -69,9 +71,9 @@ const fakePrisma = (world: World) => ({
   },
   conversation: { findUnique: jest.fn(async () => world.conversation) },
   community: {
-    findFirst: jest.fn(async () => (world.privateCommunity ? { createdBy: 'owner', isPrivate: true, isActive: true, members: [] } : null)),
+    findFirst: jest.fn(async () => (world.privateCommunity ? { createdBy: 'owner', isPrivate: true, isActive: true, members: world.communityRole ? [{ role: world.communityRole }] : [] } : null)),
   },
-  communityMember: { findMany: jest.fn(async () => []) },
+  communityMember: { findMany: jest.fn(async () => world.communityMembers ?? []) },
   user: {
     findFirst: jest.fn(async ({ where }: { where: { OR: Array<{ id: string | { in: string[] }; blockedUserIds: { has?: string; hasSome?: string[] } }> } }) => {
       const pairs = where.OR.flatMap((clause) => {
@@ -344,5 +346,96 @@ describe('resolveInvitedGuestParticipantId — l’invitation ouvre CET appel, p
     });
 
     expect(await resolveInvitedGuestParticipantId(prisma as never, { callId: CALL, userId: 'dave' }, NOW)).toBe('p-first');
+  });
+});
+
+describe('authorizeCallInvitation — un refus vers un compte non ajoutable se paie, comme à la route (#20795)', () => {
+  const NOT_ADDABLE = { kind: 'refused', reason: 'not-addable', attempted: 1 };
+  const budget = (allowed = true, retryAfter = 0) =>
+    jest.fn(async (_actor: string, _admission: unknown) => ({ verdict: { allowed, retryAfter }, rendre: async () => undefined }));
+  const salon = (overrides: Partial<World> = {}) =>
+    makeWorld({ conversation: groupConversation({ communityId: 'c1' }), privateCommunity: true, communityRole: 'admin', ...overrides });
+  const authorizeWith = (world: World, communityBudget: ReturnType<typeof budget> | null, invitee = 'dave') =>
+    authorizeCallInvitation(
+      {
+        prisma: fakePrisma(world) as never,
+        callService: { getCallSession: async () => world.session } as never,
+        ringingInviteeIds: () => [],
+        communityBudget,
+      },
+      { callId: CALL, inviterUserId: 'alice', inviteeUserId: invitee }
+    );
+
+  it('une personne bloquée avec un présent, dans le salon d’une communauté privée : la tentative débite l’inviteur', async () => {
+    const spend = budget();
+    expect(await authorizeWith(salon({ blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).toHaveBeenCalledTimes(1);
+    expect(spend).toHaveBeenCalledWith('alice', NOT_ADDABLE);
+  });
+
+  it('un compte désactivé, dans le même salon : la tentative débite l’inviteur', async () => {
+    const world = salon({ friends: [['alice', 'gone']] });
+    const spend = budget();
+    expect(await authorizeWith(world, spend, 'gone')).toEqual({ ok: false, code: 'NOT_A_CONTACT' });
+    expect(spend).toHaveBeenCalledWith('alice', NOT_ADDABLE);
+  });
+
+  it('une personne bannie du salon : la tentative débite l’inviteur', async () => {
+    const world = salon({ participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', isActive: false, bannedAt: NOW }] });
+    const spend = budget();
+    expect(await authorizeWith(world, spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).toHaveBeenCalledWith('alice', NOT_ADDABLE);
+  });
+
+  it('un membre déjà actif de la communauté n’y entre pas : son refus ne coûte rien', async () => {
+    const spend = budget();
+    const members = [{ id: 'm-dave', userId: 'dave', isActive: true }];
+    expect(await authorizeWith(salon({ communityMembers: members, blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    const banned = salon({ communityMembers: members, participants: [{ id: 'p-dave', conversationId: CONV, userId: 'dave', isActive: false, bannedAt: NOW }] });
+    expect(await authorizeWith(banned, spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('un ancien membre qui ne reviendrait qu’en invité de l’appel (`guest-only`) : refusé, il ne coûte rien, comme accordé', async () => {
+    const spend = budget();
+    const former = { id: 'p-dave', conversationId: CONV, userId: 'dave', isActive: false, bannedAt: null };
+    expect(await authorizeWith(salon({ participants: [former], blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(await authorizeWith(salon({ participants: [former] }), spend)).toMatchObject({ ok: true, route: 'legacy-guest' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('un salon fermé aux nouveaux membres refuse gratuitement, bloqué ou non', async () => {
+    const spend = budget();
+    const ferme = salon({ conversation: groupConversation({ communityId: 'c1', type: 'external' }), blocked: [['bob', 'dave']] });
+    expect(await authorizeWith(ferme, spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('le budget épuisé : le refus dit RATE_LIMITED et quand réessayer, sans dire pourquoi la cible n’entrait pas', async () => {
+    expect(await authorizeWith(salon({ blocked: [['bob', 'dave']] }), budget(false, 120))).toEqual({ ok: false, code: 'RATE_LIMITED', retryAfter: 120 });
+  });
+
+  it('un inviteur sans rang dans la communauté est refusé pour AUTORISATION : rien n’est débité', async () => {
+    const spend = budget();
+    expect(await authorizeWith(salon({ communityRole: undefined, blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(await authorizeWith(salon({ communityRole: undefined }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('hors d’une communauté privée, un refus ne coûte rien', async () => {
+    const spend = budget();
+    expect(await authorizeWith(makeWorld({ blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(await authorizeWith(salon({ privateCommunity: false, blocked: [['bob', 'dave']] }), spend)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('une invitation accordée n’est pas débitée ici : c’est la porte d’admission qui paie', async () => {
+    const spend = budget();
+    expect(await authorizeWith(salon(), spend)).toMatchObject({ ok: true, route: 'admit-member' });
+    expect(spend).not.toHaveBeenCalled();
+  });
+
+  it('une refusée sans budget posé reste un refus simple', async () => {
+    expect(await authorizeWith(salon({ blocked: [['bob', 'dave']] }), null)).toEqual({ ok: false, code: 'PERMISSION_DENIED' });
   });
 });

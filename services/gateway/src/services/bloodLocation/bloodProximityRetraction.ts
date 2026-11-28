@@ -25,7 +25,16 @@ import { retractedNotificationOf, type RetractedNotification } from '../notifica
 
 export type BloodProximityRetraction =
   | { readonly kind: 'everywhere'; readonly ownerId: string }
-  | { readonly kind: 'at'; readonly ownerId: string; readonly readerId: string };
+  | {
+      readonly kind: 'at';
+      readonly ownerId: string;
+      readonly readerId: string;
+      /**
+       * La ligne que l'alerte vient d'écrire (#20689) : son push part sans être attendu, donc il est
+       * révoqué sans lire `pushSent` — et annoncé même si un autre retrait l'a déjà supprimée.
+       */
+      readonly writtenId?: string;
+    };
 
 export type BloodProximityRetractionAnnouncer = {
   readonly announceNotificationsRetracted: (rows: readonly RetractedNotification[]) => Promise<void>;
@@ -42,6 +51,8 @@ export function bloodProximityRetractionFilter(scope: BloodProximityRetraction):
   return { type, $or: [{ 'actor.id': scope.ownerId }, { userId: { $oid: scope.ownerId } }] };
 }
 
+const writtenOf = (scope: BloodProximityRetraction): string | null => (scope.kind === 'at' ? scope.writtenId ?? null : null);
+
 /** Supprime puis annonce ; rend le nombre de lignes retirées. Une panne de la base LÈVE. */
 export async function retractBloodProximityNotices(
   prisma: Pick<PrismaClient, 'notification'>,
@@ -55,11 +66,15 @@ export async function retractBloodProximityNotices(
   const rows = raw.flatMap((row) => {
     const id = idOf(row._id);
     const userId = idOf(row.userId);
-    return id && userId ? [retractedNotificationOf({ id, userId, type: row.type, context: row.context, delivery: row.delivery })] : [];
+    if (!id || !userId) return [];
+    const retracted = retractedNotificationOf({ id, userId, type: row.type, context: row.context, delivery: row.delivery });
+    return [id === writtenOf(scope) ? { ...retracted, pushSent: true } : retracted];
   });
-  if (rows.length === 0) return 0;
-  await prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
-  await announcer?.announceNotificationsRetracted(rows).catch(() => undefined);
+  const written = writtenOf(scope);
+  const announced = written === null || rows.some((row) => row.id === written) || scope.kind !== 'at' ? rows : [...rows, { id: written, userId: scope.readerId, pushSent: true }];
+  if (announced.length === 0) return 0;
+  if (rows.length > 0) await prisma.notification.deleteMany({ where: { id: { in: rows.map((row) => row.id) } } });
+  await announcer?.announceNotificationsRetracted(announced).catch(() => undefined);
   return rows.length;
 }
 
