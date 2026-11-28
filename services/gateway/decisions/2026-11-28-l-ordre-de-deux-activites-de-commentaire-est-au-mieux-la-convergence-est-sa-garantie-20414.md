@@ -2,6 +2,26 @@
 
 **Issue** : #20414 · **Constat source** : audit adversarial de #20337, constat 4
 
+> **Décision COMPAGNE, écrite en parallèle par une autre session :**
+> [2026-11-27 — une activité à compteur ABSOLU ne promet aucun ordre de
+> livraison, elle promet une RELECTURE](2026-11-27-les-activites-a-compteur-absolu-ne-promettent-aucun-ordre-de-livraison-20414.md).
+> Les deux soldent #20414 et **ne se contredisent pas** : elles ont été
+> rapprochées à la main, et chaque site de code cite les deux. Elles se
+> partagent la question — la compagne porte la PORTÉE (les six diffusions à
+> compteur absolu, commentaire ET post) et ce qui corrige l'écart **par
+> client** (iOS persiste et se corrige au prochain chargement REST ; le web ne
+> survit pas au rechargement ; Android ne collecte même pas `comment:liked`,
+> dette #20745), plus la raison pour laquelle `_seq` ne peut pas estampiller
+> ces charges (`emitWithSeq` n'estampille que les émissions vers UN
+> destinataire). Celle-ci porte la PRÉMISSE de la convergence — les deux
+> transports écrivent les mêmes lignes, et son cliquet le garde — et la mesure
+> du chemin de resynchronisation, qui n'a aucun appelant (#20778).
+>
+> Deux fichiers pour une issue n'est pas l'idéal du dépôt. Ils sont gardés tels
+> quels parce qu'ils ont été rapprochés à la main par la session qui est
+> arrivée en second : les refondre aurait supprimé le travail de l'autre, ce
+> qu'aucune des deux n'avait à décider seule.
+
 ### Ce qui a motivé la décision
 
 Deux sites du dépôt portaient des doctrines d'ordonnancement **opposées** pour la
