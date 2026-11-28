@@ -11,9 +11,8 @@
  * 2. Le PERDANT du compare-and-set : quand deux instances lisent la même
  *    bulle et que celle qui tient l'instantané le plus ANCIEN écrit la
  *    première, la seconde échoue en `P2025` et renonce — le relevé le plus
- *    récent n'atteint jamais la bulle. Témoin `it.failing` : il documente le
- *    défaut restant sans rougir la CI, et rougira le jour où le perdant
- *    relira et réessaiera (retirer alors `.failing`).
+ *    récent n'atteignait jamais la bulle. Le perdant relance désormais sa
+ *    passe, un nombre BORNÉ de fois : un `P2025` permanent ne boucle pas.
  */
 import { describe, it, expect, jest } from '@jest/globals';
 
@@ -124,7 +123,7 @@ describe('#20747 audit — la bulle est lue AVANT l’instantané des mesures', 
 });
 
 describe('#20747 audit — le perdant du compare-and-set ne perd pas le relevé le plus récent', () => {
-  it.failing('l’instance au relevé le plus récent finit par écrire, même quand l’autre a écrit la première', async () => {
+  it('l’instance au relevé le plus récent finit par écrire, même quand l’autre a écrit la première', async () => {
     const store: Store = { call: endedCall(3_000), bubble: postedBubble() };
     let releaseB: () => void = () => undefined;
     const bMayWrite = new Promise<void>((resolve) => { releaseB = resolve; });
@@ -145,5 +144,46 @@ describe('#20747 audit — le perdant du compare-and-set ne perd pas le relevé 
     await bDone;
 
     expect(bytesTotal(store)).toBe(10_000);
+  });
+});
+
+describe('#20747 audit — la relance après un compare-and-set perdu est BORNÉE', () => {
+  it('un P2025 permanent renonce après un petit nombre de relances, sans diffuser', async () => {
+    const store: Store = { call: endedCall(3_000), bubble: postedBubble() };
+    const a = instance(store, {
+      beforeUpdate: async () => {
+        store.bubble = { ...store.bubble, updatedAt: new Date((store.bubble.updatedAt as Date).getTime() + 1) };
+      }
+    });
+
+    await a.refresh(CALL_ID);
+
+    expect(a.prisma.message.update).toHaveBeenCalledTimes(3);
+    expect(a.broadcast).not.toHaveBeenCalled();
+  });
+
+  it('une passe sans conflit ne se relance pas', async () => {
+    const store: Store = { call: endedCall(3_000), bubble: postedBubble() };
+    const a = instance(store);
+
+    await a.refresh(CALL_ID);
+
+    expect(a.prisma.message.update).toHaveBeenCalledTimes(1);
+    expect(a.prisma.message.findFirst).toHaveBeenCalledTimes(1);
+    expect(a.broadcast).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('#20747 audit — un appel qui a changé de conversation entre l’ancre et les faits n’est pas réécrit', () => {
+  it('les faits relus pour une autre conversation que l’ancre laissent la bulle intacte', async () => {
+    const store: Store = { call: endedCall(3_000), bubble: postedBubble() };
+    const a = instance(store);
+    a.prisma.callSession.findUnique.mockImplementation(async (args: { select?: Row }) =>
+      isFactsRead(args) ? { ...store.call, conversationId: '6650000000000000000000f8' } : { ...store.call });
+
+    await a.refresh(CALL_ID);
+
+    expect(a.prisma.message.update).not.toHaveBeenCalled();
+    expect(a.broadcast).not.toHaveBeenCalled();
   });
 });
