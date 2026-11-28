@@ -633,6 +633,63 @@ final class CallStatsEstimateAndRemoteRttTests: XCTestCase {
         XCTAssertEqual(stats.roundTripTimeMs, 0)
     }
 
+    // MARK: #20797 — un RTT aberrant sur la paire élue cède au repli
+
+    private func otherPair(rtt: Double) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: "CP2", type: "candidate-pair", values: ["currentRoundTripTime": rtt],
+                           strings: ["state": "in-progress"])
+    }
+
+    func test_reduce_electedPairRttNaN_readsTheNextValidPair() {
+        let stats = CallStats.reduce(entries: [
+            elected(["currentRoundTripTime": .nan]),
+            otherPair(rtt: 0.09),
+            remoteInbound("RA", kind: "audio", rtt: 0.4)
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 90, accuracy: 0.001)
+    }
+
+    func test_reduce_electedPairRttNegativeAndNoOtherPair_readsThePeerRtt() {
+        let stats = CallStats.reduce(entries: [
+            elected(["currentRoundTripTime": -0.05]),
+            remoteInbound("RA", kind: "audio", rtt: 0.12)
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 120, accuracy: 0.001)
+    }
+
+    func test_reduce_electedPairRttInfinite_fallsBack() {
+        let toPeer = CallStats.reduce(entries: [
+            elected(["currentRoundTripTime": .infinity]),
+            remoteInbound("RA", kind: "audio", rtt: 0.12)
+        ])
+        let toPair = CallStats.reduce(entries: [elected(["currentRoundTripTime": -.infinity]), otherPair(rtt: 0.07)])
+
+        XCTAssertEqual(toPeer.roundTripTimeMs, 120, accuracy: 0.001)
+        XCTAssertEqual(toPair.roundTripTimeMs, 70, accuracy: 0.001)
+    }
+
+    func test_reduce_aberrantNextPairRtt_isSkippedForThePeerRtt() {
+        let stats = CallStats.reduce(entries: [
+            elected(["currentRoundTripTime": .nan]),
+            otherPair(rtt: -1),
+            remoteInbound("RA", kind: "audio", rtt: 0.12)
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 120, accuracy: 0.001)
+    }
+
+    func test_reduce_electedPairRttOfZero_isAMeasureAndEndsTheFallback() {
+        let stats = CallStats.reduce(entries: [
+            elected(["currentRoundTripTime": 0]),
+            otherPair(rtt: 0.09),
+            remoteInbound("RA", kind: "audio", rtt: 0.4)
+        ])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 0)
+    }
+
     func test_rawProjection_readsTheRemoteInboundRoundTripTime() {
         let entry = CallStats.RawEntry(id: "RA", type: "remote-inbound-rtp",
                                        raw: ["kind": "audio" as NSString, "roundTripTime": NSNumber(value: 0.12)])

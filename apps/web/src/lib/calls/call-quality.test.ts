@@ -278,3 +278,35 @@ describe('une estimation hors bornes et un RTT absent de la paire se lisent comm
     expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0 }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBe(0);
   });
 });
+
+describe('un RTT aberrant sur la paire élue cède au repli, comme sur iOS et Android (#20797)', () => {
+  const read = (entries: readonly Entry[]) => readStats(report(entries), 0);
+  const elected = (fields: Entry = {}): Entry => ({ type: 'candidate-pair', id: 'CP1', nominated: true, state: 'succeeded', ...fields });
+  const other = (fields: Entry = {}): Entry => ({ type: 'candidate-pair', id: 'CP2', state: 'in-progress', ...fields });
+  const peer = (roundTripTime: number): Entry => ({ type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime });
+
+  test('une paire élue à NaN cède à la paire suivante qui porte une valeur valide', () => {
+    expect(read([elected({ currentRoundTripTime: Number.NaN }), other({ currentRoundTripTime: 0.09 }), peer(0.4)]).rtt).toBeCloseTo(90);
+  });
+
+  test('une paire élue négative, sans autre paire, cède au RTT du pair', () => {
+    expect(read([elected({ currentRoundTripTime: -0.05 }), peer(0.12)]).rtt).toBeCloseTo(120);
+  });
+
+  test('une paire élue infinie cède au repli', () => {
+    expect(read([elected({ currentRoundTripTime: Number.POSITIVE_INFINITY }), peer(0.12)]).rtt).toBeCloseTo(120);
+    expect(read([elected({ currentRoundTripTime: Number.NEGATIVE_INFINITY }), other({ currentRoundTripTime: 0.07 })]).rtt).toBeCloseTo(70);
+  });
+
+  test('une paire suivante aberrante est sautée aussi, au profit du RTT du pair', () => {
+    expect(read([elected({ currentRoundTripTime: Number.NaN }), other({ currentRoundTripTime: -1 }), peer(0.12)]).rtt).toBeCloseTo(120);
+  });
+
+  test('une paire élue à 0 est une mesure : le repli n’est pas consulté', () => {
+    expect(read([elected({ currentRoundTripTime: 0 }), other({ currentRoundTripTime: 0.09 }), peer(0.4)]).rtt).toBe(0);
+  });
+
+  test('une valeur non numérique sur la paire élue reste ignorée', () => {
+    expect(read([elected({ currentRoundTripTime: '0.05' }), peer(0.12)]).rtt).toBeCloseTo(120);
+  });
+});

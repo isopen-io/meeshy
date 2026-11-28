@@ -147,6 +147,57 @@ class CallStatValueTest {
         assertThat(stats.roundTripTimeMs).isEqualTo(0.0)
     }
 
+    // --- #20797 : un RTT aberrant sur la paire élue cède au repli -------------
+
+    private fun otherPair(rttSeconds: Double) = CallStats.RawEntry(
+        id = "q",
+        type = "candidate-pair",
+        values = mapOf("currentRoundTripTime" to rttSeconds),
+        strings = mapOf("state" to "in-progress"),
+    )
+
+    @Test
+    fun `an elected pair rtt of NaN yields to the next pair carrying a valid one`() {
+        val stats = CallStats.reduce(
+            listOf(electedPair(mapOf("currentRoundTripTime" to Double.NaN)), otherPair(0.09), remoteInbound("RA", "audio", 0.4)),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(90.0)
+    }
+
+    @Test
+    fun `a negative elected pair rtt with no other pair yields to the peer rtt`() {
+        val stats = CallStats.reduce(
+            listOf(electedPair(mapOf("currentRoundTripTime" to -0.05)), remoteInbound("RA", "audio", 0.12)),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(120.0)
+    }
+
+    @Test
+    fun `an infinite elected pair rtt falls back`() {
+        val toPeer = CallStats.reduce(
+            listOf(electedPair(mapOf("currentRoundTripTime" to Double.POSITIVE_INFINITY)), remoteInbound("RA", "audio", 0.12)),
+        )
+        val toPair = CallStats.reduce(listOf(electedPair(mapOf("currentRoundTripTime" to Double.NEGATIVE_INFINITY)), otherPair(0.07)))
+        assertThat(toPeer.roundTripTimeMs).isWithin(1e-9).of(120.0)
+        assertThat(toPair.roundTripTimeMs).isWithin(1e-9).of(70.0)
+    }
+
+    @Test
+    fun `an aberrant next pair rtt is skipped for the peer rtt`() {
+        val stats = CallStats.reduce(
+            listOf(electedPair(mapOf("currentRoundTripTime" to Double.NaN)), otherPair(-1.0), remoteInbound("RA", "audio", 0.12)),
+        )
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(120.0)
+    }
+
+    @Test
+    fun `an elected pair rtt of zero is a measure and ends the fallback`() {
+        val stats = CallStats.reduce(
+            listOf(electedPair(mapOf("currentRoundTripTime" to 0.0)), otherPair(0.09), remoteInbound("RA", "audio", 0.4)),
+        )
+        assertThat(stats.roundTripTimeMs).isEqualTo(0.0)
+    }
+
     // --- reduce : gigue -----------------------------------------------------
 
     @Test
