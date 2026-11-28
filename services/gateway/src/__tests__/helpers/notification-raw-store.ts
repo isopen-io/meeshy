@@ -50,6 +50,10 @@ export function notificationRawStore(initial: readonly StoredNotification[] = []
   };
   return {
     rows: () => rows,
+    /** Range une ligne comme `createNotification` l'aurait écrite. */
+    insert: (row: StoredNotification): void => {
+      rows = [...rows, row];
+    },
     /** Chaque filtre brut reçu, dans l'ordre. */
     filters,
     prisma: {
