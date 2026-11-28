@@ -257,18 +257,26 @@ extension CallStats {
         entries.sorted { ($0.kind == "video") != ($1.kind == "video") ? $1.kind == "video" : $0.id < $1.id }
     }
 
-    /// #20098 — a pair measure read on the elected pair; with no elected pair,
-    /// or one lacking the field, on the pair carrying it first in `electionOrder`.
+    /// #20348, #20797 — a measure is kept only when finite and `>= 0`; a 0 is a measure.
+    private static func isValidMeasure(_ value: Double) -> Bool {
+        value.isFinite && value >= 0
+    }
+
+    /// #20098, #20797 — a pair measure read on the elected pair; with no elected
+    /// pair, or one lacking the field or carrying an aberrant value (NaN,
+    /// infinite, negative), on the first pair of `electionOrder` carrying a
+    /// valid one; `nil` otherwise, and the caller falls back.
     /// Never used for `availableOutgoingBitrate` (#20284).
     private static func pairMeasure(_ key: String, elected: RawEntry?, in entries: [RawEntry]) -> Double? {
-        elected?.values[key] ?? electionOrder(entries).first { $0.values[key] != nil }?.values[key]
+        ([elected].compactMap { $0 } + electionOrder(entries))
+            .lazy.compactMap { $0.values[key] }.first(where: isValidMeasure)
     }
 
     /// #20348 — the peer's `roundTripTime` (s): the first `remote-inbound-rtp`
     /// of `streamOrder` carrying a finite value `>= 0` (web `remoteRoundTripTime`).
     private static func remoteRoundTripTime(in entries: [RawEntry]) -> Double? {
         streamOrder(entries.filter { $0.type == "remote-inbound-rtp" })
-            .lazy.compactMap { $0.values["roundTripTime"] }.first { $0.isFinite && $0 >= 0 }
+            .lazy.compactMap { $0.values["roundTripTime"] }.first(where: isValidMeasure)
     }
 
     /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
@@ -277,9 +285,11 @@ extension CallStats {
     /// first `inbound-rtp` of `streamOrder` whose codec resolves (#20221), and keeps
     /// inbound audio/video separate. RTT and available outgoing bitrate come
     /// from the SELECTED pair (#20098). RTT alone falls back, with no elected
-    /// pair or an elected pair lacking it, to the pair carrying it first in
+    /// pair or an elected pair lacking it or carrying an aberrant value (NaN,
+    /// infinite, negative, #20797), to the pair carrying a valid one first in
     /// `electionOrder` (strongest `priority`, then smallest `id`, #20121), and
-    /// with no pair carrying it, to the peer's `remote-inbound-rtp` (#20348). The
+    /// with no pair carrying one, to the peer's `remote-inbound-rtp` (#20348);
+    /// a 0 is a measure and ends the fallback. The
     /// bitrate never does (#20284): a pair that carries no traffic holds a low
     /// or stale estimate, and the video tier would follow it — no estimate on
     /// the elected pair reads 0, "no estimate", as on the web (`readStats`), and
