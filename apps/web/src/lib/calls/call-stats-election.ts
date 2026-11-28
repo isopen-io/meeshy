@@ -65,17 +65,18 @@ export function selectedCandidatePair(entries: readonly StatsEntry[]): StatsEntr
   return named ?? pairs.find((entry) => entry.state === 'succeeded' && entry.nominated === true);
 }
 
-/** Une mesure de paire, lue sur la paire élue ; absente d'elle, sur la première paire de `electionOrder` qui la porte. */
+/** Une mesure retenue : un nombre fini et positif ou nul (#20348, #20797). Un 0 est une mesure. */
+const validMeasure = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+
+/**
+ * Une mesure de paire, lue sur la paire élue ; absente d'elle ou aberrante (non numérique, NaN, infinie, négative),
+ * sur la première paire de `electionOrder` qui en porte une valide (#20797). Aucune ⇒ `undefined`, et l'appelant passe au repli.
+ */
 export function pairMeasure(entries: readonly StatsEntry[], elected: StatsEntry | undefined, field: string): number | undefined {
-  const carried = (entry: StatsEntry | undefined): number | undefined => {
-    const value = entry?.[field];
-    return typeof value === 'number' ? value : undefined;
-  };
-  return carried(elected) ?? electionOrder(entries).map(carried).find((value) => value !== undefined);
+  return [elected, ...electionOrder(entries)].map((entry) => entry?.[field]).find(validMeasure);
 }
 
 /** Le `roundTripTime` (s) que rapporte le pair : le premier `remote-inbound-rtp` de `streamOrder` qui en porte un fini et positif ou nul (#20348). */
 export function remoteRoundTripTime(entries: readonly StatsEntry[]): number | undefined {
-  const valid = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
-  return streamOrder(entries.filter((entry) => entry.type === 'remote-inbound-rtp')).map((entry) => entry.roundTripTime).find(valid);
+  return streamOrder(entries.filter((entry) => entry.type === 'remote-inbound-rtp')).map((entry) => entry.roundTripTime).find(validMeasure);
 }

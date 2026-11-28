@@ -96,6 +96,11 @@ export const MAX_BITRATE_ESTIMATE_BPS = 2_147_483_647;
 export const bitrateEstimate = (value: unknown): number | null =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_BITRATE_ESTIMATE_BPS ? value : null;
 
+/**
+ * Le relevé d'un `getStats`. Le RTT se lit sur la paire élue, puis sur la première paire de `electionOrder` qui en porte un,
+ * puis sur le pair (`remote-inbound-rtp`) ; à chaque étape, seule une mesure finie et positive ou nulle est retenue, et un 0
+ * arrête le repli (#20348, #20797).
+ */
 export function readStats(report: StatsReportLike, at: number): StatsRead {
   const entries: StatsEntry[] = [];
   report.forEach((entry) => entries.push(entry));
