@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -104,11 +104,29 @@ describe('une seule source', () => {
     'services/gateway/src/services/zmq-agent/ZmqAgentClient.ts',
     'services/agent/src/zmq/types.ts',
   ];
+  const zmqDirectories = ['services/gateway/src/services/zmq-agent', 'services/agent/src/zmq'];
+  const redeclaration = /z\.literal\(\s*['"`]agent:|type:\s*['"`]agent:(response|reaction)['"`]\s*;/;
 
-  it.each(consumers)('%s consomme le contrat partagé sans le redéclarer', (path) => {
-    const source = readFileSync(resolve(repoRoot, path), 'utf8');
-    expect(source).toContain('@meeshy/shared/agent/zmq-contract');
-    expect(source).not.toMatch(/z\.literal\(\s*['"]agent:/);
-    expect(source).not.toMatch(/type:\s*['"]agent:(response|reaction)['"]/);
+  const sourcesUnder = (directory: string): readonly string[] =>
+    readdirSync(resolve(repoRoot, directory), { withFileTypes: true }).flatMap((entry) => {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isDirectory()) return entry.name === '__tests__' ? [] : sourcesUnder(path);
+      return /\.ts$/.test(entry.name) && !/\.test\.ts$/.test(entry.name) ? [path] : [];
+    });
+
+  it.each(consumers)('%s consomme le contrat partagé', (path) => {
+    expect(readFileSync(resolve(repoRoot, path), 'utf8')).toContain('@meeshy/shared/agent/zmq-contract');
+  });
+
+  it('aucun fichier ZMQ de la passerelle ni de l’agent ne redéclare un message du contrat', () => {
+    const offenders = zmqDirectories
+      .flatMap(sourcesUnder)
+      .filter((path) => redeclaration.test(readFileSync(resolve(repoRoot, path), 'utf8')));
+    expect(offenders).toEqual([]);
+  });
+
+  it('la passerelle type ce qu’elle envoie à l’agent par le contrat', () => {
+    const sink = readFileSync(resolve(repoRoot, 'services/gateway/src/socketio/handlers/agentMessageNotification.ts'), 'utf8');
+    expect(sink).toMatch(/sendEvent\(event: AgentEventInput\)/);
   });
 });

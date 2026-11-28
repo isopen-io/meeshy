@@ -6,10 +6,10 @@
 //
 //   node .amsf/scripts/inventaire.mjs                 inventaire en Markdown
 //   node .amsf/scripts/inventaire.mjs --json          le même, en JSON
-//   node .amsf/scripts/inventaire.mjs --affected dev  projets touchés depuis <base>
+//   node .amsf/scripts/inventaire.mjs --affected origin/dev  projets touchés depuis <base>
 //                                                     et leurs consommateurs transitifs
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -111,9 +111,7 @@ const workflows = () =>
     .sort()
     .map((chemin) => ({ chemin, nom: lire(chemin).match(/^name:\s*['"]?(.+?)['"]?\s*$/m)?.[1] ?? '' }));
 const composes = () =>
-  parcourir('.', 3, (nom) => /^docker-compose.*\.ya?ml$/.test(nom))
-    .filter((chemin) => !statSync(join(racine, chemin)).isSymbolicLink?.())
-    .sort();
+  parcourir('.', 3, (nom) => /^docker-compose.*\.ya?ml$/.test(nom)).sort();
 
 const inventaire = () => {
   const workspaces = workspacesJs();
@@ -151,10 +149,21 @@ const touches = (base) => {
     .map((p) => p.chemin)
     .filter((chemin, index, tous) => tous.indexOf(chemin) === index)
     .filter((chemin) => chemin !== '.' && fichiers.some((f) => f.startsWith(`${chemin}/`)));
+  const consommateursNatifs = [
+    ...inv.swift.map((s) => ({ chemin: s.chemin, lit: s.dependancesLocales })),
+    ...inv.xcodegen.map((x) => ({ chemin: x.chemin, lit: x.paquetsLocaux })),
+  ];
+  const etendreNatifs = (atteints) => {
+    const nouveaux = consommateursNatifs
+      .filter((c) => !atteints.includes(c.chemin) && c.lit.some((dep) => atteints.includes(dep)))
+      .map((c) => c.chemin);
+    return nouveaux.length === 0 ? atteints : etendreNatifs([...atteints, ...new Set(nouveaux)]);
+  };
+  const natifsTransitifs = etendreNatifs(natifs).sort();
   const horsProjet = fichiers.filter(
     (f) => !inv.workspaces.some((w) => f.startsWith(`${w.chemin}/`)) && !natifs.some((chemin) => f.startsWith(`${chemin}/`)),
   );
-  return { base, fichiers: fichiers.length, directs, transitifs: consommateursTransitifs(inv.workspaces, directs), natifs, horsProjet };
+  return { base, fichiers: fichiers.length, directs, transitifs: consommateursTransitifs(inv.workspaces, directs), natifs, natifsTransitifs, horsProjet };
 };
 
 const tableau = (entetes, lignes) =>

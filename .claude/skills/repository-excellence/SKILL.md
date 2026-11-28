@@ -8,12 +8,12 @@ description: Boucle d'amélioration continue du monorepo Meeshy (AMSF). À utili
 L'état ne vit pas dans la conversation. Il se reconstruit depuis trois sources, dans cet ordre de confiance : **git** (ce qui est réellement livré), **les issues GitHub** (ce qui est décidé et en cours — seule source d'ÉTAT, CLAUDE.md § Pilotage), **`.amsf/`** (le relevé daté de l'orchestrateur).
 
 ## 1. Reprendre
-1. `cat .amsf/STATE.md` — phase, SHA de base, ce qui est en vol.
+1. `cat .amsf/STATE.md` — le dernier relevé de l'orchestrateur (SHA de base, ce qui a été livré, ce qui a été vérifié). Ce qui est EN COURS se lit dans les issues et les branches poussées, pas ici.
 2. `git fetch origin && git log --oneline origin/dev -5 && git status -sb` — si `dev` a avancé, fusionner `origin/dev` dans la branche avant tout (jamais de rebase, jamais de `--ours` global).
 3. `node .amsf/scripts/inventaire.mjs` — si l'inventaire a changé, mettre à jour `.amsf/INVENTORY.md`.
 
 ## 2. Choisir
-`.amsf/BACKLOG.md` classe les constats par sévérité. Prendre le plus haut qui est (a) confirmé dans le code, (b) corrigeable sans décision du porteur, (c) sans branche vivante sur ses chemins. Ouvrir ou retrouver son issue AVANT d'écrire.
+Le prochain lot se choisit dans les **issues ouvertes** et le projet « Meeshy — pilotage » (priorité, horizon), jamais dans un fichier. `.amsf/BACKLOG.md` est le relevé daté d'un audit : chaque ligne encore ouverte doit devenir une issue avant d'être travaillée. Prendre le plus haut qui est (a) confirmé dans le code, (b) corrigeable sans décision du porteur, (c) sans branche vivante sur ses chemins.
 
 ## 3. Déléguer
 - Un projet seul → agent `ingenieur-application`, périmètre d'écriture explicite.
