@@ -57,6 +57,7 @@ function fakePrisma(overrides: Record<string, any> = {}) {
       [model, { deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) }])),
     conversationShareLink: shareLinkTable([]),
     notification: {
+      findRaw: jest.fn<any>().mockResolvedValue([]),
       findMany: jest.fn<any>().mockResolvedValue([]),
       deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },
