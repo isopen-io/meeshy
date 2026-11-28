@@ -62,7 +62,7 @@ normal.
 | **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
 | **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | [#20607](https://github.com/isopen-io/meeshy/pull/20607) → `dev` | ✅ mergé |
 | **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | [#20648](https://github.com/isopen-io/meeshy/pull/20648) → `dev` | ✅ mergé |
-| **98w** | 2026-11-28 | `claude/practical-fermat-6d9m0i` | → `dev` | ⏳ ouverte |
+| **98w** | 2026-11-28 | `claude/practical-fermat-6d9m0i` | [#20793](https://github.com/isopen-io/meeshy/pull/20793) → `dev` | ⏳ ouverte |
 
 **98w** — cohérence (dim. 6) / maintenabilité site-unique (dim. 11) / a11y œil↔oreille /
 parité iOS (**FIN de la dette #20606**) : le **minuteur d'enregistrement vocal**
