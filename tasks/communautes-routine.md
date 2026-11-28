@@ -1046,4 +1046,11 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 ## 2026-11-28 — réveil 09:37 UTC
 
 - Début du run : #20796 (#20740) fusionnée dans `dev` (`98dd6cd22`) ; aucune PR de la routine ouverte ; aucune branche vivante sur `callInvitation.ts`, `call-invite-events.ts` ni `community-addition-budget.ts`.
-- Lot : #20795 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »). En cours.
+- Lot : #20795 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »).
+- Passerelle : `authorizeCallInvitation` fait payer à l'inviteur (une unité, `communityBudget` injecté par `callInviteDependencies`) un refus vers une personne bloquée avec un présent, désactivée ou bannie du salon d'une communauté PRIVÉE, sous la loi des routes : refus d'autorisation (`invite-forbidden`), membre déjà actif, salon fermé aux nouveaux membres et ancien membre `guest-only` ne coûtent rien ; seau de l'acteur épuisé ⇒ `RATE_LIMITED` + `retryAfter`.
+- Contrat : `CallControlAck` porte `retryAfter?` (secondes) ; `refused(code, retryAfter)` ; l'admission rend `{ outcome: 'throttled', retryAfter }` (la forme nue reste lue).
+- Budget : un débit que Redis n'a pas compté (`consume` ⇒ `null`) ne se rend plus, fenêtre par fenêtre (`prendre` / `rendreSur`, `spendCommunityAdditionByActorUndoable`) ; `refundCommunityAdditionByActor`, sans appelant, retiré.
+- Décision écrite : `decisions/2026-11-28-l-invite-d-un-seul-appel-ne-paie-pas-le-budget-des-ajouts-20795.md` (le `legacy-guest` n'entre nulle part et ne paie pas) ; la décision #20740 rejoint la carte `decisions.md`.
+- Témoins : `callInvitation.test.ts` (+11), `call-invite-events.test.ts` (+3), `community-addition-budget-redis-outage-20795.test.ts` (4, neuf). Rouges prouvés : 9 échecs avant le code, puis 3 sous la mutation des correctifs d'audit.
+- Revue adversariale (non bloquante), corrigé dans le lot : un ancien membre `guest-only` bloqué payait alors que la décision dit qu'il ne paie rien ; le cas « membre actif » n'avait pas de témoin ; salon fermé aux nouveaux membres ; témoin de panne partielle (une fenêtre comptée, l'autre non) ; avertissement quand aucun hôte de budget n'est posé à l'autorisation. Reste écrit dans la décision : l'oracle sur le blocage est taxé, pas fermé (seau de la cible plein).
+- Suivi #20802 (même milestone) : iOS et Android disent « réessayez plus tard » pour une invitation refusée en `RATE_LIMITED` et lisent `retryAfter` (le web dit déjà la phrase ; aucun client ne lit `retryAfter`).

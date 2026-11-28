@@ -178,6 +178,11 @@ export function callInviteDependencies(input: {
 }): CallInviteEventDeps {
   const { io, prisma, callService } = input;
   const communityBudget = (): CommunityAdmissionBudget | null => (input.communityBudget ?? hostedCommunityAdmissionBudget)();
+  const authorizationBudget = (): CommunityAdmissionBudget | null => {
+    const budget = communityBudget();
+    if (!budget) logger.warn('call-invite: no community addition budget host — refusals not debited');
+    return budget;
+  };
   let engagement: EngagementService | null = null;
   const joinRoom = (userId: string, conversationId: string): Promise<void> =>
     admitUserToConversationRoom({ io, userSockets: new Map(), socketById: () => undefined, connectedUsers: new Map() }, userId, conversationId);
@@ -188,7 +193,7 @@ export function callInviteDependencies(input: {
     rateLimiter: input.rateLimiter,
     authorize: (request) =>
       authorizeCallInvitation(
-        { prisma, callService, ringingInviteeIds: (callId) => input.invitations.pendingFor(callId), communityBudget: communityBudget() },
+        { prisma, callService, ringingInviteeIds: (callId) => input.invitations.pendingFor(callId), communityBudget: authorizationBudget() },
         request
       ),
     rebranch: (request) =>

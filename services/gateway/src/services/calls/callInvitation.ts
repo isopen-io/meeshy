@@ -211,9 +211,11 @@ async function refusePaying(
 /**
  * Une personne bloquée avec un présent, désactivée ou bannie du salon d'une
  * communauté PRIVÉE : la tentative se paie comme à la route, sans quoi l'appel
- * serait un sondage gratuit des comptes ajoutables (#20795). Le budget épuisé
- * répond `RATE_LIMITED`, quelle que soit la raison du refus : il ne dit pas
- * pourquoi la cible n'entrait pas.
+ * serait un sondage gratuit des comptes ajoutables (#20795). Le seau de
+ * l'ACTEUR épuisé répond `RATE_LIMITED`, quelle que soit la raison du refus.
+ * Ne paient pas : un salon fermé aux nouveaux membres (refusé gratuitement de
+ * toute façon), et un ancien membre qui ne serait revenu qu'en invité de CET
+ * appel (`guest-only`) — accordé, il ne coûte rien, refusé non plus.
  */
 async function refuseNotAddable(
   deps: CallInvitationDeps,
@@ -221,10 +223,17 @@ async function refuseNotAddable(
   code: CallControlErrorCode
 ): Promise<CallInvitationRefusal> {
   if (!deps.communityBudget || callInvitationRoute(input.conversation) !== 'admit-member') return refuse(code);
+  if (newMemberRefusal(input.conversation)) return refuse(code);
+  const entry = await callEntryForInvitee(deps.prisma, {
+    conversationId: input.conversation.id,
+    inviterUserId: input.inviterUserId,
+    inviteeUserId: input.inviteeUserId,
+  });
+  if (entry === 'guest-only') return refuse(code);
   const community = await loadSalonCommunity(deps.prisma, { communityId: input.conversation.communityId, actorId: input.inviterUserId });
   if (!community) return refuse(code);
-  const entry = await planSalonEntry(deps.prisma, community, { kind: 'registered', userId: input.inviteeUserId });
-  return refusePaying(deps, input.inviterUserId, attemptOf(entry), code);
+  const plan = await planSalonEntry(deps.prisma, community, { kind: 'registered', userId: input.inviteeUserId });
+  return refusePaying(deps, input.inviterUserId, attemptOf(plan), code);
 }
 
 const isLiveAccount = (user: { readonly isActive?: boolean | null; readonly deletedAt?: Date | null } | undefined): boolean =>

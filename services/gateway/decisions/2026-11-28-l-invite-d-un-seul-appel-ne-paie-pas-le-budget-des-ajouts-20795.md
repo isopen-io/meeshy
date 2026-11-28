@@ -23,11 +23,19 @@ ajoutables d'une communauté privée. Dans le salon d'une communauté privée, l
 désormais ce que `planSalonEntry` coûterait : un refus d'AUTORISATION (l'inviteur ne peut faire
 entrer personne, `invite-forbidden`) ne coûte rien ; une personne qui serait entrée coûte une unité
 (`not-addable`, comme un identifiant sans compte à la route) ; un membre déjà actif n'entre pas et
-ne coûte rien. Le budget épuisé rend `RATE_LIMITED`, quelle que soit la raison du refus.
+ne coûte rien. Ne paient pas non plus : un salon fermé aux nouveaux membres (refusé gratuitement de
+toute façon), et un ancien membre qui ne serait revenu qu'en invité de CET appel (`guest-only`,
+décision 1 — accordé ou refusé, il ne coûte rien). Le seau de l'ACTEUR épuisé rend `RATE_LIMITED`,
+quelle que soit la raison du refus. Limite assumée, mesurée par l'audit du lot : seul l'acteur est
+débité sur un refus, donc quand c'est le seau de la CIBLE (ou de la paire) qui est plein, une cible
+ajoutable rend `RATE_LIMITED` par l'admission et une cible bloquée `PERMISSION_DENIED` — ce que les
+codes distinguaient déjà avant ce lot (#19650) ; l'oracle sur le blocage est TAXÉ, il n'est pas
+fermé.
 
 **Décision 3 — l'accusé dit quand réessayer.** `CallControlAck` porte `retryAfter` (secondes,
 optionnel) sur un `RATE_LIMITED` dont le serveur connaît l'échéance. Ajout rétrocompatible : un
-client qui ne le lit pas reste juste.
+client qui ne le lit pas reste juste. Aucun client ne le lit encore (mesuré : web `call-decode.ts`,
+iOS `MessageSocketManager+CallControls.swift`, Android `CallControlsSocket.kt`) : #20802.
 
 **Décision 4 — un débit que Redis n'a pas compté ne se rend pas.** `consume` rend `null` sur une
 panne (fail-open, #19812) ; le rendu armé par ce geste décrémentait quand Redis revenait, sur des

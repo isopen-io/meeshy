@@ -24,18 +24,19 @@ const CIBLE = '507f1f77bcf86cd7994390b1';
 
 const fakeRedis = () => {
   const store = new Map<string, number>();
-  const state = { down: false };
-  const guard = () => {
-    if (state.down) throw new Error('ECONNREFUSED');
+  const state: { down: boolean; downFor: (key: string) => boolean } = { down: false, downFor: () => false };
+  const guard = (key = '') => {
+    if (state.down || state.downFor(key)) throw new Error('ECONNREFUSED');
   };
   const pipeline = () => {
     const ops: Array<() => [null, number]> = [];
+    const keys: string[] = [];
     const chain = {
-      incr: (key: string) => (ops.push(() => [null, store.set(key, (store.get(key) ?? 0) + 1).get(key) as number]), chain),
-      incrby: (key: string, n: number) => (ops.push(() => [null, store.set(key, (store.get(key) ?? 0) + n).get(key) as number]), chain),
+      incr: (key: string) => (keys.push(key), ops.push(() => [null, store.set(key, (store.get(key) ?? 0) + 1).get(key) as number]), chain),
+      incrby: (key: string, n: number) => (keys.push(key), ops.push(() => [null, store.set(key, (store.get(key) ?? 0) + n).get(key) as number]), chain),
       pttl: (_key: string) => (ops.push(() => [null, 60_000]), chain),
       exec: async () => {
-        guard();
+        keys.forEach((key) => guard(key));
         return ops.map((op) => op());
       },
     };
@@ -93,6 +94,24 @@ describe('#20795 — un débit pris pendant une panne Redis ne se rend pas sur l
     expect(count(store, `actor:d:user:${ACTEUR}`)).toBe(1);
 
     await pendantLaPanne.rendre();
+
+    expect(count(store, `actor:h:user:${ACTEUR}`)).toBe(1);
+    expect(count(store, `actor:d:user:${ACTEUR}`)).toBe(1);
+    await app.close();
+  });
+
+  it('une fenêtre comptée et l’autre en panne : seule la fenêtre comptée se rend', async () => {
+    const { redis, store, state } = fakeRedis();
+    const app = appWith(redis);
+    state.downFor = (key) => key.includes('actor:d');
+    const spend = await spendCommunitySalonAdmissionUndoable(app, ACTEUR, entre(CIBLE));
+    expect(spend.verdict.allowed).toBe(true);
+    expect(count(store, `actor:h:user:${ACTEUR}`)).toBe(1);
+    state.downFor = () => false;
+    await spendCommunitySalonAdmissionUndoable(app, ACTEUR, entre('507f1f77bcf86cd7994390b2'));
+    expect(count(store, `actor:d:user:${ACTEUR}`)).toBe(1);
+
+    await spend.rendre();
 
     expect(count(store, `actor:h:user:${ACTEUR}`)).toBe(1);
     expect(count(store, `actor:d:user:${ACTEUR}`)).toBe(1);
