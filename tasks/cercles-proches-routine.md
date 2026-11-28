@@ -2302,3 +2302,12 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   `tsc` passerelle 0 ; dette `any` inchangée (484).
 - Prochain lot : finir #20714 si elle est encore ouverte ; puis les lots iOS de la position après #20514, sinon un autre
   lot serveur du jalon 1/2.
+
+## 2026-11-28 — réveil de 5 h 13 : fusion de #20738 (#19540)
+
+- Reprise : #20738 seule PR de la routine ouverte, CI `ci.yml` 46104019104 (`workflow_dispatch`, autre session) en cours
+  sur c67febb3a. Aucun nouveau lot ouvert : le run consiste à la mener à la fusion.
+- `dev` (60 commits de plus, aucun chemin commun) fusionnée localement ; rejoué sur l'arbre fusionné : affiliation,
+  inscription et relations 28 suites, 396/396 ; `tsc` passerelle 0.
+- Prochain lot : les lots iOS de la position (#20416 point 2, #20308, #20054, #20056) dès que #20514 aura fusionné ;
+  sinon un lot serveur du jalon 1/2.
