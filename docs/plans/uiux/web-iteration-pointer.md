@@ -11,7 +11,7 @@
 |---|---|
 | **Base de départ** de chaque itération web | `origin/dev` (resync à chaque tour) |
 | **Cible de la PR** | `dev` |
-| Branche de travail de la session courante | `claude/practical-fermat-3gkfko` |
+| Branche de travail de la session courante | `claude/practical-fermat-6d9m0i` |
 
 **Pourquoi `dev` et non `main`.** La directive porteur (CLAUDE.md §🚦) tranche :
 `dev` **est le staging**, et Claude y est autonome sur tout — toute PR vers `dev`
@@ -61,7 +61,30 @@ normal.
 | **94w** | 2026-11-24 | `claude/practical-fermat-stot2z` | [#20515](https://github.com/isopen-io/meeshy/pull/20515) → `dev` | ✅ mergé |
 | **95w** | 2026-11-25 | `claude/practical-fermat-o90to9` | → `dev` | ✅ mergé |
 | **96w** | 2026-11-26 | `claude/practical-fermat-h4rohp` | [#20607](https://github.com/isopen-io/meeshy/pull/20607) → `dev` | ✅ mergé |
-| **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | [#20648](https://github.com/isopen-io/meeshy/pull/20648) → `dev` | ⏳ ouverte |
+| **97w** | 2026-11-27 | `claude/practical-fermat-3gkfko` | [#20648](https://github.com/isopen-io/meeshy/pull/20648) → `dev` | ✅ mergé |
+| **98w** | 2026-11-28 | `claude/practical-fermat-6d9m0i` | → `dev` | ⏳ ouverte |
+
+**98w** — cohérence (dim. 6) / maintenabilité site-unique (dim. 11) / a11y œil↔oreille /
+parité iOS (**FIN de la dette #20606**) : le **minuteur d'enregistrement vocal**
+(`components/composer-tray.tsx`) arrondissait (`Math.round`) sur ses DEUX surfaces — l'œil
+`formatDuration` (`<span aria-hidden>`) et l'oreille `spokenDuration` (`<span sr-only>`,
+prononcé) — alors que le socle `formatMediaTime` (`lib/view/seek-track.ts`) et iOS
+`MediaFormat.duration` (défaut `rounding: .down`, **œil ET `.spoken`**) planchén. Conséquences :
+(1) +1 s à l'œil comme à l'oreille pour toute fraction ≥ .5 s (90 500 ms → « 1:31 » / « 1 min
+31 s », partout ailleurs « 1:30 ») ; (2) risque de divergence a11y œil↔oreille (deux `Math.round`
+indépendants). Parité iOS confirmée : `MediaFormat+Duration.swift:34,45` plancher le chemin
+`wholeSeconds`, partagé par la forme `m:ss` et `.spoken`. Correction (site unique du PLANCHER) :
+`floorMediaSeconds(seconds)` extraite dans le socle `seek-track.ts` (plancher + garde
+non-fini/négatif), consommée par `formatMediaTime` (sortie **byte-identique**) ; l'œil délègue à
+`formatMediaTime(ms/1000)`, l'oreille plancher via `floorMediaSeconds(ms/1000)` — une seule loi,
+œil et oreille structurellement verrouillés. Témoin NEUF (axe discriminant : le cas 65 000 ms est
+entier, floor==round) `composer-tray.test.tsx` « à la demi-seconde, l'œil et l'oreille planchent
+ensemble » (**1 rouge → vert** : « 1:30 »/« 1 min 30 s », jamais « :31 ») ; non-régression
+`composer-tray(+heif)` **9/9**, `lib/view` **4380/0**, `lib/export` **547/0** ; `tsc` **0** ; gate
+#8879 **0** (remesuré à l'ouverture). Housekeeping : 97w confirmée mergée (#20648) ; appariement
+analyses↔plans 1:1 (**77/77** `w` → **78/78** avec 98w, 0 doublon). **#20606 FERMÉE** : les cinq
+formateurs `m:ss` du web convergent sur le socle ; reste `talkie-header-law.ts:197` (réimplémente
+mais planche déjà — conforme, pas un défaut). Analyse : `docs/analyses/uiux/2026-11-28-iteration-98w.md`.
 
 **97w** — cohérence de positionnement (dim. 6) / maintenabilité site-unique (dim. 11)
 / parité iOS (**suite surgicale de 96w, moitié EXPORT de #20606**) : **jumelle
@@ -471,27 +494,38 @@ du code supprimé et ne se rejouent pas.** La routine repart d'une revue fraîch
 l'`apps/web` actuel (Vite + Preact). Toutes sont annotées `CORRIGÉ` et closes pour
 leur époque.
 
-## Prochaine itération : **97w** — revue fraîche de l'`apps/web`
+## Prochaine itération : **99w** — revue fraîche de l'`apps/web`
 
-**Filons a11y/i18n (#20326) et harmonie (#8879) SOLDÉS ; 96w a soldé le badge de
-durée vidéo (#20605).** 97w repart d'une **revue fraîche** de l'`apps/web` actuel
-(Vite + Preact), dans l'esprit de la routine : épuration (dim. 12, « logique
-épurée »), optimisation (performance/fluidité), cohérence de thème/positionnement,
-accessibilité, i18n (texte visible ou lu encore en dur), navigation/gestes.
-Mesurer contre iOS (`apps/ios` + MeeshySDK, **jamais modifiés**) pour la parité,
-jamais pour reviser iOS.
+**Filons SOLDÉS : a11y/i18n `composeMessageLabel` (#20326), harmonie (#8879), ET
+les cinq formateurs `m:ss` (#20605 badge vidéo, #20606 export + composer-tray).**
+99w repart d'une **revue fraîche** de l'`apps/web` actuel (Vite + Preact), dans
+l'esprit de la routine : épuration (dim. 12, « logique épurée »), optimisation
+(performance/fluidité), cohérence de thème/positionnement, accessibilité, i18n
+(texte visible ou lu encore en dur), navigation/gestes. Mesurer contre iOS
+(`apps/ios` + MeeshySDK, **jamais modifiés**) pour la parité, jamais pour reviser iOS.
 
-**Piste la plus mûre pour 97w** : la **dette #20606** — deux des cinq formateurs
-`m:ss` du web arrondissent encore (`composer-tray.tsx:99` minuteur vocal ; iOS
-`VoiceRecordingView.swift:206` plancher → correctif direct ; `message-card-media
-.ts:54` export → vérifier la parité iOS de la carte d'export AVANT de planchér).
-Lot surgical, témoins d'accord avec `formatMediaTime`.
+**Méthode confirmée par 96w→98w** : la revue fraîche la plus rentable est la chasse
+aux JUMELLES DIVERGENTES (un concept réimplémenté en N sites qui dérivent). La
+famille `m:ss` est épuisée (tout converge sur `formatMediaTime` / `floorMediaSeconds`,
+socle `lib/view/seek-track.ts`). **Chercher d'autres familles de même forme** avant
+de conclure à une surface propre :
+- autres **formateurs recopiés** (tailles de fichier `o/Ko/Mo`, dates/heures relatives,
+  pourcentages, comptes abrégés `1,2 k`) ;
+- **résolveurs de couleur / d'accent** réimplémentés hors de `lib/accent` / `conversation-colors` ;
+- **calculs d'état** (présence, lecture/non-lu, progression) recopiés côté client au lieu
+  de dériver de la source servie.
+Partir d'`grep` sur `Math.round(`, `toFixed(`, `Intl.NumberFormat`, et sur les littéraux
+de couleur hors gate (`composer*`, hors périmètre #8879).
 
-**Méthode confirmée par 96w** : la revue fraîche la plus rentable est la chasse
-aux JUMELLES DIVERGENTES (un concept réimplémenté en N sites qui dérivent) — le
-badge vidéo arrondissait quand tout le reste planchérait. Chercher d'autres
-familles de même forme (formateurs, résolveurs de couleur, calculs d'état
-recopiés) avant de conclure à une surface propre.
+**Toujours REMESURER le gate d'harmonie #8879 à l'ouverture** (`node scripts/check-design-harmony.mjs`) :
+0 après 91w→98w, mais il remonte dès que `dev` reçoit une poche de chrome neuve. S'il est
+remonté, le vider reste prioritaire (une famille par tour) avant l'épuration.
+
+**Écarté, ne pas reproposer** : le lead E2EE de l'écran Sécurité
+(`settings-security.tsx`) est un repère règle 7 GOUVERNÉ (#17594), pas un défaut
+d'épure. i18n des attributs/texte visible : propre (balayé 96w). a11y des boutons :
+tous nommés. Gestes dismiss/show/back : `useBackDismiss` + `<dialog>` couvrent tout.
+`talkie-header-law.ts:197` : réimplémente `m:ss` mais planche déjà — conforme.
 
 **Écarté, ne pas reproposer** : le lead E2EE de l'écran Sécurité
 (`settings-security.tsx`) est un repère règle 7 GOUVERNÉ (#17594), pas un défaut
