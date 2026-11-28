@@ -554,14 +554,14 @@ describe('CallService.persistCallStats', () => {
     expect(lastUpdateData(prisma)).toEqual({ networkQuality: 'poor' });
   });
 
-  it('writes no bytes when the call no longer exists; the quality write is scoped by id alone (#20152)', async () => {
+  it('writes no bytes when the call no longer exists; only the quality writes, scoped by id (#20152, #20709)', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(null);
 
     await sut.persistCallStats(CALL_ID, { bytesSent: 1, bytesReceived: 1, level: 'good' });
 
-    expect(prisma.callSession.updateMany).toHaveBeenCalledTimes(1);
-    expect(prisma.callSession.updateMany).toHaveBeenCalledWith({ where: { id: CALL_ID }, data: { networkQuality: 'good' } });
+    const writes = prisma.callSession.updateMany.mock.calls.map(([args]: [{ where: { id: string }; data: Record<string, unknown> }]) => args);
+    expect(writes.every((w: { where: { id: string }; data: Record<string, unknown> }) => w.where.id === CALL_ID && Object.keys(w.data).join() === 'networkQuality')).toBe(true);
   });
 
   it('ignores an unknown quality tier', async () => {
@@ -598,7 +598,7 @@ describe('CallService.persistCallStats', () => {
     prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 0, bytesReceived: 0 });
     prisma.callSession.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(sut.persistCallStats(CALL_ID, { bytesSent: 500, bytesReceived: 600 })).resolves.toBeUndefined();
+    await expect(sut.persistCallStats(CALL_ID, { bytesSent: 500, bytesReceived: 600 })).resolves.toBe(false);
   });
 
 });

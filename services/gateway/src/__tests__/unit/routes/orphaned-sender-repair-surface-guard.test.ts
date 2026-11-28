@@ -463,6 +463,11 @@ const SERVICE_SURFACES: Record<string, Classification> = {
       'depuis le passé, donc jamais orpheline en pratique.',
   },
 
+  // #20709 — le rafraîchissement du résumé après un relevé tardif lit la bulle
+  // par `select: { id, metadata, updatedAt }` ; sa réécriture passe par
+  // `update` + `CALL_SUMMARY_MESSAGE_INCLUDE`, la même forme que `CallService`.
+  'calls/callSummaryLateRefresh.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+
   // Le résolveur PARTAGÉ lui-même (#6516) : sa seule lecture est la
   // découverte de portée — `{ select: { conversationId: true } }`, jamais
   // `sender`. C'est la garantie qu'il offre à ses appelants, pas un lecteur
