@@ -1042,3 +1042,8 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 - Gates locaux : `tsc --noEmit` passerelle exit 0 ; conversations, communautés, socketio : 403 suites, 4 900 tests verts.
 - Revue adversariale (non bloquante), corrigé dans le lot : (1) le débannissement faisait RENTRER sans débit dans une communauté qu'on avait quittée — il paie désormais, et un refus lève le bannissement sans rendre l'appartenance (témoins `community-salon-return-doors.test.ts` +4, rouge prouvé : 2 échecs) ; (2) `POST /conversations` en tête-à-tête rouvert / 409 E2EE / blocage gardait le débit — rendu (témoin `community-salon-addition-budget-20464.test.ts` +2, rouge prouvé sur le rouvert) ; un rejoin qui lève hors P2025 rend aussi son débit ; `rendre()` est idempotent (témoin, rouge prouvé) ; un témoin de source garde le montage de l'hôte, et l'appel journalise quand il manque.
 - Suivi #20795 (même milestone) : sonde gratuite par `PERMISSION_DENIED` à l'appel, `retryAfter` absent de l'accusé, rendu après une panne Redis, invité `legacy-guest`, lecture client de `RATE_LIMITED`.
+
+## 2026-11-28 — réveil 09:37 UTC
+
+- Début du run : #20796 (#20740) fusionnée dans `dev` (`98dd6cd22`) ; aucune PR de la routine ouverte ; aucune branche vivante sur `callInvitation.ts`, `call-invite-events.ts` ni `community-addition-budget.ts`.
+- Lot : #20795 (milestone « Personne n'est ajouté en masse à une communauté, ni à son insu »). En cours.
