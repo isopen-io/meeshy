@@ -307,6 +307,42 @@ préparé » :
 > elle-même, donc elle ne voit jamais ces trois-là : un rouge local que la CI
 > ne reproduit pas est un rouge d'arbre jusqu'à preuve du contraire.
 
+**Et la quatrième ligne n'est pas un ARTEFACT : c'est un BINAIRE SYSTÈME absent**
+(mesuré le 2026-11-28). **Trois suites** rendent **4 rouges** dans un conteneur
+de session, sur un arbre PARFAITEMENT à jour de `dev` et préparé selon les trois
+commandes ci-dessus :
+
+| suite | ce qui tombe |
+|---|---|
+| `services/gateway/src/__tests__/unit/services/UploadProcessor.heif-conversion.test.ts` | « la ligne désigne un JPEG lisible, l'original HEIC est gardé dans `renditions` » et son jumeau chiffré |
+| `services/gateway/src/routes/uploads/__tests__/tus-handler-heif-conversion.test.ts` | le même défaut sur le transport résumable |
+| `services/gateway/src/services/attachments/__tests__/ExifStrip.gain-map.test.ts` | la carte de gain d'un HEIC |
+
+Les trois sont dans la **voie de parité** (`node scripts/ci/voie-parite.mjs
+--liste gateway`), donc elles rougissent au premier job de la CI — celui qu'on
+regarde en premier.
+
+La cause est que la CI installe `ffmpeg`, `jpegtran`, `avifenc` et **`heif-convert`**
+(étape « Install ffmpeg, jpegtran, avifenc and heif-convert (gateway) ») et que les
+conteneurs de session n'ont que `ffmpeg`. **Le discriminant est une commande, pas
+une lecture de code** :
+
+```bash
+for b in heif-convert avifenc jpegtran ffmpeg; do printf '%-14s ' "$b"; command -v $b >/dev/null && echo présent || echo ABSENT; done
+```
+
+Ce rouge se distingue des trois autres par ce qu'il demande : **rien.** Il n'y a
+pas de commande qui l'efface, il n'y a qu'un fait à connaître — d'où sa place
+ici. La confirmation se fait en rejouant la suite sur `origin/dev` NU : si les
+mêmes témoins y tombent, aucun lot n'est en cause. C'est la mesure qui a été
+faite, et c'est la seule qui tranche.
+
+> **Un rouge reproductible sur `dev` nu n'accuse pas un lot — mais il n'accuse
+> pas forcément l'ARBRE non plus.** La règle d'au-dessus envoie vérifier les
+> artefacts ; quand ils sont tous à jour, la question suivante est
+> **« qu'est-ce que la CI INSTALLE que je n'ai pas ? »**, et elle se répond dans
+> le workflow, jamais dans le dépôt.
+
 **`bun install` échoue derrière un proxy sortant.** Le postinstall de `grpc-tools`
 télécharge un binaire préconstruit via une URL S3 que le proxy réécrit, et
 `node-pre-gyp` rend `Could not parse s3 bucket name from virtual host url` — l'install

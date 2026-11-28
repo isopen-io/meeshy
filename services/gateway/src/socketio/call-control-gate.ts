@@ -16,7 +16,8 @@ import { logger } from '../utils/logger';
 
 export type CallControlAckCallback = (response: CallControlAck) => void;
 
-export const refused = (code: CallControlErrorCode): CallControlAck => ({ success: false, code });
+export const refused = (code: CallControlErrorCode, retryAfter?: number): CallControlAck =>
+  retryAfter && retryAfter > 0 ? { success: false, code, retryAfter } : { success: false, code };
 
 export const ACCEPTED: CallControlAck = { success: true };
 

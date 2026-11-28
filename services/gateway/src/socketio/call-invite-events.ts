@@ -22,7 +22,8 @@ import { EngagementService } from '../services/engagement/EngagementService';
 import { creditCallInvitation } from '../services/calls/callEngagementCredits';
 import type { CallInvitationLifecycle, PendingCallInvitation } from './call-invite-lifecycle';
 import { rebranchCall, type RebranchInput, type RebranchOutcome } from '../services/calls/callConversationRebranch';
-import { admitConversationMember, type ParticipantAdmissionVerdict } from '../services/conversations/memberAdmission';
+import { admitConversationMember, type CommunityAdmissionBudget, type ParticipantAdmissionVerdict } from '../services/conversations/memberAdmission';
+import { hostedCommunityAdmissionBudget } from '../services/conversations/communitySalonAdmissionBudget';
 import { noticeActor } from '../services/conversations/conversationNotice';
 import { newMemberRefusal } from '../services/conversations/newMemberAdmission';
 import { loadSalonCommunity, type SalonCommunity } from '../services/conversations/communityMembershipSync';
@@ -97,7 +98,7 @@ export type CallInviteEventDeps = {
     readonly inviteeUserId: string;
     readonly community?: SalonCommunity | null;
     readonly blockCheck?: 'members';
-  }) => Promise<ParticipantAdmissionVerdict['outcome'] | 'refused' | 'guest-only'>;
+  }) => Promise<CallAdmissionOutcome>;
   /** `true` quand l'invitation est nouvelle (`recordCallInvitation`). */
   readonly record: (session: CallInvitationGrant['session'], inviteeUserId: string) => Promise<boolean>;
   /** #8959 `conversation.call_participant_added` — l'inviteur, sur une invitation nouvelle. */
@@ -108,6 +109,16 @@ export type CallInviteEventDeps = {
   /** Les invitations d'un même appel, l'une après l'autre (défaut : `serializePerCall`, partagé par tous les sockets). */
   readonly serialize?: <T>(callId: string, run: () => Promise<T>) => Promise<T>;
 };
+
+/**
+ * Ce que la porte d'ajout rend à l'invitation. `throttled` porte son échéance
+ * quand le budget la connaît (#20795) ; la forme nue reste lue.
+ */
+export type CallAdmissionOutcome =
+  | ParticipantAdmissionVerdict['outcome']
+  | 'refused'
+  | 'guest-only'
+  | { readonly outcome: 'throttled'; readonly retryAfter: number };
 
 const callQueues = new Map<string, Promise<unknown>>();
 
@@ -162,8 +173,16 @@ export function callInviteDependencies(input: {
   /** Le diffuseur `message:new` des messages d'appel (`wireCallMessageBroadcasters`). */
   readonly broadcastMessage?: () => ((message: unknown, conversationId: string) => Promise<void>) | null;
   readonly notificationService?: () => Pick<NotificationService, 'createAddedToConversationNotification' | 'createMemberJoinedNotificationsBatch'> | null;
+  /** Le budget des ajouts sans accord (#20740) — par défaut celui du serveur posé au montage de Socket.IO. */
+  readonly communityBudget?: () => CommunityAdmissionBudget | null;
 }): CallInviteEventDeps {
   const { io, prisma, callService } = input;
+  const communityBudget = (): CommunityAdmissionBudget | null => (input.communityBudget ?? hostedCommunityAdmissionBudget)();
+  const authorizationBudget = (): CommunityAdmissionBudget | null => {
+    const budget = communityBudget();
+    if (!budget) logger.warn('call-invite: no community addition budget host — refusals not debited');
+    return budget;
+  };
   let engagement: EngagementService | null = null;
   const joinRoom = (userId: string, conversationId: string): Promise<void> =>
     admitUserToConversationRoom({ io, userSockets: new Map(), socketById: () => undefined, connectedUsers: new Map() }, userId, conversationId);
@@ -173,7 +192,10 @@ export function callInviteDependencies(input: {
     io,
     rateLimiter: input.rateLimiter,
     authorize: (request) =>
-      authorizeCallInvitation({ prisma, callService, ringingInviteeIds: (callId) => input.invitations.pendingFor(callId) }, request),
+      authorizeCallInvitation(
+        { prisma, callService, ringingInviteeIds: (callId) => input.invitations.pendingFor(callId), communityBudget: authorizationBudget() },
+        request
+      ),
     rebranch: (request) =>
       rebranchCall(
         {
@@ -212,6 +234,8 @@ export function callInviteDependencies(input: {
       const community = request.community !== undefined
         ? request.community
         : await loadSalonCommunity(prisma, { communityId: conversation.communityId, actorId: request.inviterUserId });
+      const budget = communityBudget();
+      if (community && !budget) logger.warn('call-invite: no community addition budget host — admission not debited', { conversationId: request.conversationId });
       const verdict = await admitConversationMember(
         {
           prisma,
@@ -220,9 +244,9 @@ export function callInviteDependencies(input: {
           broadcastMessage,
           notificationService: input.notificationService?.() ?? null,
           engagement: (engagement ??= new EngagementService(prisma)),
-          // #20703 — l'invitation dans un appel n'a pas encore son débit : ses
-          // seaux vivent sur le serveur Fastify, que ce transport ne tient pas.
-          communityBudget: null,
+          // #20740 — faire sonner quelqu'un dans le salon d'une communauté
+          // privée l'y fait entrer : il paie les MÊMES seaux que les routes.
+          communityBudget: budget,
         },
         {
           conversationId: request.conversationId,
@@ -234,7 +258,7 @@ export function callInviteDependencies(input: {
           notifyInvitee: false,
         }
       );
-      return verdict.outcome;
+      return verdict.outcome === 'throttled' ? { outcome: 'throttled', retryAfter: verdict.retryAfter ?? 0 } : verdict.outcome;
     },
     record: (session, inviteeUserId) => recordCallInvitation(prisma, session, inviteeUserId),
     credit: (invitation) =>
@@ -288,10 +312,10 @@ export function registerCallInviteEvents(
       run: (inviterUserId, { callId, userId: inviteeUserId }) =>
         (deps.serialize ?? serializePerCall)(callId, async () => {
           const grant = await deps.authorize({ callId, inviterUserId, inviteeUserId });
-          if ('code' in grant) return refused(grant.code);
+          if ('code' in grant) return refused(grant.code, grant.retryAfter);
 
           const home = await joinCallConversation(deps, grant, { callId, inviterUserId, inviteeUserId });
-          if ('code' in home) return refused(home.code);
+          if ('code' in home) return refused(home.code, home.retryAfter);
 
           if (await deps.record(grant.session, inviteeUserId)) {
             deps.credit({ inviterUserId, callId, conversationId: home.conversationId });
@@ -345,6 +369,13 @@ type CallHome =
 
 const ADMITTED: ReadonlySet<string> = new Set(['new', 'rejoin', 'already-member', 'guest-only']);
 
+/** Le refus du budget, avec son échéance quand elle est connue ; `null` pour toute autre issue. */
+function throttledRefusal(outcome: CallAdmissionOutcome): CallInvitationRefusal | null {
+  if (outcome === 'throttled') return { ok: false, code: 'RATE_LIMITED' };
+  if (typeof outcome === 'object') return { ok: false, code: 'RATE_LIMITED', retryAfter: outcome.retryAfter };
+  return null;
+}
+
 /** La conversation où l'invité sonne — après l'avoir fait entrer, ou après la bascule de l'appel (#19650). */
 async function joinCallConversation(
   deps: CallInviteEventDeps,
@@ -362,7 +393,9 @@ async function joinCallConversation(
       inviteeUserId: input.inviteeUserId,
       community: grant.community,
     });
-    return ADMITTED.has(outcome) ? stay : { ok: false, code: 'PERMISSION_DENIED' };
+    const throttled = throttledRefusal(outcome);
+    if (throttled) return throttled;
+    return typeof outcome === 'string' && ADMITTED.has(outcome) ? stay : { ok: false, code: 'PERMISSION_DENIED' };
   }
 
   const presentUserIds = grant.session.participants.flatMap((p) => (!p.leftAt && p.participant?.userId ? [p.participant.userId] : []));
@@ -380,5 +413,7 @@ async function joinCallConversation(
     inviteeUserId: input.inviteeUserId,
     blockCheck: 'members',
   });
-  return ADMITTED.has(admitted) ? { conversationId: outcome.conversationId, moved: true, title: null } : { ok: false, code: 'PERMISSION_DENIED' };
+  const throttled = throttledRefusal(admitted);
+  if (throttled) return throttled;
+  return typeof admitted === 'string' && ADMITTED.has(admitted) ? { conversationId: outcome.conversationId, moved: true, title: null } : { ok: false, code: 'PERMISSION_DENIED' };
 }

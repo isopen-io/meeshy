@@ -24,7 +24,9 @@
  * — jamais plus précis que l'alerte socket. Une app fermée l'apprend ainsi ; un échec de notification n'arrête rien.
  *
  * Le consentement est relu en base à CHAQUE enregistrement (`relationConsent`), jamais en cache : un
- * retrait coupe l'alerte suivante. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
+ * retrait coupe l'alerte suivante. Et la paire est RELUE après la cadence (#20689) — un retrait, un
+ * effacement ou un fantôme posé pendant les attentes Redis coupe l'alerte EN VOL ; le notifieur la
+ * relit encore juste avant d'écrire, et une ligne écrite pendant un retrait est aussitôt retirée. La loi d'accès (`location.proximity`, niveau, blocage, âge, équipe)
  * est celle de `pairAccessAmong`, dans les deux sens.
  */
 import {
@@ -84,14 +86,26 @@ export function isPlausibleMove(previous: (Point & { readonly at: number }) | nu
   return distanceMeters(previous, next) / seconds <= PROXIMITY_MAX_SPEED_MPS;
 }
 
-/** La notification poussée de chaque alerte (#20540) : best-effort, un échec n'arrête rien. */
+/**
+ * La notification poussée de chaque alerte (#20540), l'une après l'autre : best-effort, un échec
+ * n'arrête rien. Le notifieur relit la paire juste avant d'écrire (#20689) ; une ligne écrite
+ * pendant qu'un retrait passait est relue APRÈS et retirée chez son lecteur — une relecture qui
+ * lève vaut paire fermée — et son push, parti sans être attendu, est révoqué sans condition.
+ */
 async function notifyAll(deps: BloodLocationDeps, notices: readonly BloodProximityNotice[]): Promise<void> {
   const notify = deps.notifyProximity;
-  if (!notify || notices.length === 0) return;
-  const settled = await Promise.allSettled(notices.map((notice) => Promise.resolve().then(() => notify(notice))));
-  settled.forEach((result) => {
-    if (result.status === 'rejected') deps.report?.(result.reason);
-  });
+  if (!notify) return;
+  for (const notice of notices) {
+    try {
+      const admits = (): Promise<boolean> => noticeAdmitted(deps, notice);
+      const written = await notify(notice, { admits });
+      if (typeof written === 'string' && !(await admits().catch(() => false))) {
+        await deps.retractProximityNotices({ kind: 'at', ownerId: notice.otherId, readerId: notice.recipientId, writtenId: written });
+      }
+    } catch (error) {
+      deps.report?.(error);
+    }
+  }
 }
 
 async function claimed(deps: BloodLocationDeps, key: string, ttlSeconds: number): Promise<boolean> {
@@ -148,6 +162,36 @@ async function freshPositionOf(deps: BloodLocationDeps, otherId: string, ownerId
   return point && !point.implausible && pointVisibleTo(point, ownerId) ? point : null;
 }
 
+/**
+ * La paire relue juste avant un canal (#20689) : drapeau, fantôme (global ou ciblé) dans les deux
+ * sens, consentement mutuel `location.proximity` sous la loi d'accès, et un point frais et visible
+ * de chacun — un effacement d'historique emporte le sien. Toute lecture qui lève : refusé.
+ */
+export async function bloodProximityPairOpen(deps: BloodLocationDeps, ownerId: string, otherId: string): Promise<boolean> {
+  if (!deps.enabledFor(ownerId) || !deps.enabledFor(otherId)) return false;
+  const [hiddenFromOwner, hiddenFromOther] = await Promise.all([
+    ownersHidingFrom(deps.prisma, ownerId, [otherId]),
+    ownersHidingFrom(deps.prisma, otherId, [ownerId]),
+  ]);
+  if (hiddenFromOwner.size > 0 || hiddenFromOther.size > 0) return false;
+  if ((await mutuallyAllowed(deps, ownerId, [otherId])).length === 0) return false;
+  const [ownerPoint, otherPoint] = await Promise.all([freshPositionOf(deps, ownerId, otherId), freshPositionOf(deps, otherId, ownerId)]);
+  return ownerPoint !== null && otherPoint !== null;
+}
+
+/** Une alerte vers `recipientId` : la paire ouverte, et le lecteur n'a pas coupé l'autre (#19454). */
+async function noticeAdmitted(deps: BloodLocationDeps, notice: BloodProximityNotice): Promise<boolean> {
+  if (!(await bloodProximityPairOpen(deps, notice.otherId, notice.recipientId))) return false;
+  const muted = await bloodLocationMutedBy(deps.prisma, notice.recipientId, [notice.otherId]);
+  return !muted.has(notice.otherId);
+}
+
+const pairOpenOrClosed = (deps: BloodLocationDeps, ownerId: string, otherId: string): Promise<boolean> =>
+  bloodProximityPairOpen(deps, ownerId, otherId).catch((error: unknown) => {
+    deps.report?.(error);
+    return false;
+  });
+
 /** Cherche les Sangs proches du nouveau point de `ownerId` et leur envoie l'alerte, une par paire toutes les 2 h. */
 export async function alertBloodProximity(
   deps: BloodLocationDeps,
@@ -184,6 +228,7 @@ export async function alertBloodProximity(
     const meters = distanceMeters(position, other);
     if (meters > (radii.get(otherId) ?? BLOOD_PROXIMITY_DEFAULT_RADIUS_METERS)) continue;
     if (!(await claimed(deps, pairKeyOf(ownerId, otherId), RELATION_THRESHOLDS.proximity.cooldownHours * 3600))) continue;
+    if (!(await pairOpenOrClosed(deps, ownerId, otherId))) continue;
     const distance = stepOf(meters);
     const notices: BloodProximityNotice[] = [];
     if (!mutedOwner.has(otherId)) {
