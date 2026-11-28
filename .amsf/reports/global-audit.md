@@ -10,9 +10,9 @@ Branches : `isopen-io/meeshy` et `isopen-io/andp`, `claude/monorepo-engineering-
 | Bibliothèques partagées | 5 — shared, design-tokens, MeeshySDK, LibSignalClient, libsignal-wasm |
 | Dépôt voisin | 1 — andp |
 | Composants audités | 13, plus les 24 workflows et l'infrastructure |
-| Constats vérifiés | 25 (2 hauts, 14 moyens, 9 bas) |
+| Constats vérifiés | 25 (2 hauts, 13 moyens, 10 bas) |
 | Corrigés | 4 (1 haut, 3 moyens) |
-| Restants | 21 (1 haut, 11 moyens, 9 bas) — `../BACKLOG.md` |
+| Restants | 21 (1 haut, 10 moyens, 10 bas) — `../BACKLOG.md` |
 | Signalements écartés après vérification | 4 — décisions documentées du dépôt, pas des défauts |
 
 ## Builds et tests (exécutés ici sauf mention)
