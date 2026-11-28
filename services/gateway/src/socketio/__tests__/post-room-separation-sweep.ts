@@ -73,6 +73,16 @@ export type PostRoomKind =
   | 'fabrique-de-rooms'
   /** ADHÉSION — `socket.join` / `socketsLeave`. Ni charge, ni audience à taire. */
   | 'adhesion'
+  /**
+   * **LIT l'appartenance de la room** (`fetchSockets`) et n'émet rien : son
+   * appelant émet. Cinquième nature, ajoutée par #20779 — et ajoutée plutôt que
+   * forcée dans une des quatre, parce qu'aucune ne la décrit : ce n'est ni une
+   * fabrique de NOMS, ni une adhésion, ni une émission. Ce qu'elle ENGAGE lui
+   * est propre : sa sortie DÉCIDE qui sera servi à part, donc elle doit
+   * soustraire elle-même les rooms que l'axe de l'auteur ferme — un verdict
+   * pris en aval ne la rattraperait pas.
+   */
+  | 'lecture-de-room'
   /** ÉMET sans séparation, et la RAISON est écrite. */
   | 'exemption-motivee';
 
@@ -108,7 +118,13 @@ export const POST_ROOM_SITES: readonly PostRoomSite[] = [
       'Les quatre primitives d’adresse — `commentBroadcastRooms` (consommée par ' +
       '`commentEmitter`), `emitToFeedsAndPostRoom` et `emitCommentActivity` (paramètre ' +
       '`separated`), `emitPostToAudience` (`PostRoomTarget`, dont le verdict est ' +
-      'INSÉPARABLE de l’id). Aucune n’adresse la room sans verdict.',
+      'INSÉPARABLE de l’id). Aucune n’adresse la room sans verdict. #20779 en ajoute une ' +
+      'CINQUIÈME, et elle n’adresse pas la room : `emitPostToAudience` la LIT ' +
+      '(`separatedCompanionSpectators`) pour servir à sa socket le spectateur hors ' +
+      'audience qu’un blocage sépare d’un compagnon. Elle est gardée deux fois — elle ne ' +
+      'tourne que si `postRoom.separated !== null` (sans quoi la room n’est pas adressée ' +
+      'du tout) et la lecture soustrait `postRoom.separated` de ses résultats, sans quoi ' +
+      'un lecteur séparé de l’AUTEUR recevrait le post.',
   },
   {
     file: 'socketio/handlers/CommentReactionHandler.ts',
@@ -157,6 +173,19 @@ export const POST_ROOM_SITES: readonly PostRoomSite[] = [
           'était invisible aux deux inventaires parce qu’elle ne passe pas la constante.',
       },
     ],
+  },
+  {
+    file: 'socketio/handlers/separatedCompanionSpectators.ts',
+    kind: 'lecture-de-room',
+    raison:
+      'ÉNUMÈRE la room (`io.in(postRoom).fetchSockets()`) et n’émet rien : son appelant, ' +
+      '`emitPostToAudience`, sert chaque socket rendue. #20779 — la room du post est la ' +
+      'seule adresse d’une diffusion de contenu qui ne s’énumère pas autrement, et c’est ' +
+      'pourquoi le spectateur hors audience n’était servi par personne. Deux soustractions ' +
+      'la gardent : les lecteurs DÉJÀ servis (l’audience, l’auteur — les resservir ' +
+      'doublerait la livraison) et les rooms que l’axe de l’AUTEUR ferme (#20430 — leur ' +
+      'servir une charge amputée des compagnons leur livrerait le POST). Son coût est ' +
+      'MESURÉ dans son doc-comment, sur les deux adaptateurs.',
   },
   {
     file: 'socketio/separatedRooms.ts',
