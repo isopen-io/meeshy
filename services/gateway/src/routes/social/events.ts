@@ -195,7 +195,10 @@ async function applyViews(
      concurrentes s'émettent dans l'ordre inverse de leurs écritures — le
      dernier arrivé gagnant, l'auteur garderait un compte que la base
      contredit. (Cette fenêtre PRÉEXISTE et ce lot ne la ferme pas :
-     `viewCount` est lu par `getPostById` APRÈS `recordView`. Suivi #20414.)
+     `viewCount` est lu par `getPostById` APRÈS `recordView`. Et elle ne se
+     ferme PAS davantage en lisant avant : la doctrine est tranchée — aucun
+     ordre de livraison n'est promis à une charge ABSOLUE, ce qui rattrape
+     l'écart est une relecture autoritative (décision du 2026-11-27, #20414).)
 
      Le PRIX de ce hissage est écrit ici parce qu'il est réel : un lot qui ne
      porte AUCUNE story paie quand même ses deux lectures, le type d'un post

@@ -119,7 +119,7 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
-      /* AVANT la mutation (#20338, patron de #20236) : charge ABSOLUE, donc un réordonnancement fige un compteur faux que iOS persiste. */
+      /* AVANT la mutation (#20338, patron de #20236) : charge ABSOLUE, donc un réordonnancement fige un compteur faux que iOS persiste. Lire avant RESSERRE cette fenêtre sans la fermer — aucun ordre de livraison n'est promis, et ce qui rattrape l'écart est la relecture autoritative du détail (décision du 2026-11-27, #20414). */
       const activiteSeparee = fastify.socialEvents
         ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
         : null;
@@ -315,7 +315,7 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
       const targetPostId = target.id;
-      /* AVANT la mutation, même raison que la pose (#20338) : ordre, charge absolue. */
+      /* AVANT la mutation, même raison que la pose (#20338) : charge absolue, fenêtre resserrée, aucun ordre promis (décision du 2026-11-27, #20414). */
       const activiteSeparee = fastify.socialEvents
         ? await fastify.socialEvents.activitySeparation(authContext.registeredUser.id, target.authorId)
         : null;

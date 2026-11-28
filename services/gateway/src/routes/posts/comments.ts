@@ -688,7 +688,7 @@ export function registerCommentRoutes(
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
-      /* AVANT l'écriture (#20236) : la loi dit pourquoi — charge ABSOLUE, ordre. */
+      /* AVANT l'écriture (#20236) : charge ABSOLUE, donc fenêtre de réordonnancement RESSERRÉE — jamais fermée, et aucun ordre de livraison promis ; la relecture autoritative rattrape (décision du 2026-11-27, #20414). */
       const separated = fastify.socialEvents
         ? await fastify.socialEvents.commentActivitySeparation(authContext.registeredUser.id, thread.authorId)
         : null;

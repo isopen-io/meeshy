@@ -148,11 +148,12 @@ export class PostReactionHandler {
     const event = action === 'add' ? SERVER_EVENTS.POST_REACTION_ADDED : SERVER_EVENTS.POST_REACTION_REMOVED;
     /* La SEPTIÈME famille de #20338, et la seule hors de `SocialEventsHandler`.
        `separated` est résolu par l'APPELANT, AVANT sa mutation — parce que ce
-       chemin le PEUT (aucun roster à nommer), pas pour acheter un ordre
-       (#20414). La charge porte un agrégat ABSOLU et aucun curseur `_seq` :
-       l'ordre de livraison est AU MIEUX, et ce qui garantit est la convergence
-       (le total absolu BORNE l'erreur à « périmée », la relecture autoritaire
-       la CORRIGE). `null` ⇒ on n'annonce rien. */
+       chemin le PEUT (aucun roster à nommer), pas pour acheter un ordre. La
+       charge porte un agrégat ABSOLU et aucun curseur `_seq` : lire avant
+       RESSERRE la fenêtre de réordonnancement sans la fermer, aucun ordre de
+       livraison n'est promis, et ce qui garantit est la convergence — le total
+       absolu BORNE l'erreur à « périmée », la relecture autoritaire la CORRIGE
+       (décision du 2026-11-27, #20414). `null` ⇒ on n'annonce rien. */
     if (separated === null) return;
     const target = this.io.to(ROOMS.post(postId));
     emitServerEvent(separated.length > 0 ? target.except([...separated]) : target, event, updateEvent);
@@ -227,10 +228,14 @@ export class PostReactionHandler {
       // #9584 — venue d'une republication simple, la réaction la crédite
       // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
       /* AVANT la mutation (#20338) : `target.authorId` est en main depuis
-         `resolveInteractionTarget`, donc rien n'oblige à lire après. Ce n'est
-         pas une garantie d'ordre (#20414) — l'ordre de résolution de deux
-         écritures concurrentes n'est pas l'ordre des commits, et l'adaptateur
-         Redis n'ordonne rien entre deux instances :
+         `resolveInteractionTarget`, donc rien n'oblige à lire après — et résolue
+         après, cette lecture ÉLARGIRAIT d'un `await` une fenêtre de
+         réordonnancement qu'aucun des deux arrangements ne ferme. Ce n'est donc
+         pas une garantie d'ordre : l'ordre de résolution de deux écritures
+         concurrentes n'est pas l'ordre des commits, et l'adaptateur Redis
+         n'ordonne rien entre deux instances. La charge étant un agrégat ABSOLU,
+         ce qui rattrape l'écart est une relecture autoritaire (#20414) :
+         {@link ../../../decisions/2026-11-27-les-activites-a-compteur-absolu-ne-promettent-aucun-ordre-de-livraison-20414.md}
          {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md} */
       const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const reaction = await this.postReactionService.addReaction({
@@ -373,8 +378,9 @@ export class PostReactionHandler {
       const targetPostId = target.id;
 
       /* AVANT la mutation (#20338), même raison que la pose : charge ABSOLUE,
-         ordre. Et c'est le chemin où la moitié « auteur » de la loi compte le
-         plus : retirer sa réaction reste permis après un blocage. */
+         fenêtre resserrée, aucun ordre promis (décision du 2026-11-27, #20414). Et c'est le
+         chemin où la moitié « auteur » de la loi compte le plus : retirer sa
+         réaction reste permis après un blocage. */
       const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const removed = await this.postReactionService.removeReaction({
         postId: targetPostId,

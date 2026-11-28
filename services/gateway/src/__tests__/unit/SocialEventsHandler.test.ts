@@ -680,7 +680,7 @@ describe('SocialEventsHandler', () => {
       };
 
       const commentAuthorId = 'user-comment-author';
-      /* 3e argument depuis #20236 : la séparation est résolue par l'APPELANT, AVANT sa mutation, pour que l'émission reste synchrone juste après elle (la charge porte un compteur ABSOLU). `[]` = personne à taire. */
+      /* 3e argument depuis #20236 : la séparation est résolue par l'APPELANT, AVANT sa mutation — la charge porte un compteur ABSOLU, et lire avant RESSERRE la fenêtre de réordonnancement sans la fermer ; aucun ordre de livraison n'est promis, c'est une relecture autoritative qui rattrape l'écart (décision du 2026-11-27, #20414). `[]` = personne à taire. */
       handler.broadcastCommentLiked(data, commentAuthorId, []);
 
       expect(mockIO.to).toHaveBeenCalledTimes(2);
