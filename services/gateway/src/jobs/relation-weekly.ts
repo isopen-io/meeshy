@@ -10,6 +10,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { createAcquaintanceNotifier } from '../services/relations/acquaintanceNotifier.js';
 import { runRelationCatchUp, type RelationCatchUpReport } from '../services/relations/relationCatchUp.js';
+import type { RelationIo } from '../socketio/relationEvents.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { guardedInterval } from '../utils/guarded-timer.js';
 
@@ -20,7 +21,15 @@ export const RELATION_WEEKLY_CHECK_MS = 15 * 60 * 1000;
 export class RelationWeeklyJob {
   private intervalId: NodeJS.Timeout | null = null;
 
-  constructor(private readonly prisma: PrismaClient) {}
+  /**
+   * `resolveIO` est relu à CHAQUE passe (#19538) : le job démarre avant que
+   * Socket.IO soit monté, et une Connaissance née toute seule doit apparaître
+   * aussitôt dans « Mes cercles » des deux personnes.
+   */
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly options: { readonly resolveIO?: () => RelationIo | undefined } = {},
+  ) {}
 
   start(): void {
     if (this.intervalId) {
@@ -52,6 +61,7 @@ export class RelationWeeklyJob {
       const report = await runRelationCatchUp({
         prisma: this.prisma,
         now: () => now,
+        io: this.options.resolveIO?.(),
         notify: createAcquaintanceNotifier(this.prisma),
       });
       if (report.created + report.raised + report.cancelled + report.failed > 0) logger.info('Relation catch-up done', report);

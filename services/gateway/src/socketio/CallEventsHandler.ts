@@ -57,6 +57,7 @@ import {
   resolveActiveCallParticipantId,
   resolvePreJoinDeclineParticipantId,
   resolveEverCallParticipantId,
+  resolveQualityReporter,
 } from './call-participants';
 import type { CallTranscriptionRelayDeps } from './call-transcription-relay';
 import { relayTranscriptionSegment } from './call-transcription-segment';
@@ -3553,14 +3554,12 @@ export class CallEventsHandler {
         const validation = validateSocketEvent(socketQualityReportSchema, data);
         if (!validation.success) return;
 
-        // Authorization — only an ACTIVE PARTICIPANT OF THIS CALL may write
-        // stats/quality data against it (not merely a member of its
-        // conversation — `resolveParticipantIdFromCall` only checked that,
-        // letting any other conversation member flood-write bogus
-        // bytesSent/bytesReceived/level onto someone else's active call).
-        const activeReporter = await this.resolveActiveCallParticipant(userId, data.callId);
-        if (!activeReporter) return;
-        const { participantId, userId: reporterUserId } = activeReporter;
+        // Authorization — an ACTIVE participant of THIS call, or one who left it
+        // within `QUALITY_REPORT_GRACE_MS` (#20459: last report after call:end),
+        // never a mere member of its conversation. A departed reporter never alerts.
+        const reporter = await resolveQualityReporter(this.participantResolverDependencies(), userId, data.callId);
+        if (!reporter) return;
+        const { participantId, userId: reporterUserId, departed } = reporter;
 
         // Check quality thresholds and emit alerts if needed
         const { stats } = data;
@@ -3575,7 +3574,7 @@ export class CallEventsHandler {
 
         const isDegraded = stats.rtt > 300 || stats.packetLoss > 5;
         const streakKey = `${data.callId}:${participantId}`;
-        if (!isDegraded) {
+        if (departed || !isDegraded) {
           this.qualityDegradedStreaks.delete(streakKey);
         } else {
           const nowMs = Date.now();
