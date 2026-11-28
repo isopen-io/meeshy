@@ -78,6 +78,10 @@ fun CommunityInviteScreen(
                     haptics.error()
                     toasts.emit(FeedbackToastRequest(R.string.community_action_failed, FeedbackKind.Error))
                 }
+                CommunityInviteEffect.Throttled -> {
+                    haptics.error()
+                    toasts.emit(FeedbackToastRequest(R.string.community_invite_throttled, FeedbackKind.Error))
+                }
             }
         }
     }

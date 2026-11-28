@@ -107,7 +107,8 @@ extension APIClient {
             let slowMode = NewcomerSlowMode.fromResponse(exchange.response, body: exchange.data)
             if APIRetryPolicy.shouldRetry(
                 statusCode: exchange.statusCode, attempt: attempt, retryPolicy: resolved.retryPolicy,
-                hasDailyLimit: dailyLimit != nil, hasSlowMode: slowMode != nil
+                hasDailyLimit: dailyLimit != nil, hasSlowMode: slowMode != nil,
+                isNeverReplayed: APIRetryPolicy.isNeverReplayed(statusCode: exchange.statusCode, data: exchange.data)
             ) { continue }
 
             guard (200...299).contains(exchange.statusCode) else {
