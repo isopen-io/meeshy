@@ -14,7 +14,8 @@ import { CerclesAchievements } from '../achievements/CerclesAchievements';
 import type { EngagementService } from '../engagement/EngagementService';
 import type { NotificationService } from '../notifications/NotificationService';
 import { applyCommunityAdmission, planSalonEntry, type CommunityAdmission, type SalonCommunity } from './communityMembershipSync';
-import type { CommunityAdditionVerdict } from '../../utils/community-addition-budget';
+import type { UndoableCommunityAddition } from '../../utils/community-addition-budget';
+import { givenBackOnFailure } from './communitySalonAdmissionBudget';
 import { communityMemberAnnouncerOverIO } from '../community-member-broadcast';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
@@ -38,11 +39,11 @@ export type ParticipantAdmissionVerdict = {
 
 /**
  * Le budget des ajouts sans accord (#19812) que paie une entrée dans un salon
- * d'une communauté privée (#20703) — `spendCommunitySalonAdmission` liée à
- * son serveur. `null` : la porte n'en a pas encore (l'invitation dans un
- * appel, qui n'a pas de serveur Fastify à qui demander ses seaux).
+ * d'une communauté privée (#20703) — `communityAdmissionBudgetOf(fastify)`.
+ * Le débit accepté se REND quand l'écriture n'a pas lieu (#20740). `null` :
+ * aucun serveur n'est atteignable (un transport monté sans Fastify, en test).
  */
-export type CommunityAdmissionBudget = (actorId: string, admission: CommunityAdmission) => Promise<CommunityAdditionVerdict>;
+export type CommunityAdmissionBudget = (actorId: string, admission: CommunityAdmission) => Promise<UndoableCommunityAddition>;
 
 /** Ce que l'admission demande au moteur d'engagement (#8959) — un double en test. */
 export type ParticipantInviteEngagement = Pick<EngagementService, 'recordActivity'>;
@@ -109,10 +110,10 @@ export async function admitConversationMember(
   if (!userToAdd) {
     // #20703 — un identifiant sans compte se paie comme un compte non
     // ajoutable : sans quoi la différence de débit dirait lequel existe.
-    const budget = community && currentUserId && ports.communityBudget
+    const spend = community && currentUserId && ports.communityBudget
       ? await ports.communityBudget(currentUserId, UNKNOWN_ACCOUNT_ATTEMPT)
       : null;
-    if (budget && !budget.allowed) return { userId, outcome: 'throttled', retryAfter: budget.retryAfter };
+    if (spend && !spend.verdict.allowed) return { userId, outcome: 'throttled', retryAfter: spend.verdict.retryAfter };
     return { userId, outcome: 'not-found' };
   }
   // #14107 (MSG-03, RG-22) — un groupe ne débloque rien : un membre ajouté par
@@ -136,10 +137,14 @@ export async function admitConversationMember(
   // #20703 — y entrer sans son accord est un ajout : il se paie AVANT d'écrire,
   // une tentative vers un compte non ajoutable comprise ; un refus
   // d'autorisation et un membre déjà actif ne coûtent rien.
-  const budget = community && currentUserId && ports.communityBudget
+  const spend = community && currentUserId && ports.communityBudget
     ? await ports.communityBudget(currentUserId, communityAdmission)
     : null;
-  if (budget && !budget.allowed) return { userId, outcome: 'throttled', retryAfter: budget.retryAfter };
+  if (spend && !spend.verdict.allowed) return { userId, outcome: 'throttled', retryAfter: spend.verdict.retryAfter };
+  // #20740 — payé pour une écriture qui n'a pas lieu : le débit se rend.
+  const giveBack = async (): Promise<void> => {
+    await spend?.rendre().catch((error: unknown) => logger.warn('community addition budget not given back', { userId, conversationId, error }));
+  };
   if (communityAdmission.kind === 'refused') {
     return { userId, outcome: communityAdmission.reason === 'invite-forbidden' ? 'community-forbidden' : 'not-found' };
   }
@@ -181,24 +186,25 @@ export async function admitConversationMember(
     // bannissement commis entre la décision ci-dessus et cette ligne ne doit
     // pas être rallumé. Le refus reste le verdict de CETTE porte, qui ne fait
     // jamais tomber le lot.
-    const committed = await commitParticipantRejoin<{ id: string }>({
+    const committed = await givenBackOnFailure(spend, commitParticipantRejoin<{ id: string }>({
       prisma,
       participantId: entry.participantId,
       data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields },
-    });
+    }));
+    if (committed.outcome !== 'rejoined') await giveBack();
     if (committed.outcome === 'banned') return { userId, outcome: 'banned' };
     if (committed.outcome === 'vanished') return { userId, outcome: 'not-found' };
     joinedParticipantId = committed.participant.id;
     invalidateParticipantLookup(entry.participantId, conversationId);
   } else {
-    const created = await prisma.participant.create({
+    const created = await givenBackOnFailure(spend, prisma.participant.create({
       data: {
         conversationId: conversationId,
         userId: userId,
         ...addedMemberFields,
         joinedAt
       }
-    });
+    }));
     joinedParticipantId = created.id;
 
     // Le succès revient à celui qui REJOINT, pas à celui qui l'ajoute :

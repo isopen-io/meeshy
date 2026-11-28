@@ -184,6 +184,19 @@ describe('call:invite-participant — inviter, c’est faire entrer dans la conv
     expect(h.rings).toHaveLength(1);
   });
 
+  it('#20740 — une admission refusée par le budget des ajouts dit RATE_LIMITED, et n’invite personne', async () => {
+    const h = harness({ route: 'admit-member', admitted: 'throttled' });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED' });
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.rings).toEqual([]);
+  });
+
+  it('#20740 — après la bascule vers un groupe, le même refus dit RATE_LIMITED', async () => {
+    const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP }, admitted: 'throttled' });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED' });
+    expect(h.rings).toEqual([]);
+  });
+
   it('une admission refusée n’invite personne', async () => {
     const h = harness({ route: 'admit-member', admitted: 'banned' });
     expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'PERMISSION_DENIED' });

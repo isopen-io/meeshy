@@ -10,7 +10,7 @@ import {
   conversationParticipantSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
-import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { givenBackOnFailure, spendCommunitySalonAdmission, spendCommunitySalonAdmissionUndoable } from '../../services/conversations/communitySalonAdmissionBudget';
 import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
@@ -280,10 +280,12 @@ export function registerInviteRoute(
       const communityAdmission = await planSalonEntry(fastify.prisma, community, { kind: 'registered', userId });
       // #20703 — la faire entrer sans son accord est un ajout : il se paie
       // avant d'écrire, comme à `POST …/participants`.
-      if (community) {
-        const budget = await spendCommunitySalonAdmission(fastify, inviterId, communityAdmission);
-        if (!budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
-      }
+      const spend = community ? await spendCommunitySalonAdmissionUndoable(fastify, inviterId, communityAdmission) : null;
+      if (spend && !spend.verdict.allowed) return refuseCommunityAddition(reply, spend.verdict.retryAfter);
+      // #20740 — payé pour une écriture qui n'a pas lieu : le débit se rend.
+      const giveBack = async (): Promise<void> => {
+        await spend?.rendre().catch((error: unknown) => logger.warn('community addition budget not given back', { conversationId, error }));
+      };
       if (communityAdmission.kind === 'refused') {
         return communityAdmission.reason === 'invite-forbidden'
           ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
@@ -338,13 +340,14 @@ export function registerInviteRoute(
       // bannissement commis entre la décision ci-dessus et cette ligne ne doit
       // pas être rallumé. Le refus est celui que la porte rend déjà en amont.
       const rejoin = entry.outcome === 'rejoin' && entry.participantId
-        ? await commitParticipantRejoin<SerializableParticipantRow>({
+        ? await givenBackOnFailure(spend, commitParticipantRejoin<SerializableParticipantRow>({
             prisma: fastify.prisma,
             participantId: entry.participantId,
             data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
-          })
+          }))
         : null;
+      if (rejoin && rejoin.outcome !== 'rejoined') await giveBack();
       if (rejoin?.outcome === 'banned') {
         return sendForbidden(reply, 'This user is banned from the conversation — lift the ban first');
       }
@@ -354,7 +357,7 @@ export function registerInviteRoute(
 
       const newMember = rejoin
         ? rejoin.participant
-        : await fastify.prisma.participant.create({
+        : await givenBackOnFailure(spend, fastify.prisma.participant.create({
             data: {
               conversationId: conversationId,
               userId: userId,
@@ -363,7 +366,7 @@ export function registerInviteRoute(
               isActive: true
             },
             include: invitedMemberInclude
-          });
+          }));
 
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);

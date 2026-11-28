@@ -125,7 +125,7 @@ function replyDouble() {
 
 type Banc = {
   readonly prisma: ReturnType<typeof prismaDouble>;
-  creer(actorId: string, participantIds: readonly string[]): Promise<{ status: number; body: any; headers: Record<string, string> }>;
+  creer(actorId: string, participantIds: readonly string[], type?: 'group' | 'direct'): Promise<{ status: number; body: any; headers: Record<string, string> }>;
   promouvoir(actorId: string): void;
 };
 
@@ -149,12 +149,12 @@ function banc(options: { readonly isPrivate?: boolean; readonly morts?: readonly
     promouvoir(actorId) {
       monde.lignes.splice(0, monde.lignes.length, ...monde.lignes.map((l) => (l.userId === actorId ? { ...l, role: 'admin' } : l)));
     },
-    async creer(actorId, participantIds) {
+    async creer(actorId, participantIds, type = 'group') {
       if (!monde.lignes.some((l) => l.userId === actorId)) monde.lignes.push({ userId: actorId, role: 'member', isActive: true });
       const reply = replyDouble();
       await handler(
         {
-          body: { type: 'group', title: 'Salon', participantIds, communityId: COMMUNITY },
+          body: { type, title: 'Salon', participantIds, communityId: COMMUNITY },
           params: {}, query: {}, headers: {},
           authContext: {
             type: 'user', isAuthenticated: true, isAnonymous: false,
@@ -281,6 +281,46 @@ describe('#20464 — POST /conversations dans une communauté débite le budget 
     const refus = await b.creer(acteur(200), [personne(43), victime]);
     expect(refus.status).toBe(429);
     expect(b.prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('#20740 — une création qui lève n’a fait entrer personne : l’acteur et les cibles retrouvent leur débit', async () => {
+    const b = banc();
+    const moi = acteur(8);
+    const cibles = personnes(0, COMMUNITY_ADDITION_BUDGET.actorPerHour);
+    b.prisma.conversation.create.mockRejectedValueOnce(new Error('base indisponible'));
+    expect((await b.creer(moi, cibles)).status).not.toBe(429);
+    b.prisma.conversation.create.mockClear();
+    expect((await b.creer(moi, cibles)).status).not.toBe(429);
+    expect(b.prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('#20740 — un tête-à-tête vers un compte bloqué est une tentative non ajoutable : elle coûte à l’acteur, jamais à la paire', async () => {
+    const b = banc();
+    const moi = acteur(9);
+    const cible = personne(9);
+    b.prisma.user.findFirst.mockResolvedValue({ id: cible });
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.pairPerDay + 1; i += 1) {
+      const refus = await b.creer(moi, [cible], 'direct').catch(() => ({ status: 403 }));
+      expect(refus.status).not.toBe(429);
+    }
+    b.prisma.user.findFirst.mockResolvedValue(null);
+    b.prisma.conversation.create.mockClear();
+    expect((await b.creer(moi, [cible], 'direct')).status).not.toBe(429);
+    expect(b.prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('#20740 — rouvrir un tête-à-tête existant n’écrit rien : la paire n’est pas entamée', async () => {
+    const b = banc();
+    const moi = acteur(10);
+    const cible = personne(10);
+    b.prisma.conversation.findFirst.mockResolvedValue({ id: CONV_ID, type: 'direct', title: null, participants: [] } as never);
+    for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.pairPerDay + 1; i += 1) {
+      expect((await b.creer(moi, [cible], 'direct').catch(() => ({ status: 500 }))).status).not.toBe(429);
+    }
+    b.prisma.conversation.findFirst.mockResolvedValue(null);
+    b.prisma.conversation.create.mockClear();
+    expect((await b.creer(moi, [cible], 'direct')).status).not.toBe(429);
+    expect(b.prisma.conversation.create).toHaveBeenCalledTimes(1);
   });
 
   it('Redis en panne (`consume` rend null) : le salon se crée — fail-open écrit', async () => {
