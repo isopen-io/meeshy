@@ -2873,3 +2873,40 @@ socket jusqu'au client.
 0. **PR #20710** : lire le Verdict du run 46067733063. S'il est vert, fusionner `origin/dev` dans la branche (règle #18654 ; les commits récents ne touchent pas les fichiers d'appel), puis fusionner la PR. S'il est rouge, comparer avec la tête de `dev`.
 1. **#20709** (la bulle de résumé reçoit le relevé tardif, après #20710), **#20726** (une seule source de la grâce), **#20335** (iOS, à coordonner avec la routine iOS).
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933.
+
+## Cycle 83 — 2026-11-27 / 28
+
+- **Base** : `origin/dev` @ `a6d6fc9da`, puis `9611f7271` (fusion de #20710).
+- **PR #20710 (cycle 80, #20459) : fusionnée** dans `dev` (`9611f7271`). Tous les jobs du `ci.yml` 46067733063 étaient verts (seul « Verdict CI » attendait un runner). `dev` @`a6d6fc9da` a été fusionnée dans la branche sans conflit, puis 55 suites et 745 tests d'appel, `tsc-never-loaded-tests-ratchet` compris, et `tsc` à 0 ont été rejoués sur l'arbre fusionné. #20459 est fermée. La branche distante `claude/determined-volta-4f5f06` n'a pas pu être supprimée (le proxy refuse `DELETE refs`). Elle est contenue dans `dev`.
+- **Branche** : `claude/determined-volta-20709`.
+- **Objectif** : **#20709**. La bulle de résumé d'appel reçoit le relevé tardif, et la qualité d'un appel terminé suit une règle explicite.
+- **Livré** (`services/gateway/` seulement) :
+  - `services/calls/callSummaryLateRefresh.ts` (nouveau) : un relevé tardif (`departed`) qui change les mesures persistées réédite en place la bulle terminale (`{...metadata, bytesTotal, bytesEstimated, networkQuality}`, même jeu de clés) et part par le même `message:edited` que la bascule « en cours » → terminal.
+    - Rien si rien n'a changé.
+    - Écriture conditionnée par `updatedAt`, P2025 ⇒ renonce.
+    - Bulle effacée ou encore « call-live » non touchée.
+    - Regroupement par appel : au plus une édition en cours et un rattrapage.
+  - `services/calls/callSummaryFacts.ts` (nouveau) : projection lue par la pose et par le rafraîchissement, extraite de `CallService`.
+  - `callStatsPersistence.ts` : `persistCallStats` rend « a changé ». Deux règles nommées : `liveReportOverwritesQuality` (appel en cours : le dernier relevé fait foi, comme avant) et `endedCallReportOnlyDegradesQuality` (appel `ended`/`missed`/`rejected`/`failed` : un relevé ne peut que dégrader).
+  - `CallService.ts` −34 lignes, `CallEventsHandler.ts` −1 : câblage seul. Aucun payload ni événement nouveau.
+- **Tests** :
+  - Rouge prouvé (`dc88bfa16`, tests seuls) : 7 échecs sur 11.
+  - 4 suites neuves, dont celle de la QA (`callSummaryLateRefresh-qa.test.ts`).
+  - Sur l'arbre fusionné avec `9611f7271` : `[Cc]all|orphaned-sender-repair-surface-guard|gateway-file-size-budget|tsc-never-loaded-tests-ratchet` donne **188 suites et 2 201 tests verts**, et `tsc` sort en 0. L'orchestrateur a rejoué les 3 suites du lot : 19 sur 19.
+- **QA** (`auditeur-adversarial`, indépendante) : **favorable avec réserves**. Mutations : 9 attrapées par le lot, 4 survivantes tuées par les témoins QA (`db20ecccc`), 1 quasi équivalente.
+  - R6 corrigée : un `every` sur un tableau vide dans `CallService.summary.test.ts`.
+  - R1 à R4 ouvertes dans **#20747** :
+    - R1 : course pendant la pose du résumé ;
+    - R2 : lecture de la `CallSession` avant le `Message`, entre deux instances ;
+    - R3 : `withActivity` rejoué, bulle miroir non mise à jour ;
+    - R4 : scellé d'obsolescence non consulté.
+  - R5 (gonflement des octets, préexistant) reste borné par le limiteur.
+- **Limites** :
+  - Requêtes Prisma non exercées sur un vrai MongoDB (`update` avec `updatedAt` dans un `where` unique, `isSet: false`, `notIn`).
+  - Aucune recette staging. Rendu de la bulle éditée non vérifié sur les clients.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de #20709 n'est pas fusionnée : lire son `ci.yml` en `workflow_dispatch`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
+1. **#20747** (R1 et R2 d'abord : ce sont elles qui rouvrent le critère de #20709), **#20726**, **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging, à étendre au relevé tardif), #11932, #12236, #16933.

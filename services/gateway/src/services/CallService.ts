@@ -50,8 +50,8 @@ import { KeyedMutex } from '../utils/keyed-mutex';
 import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
 import { prismaCallCaptureJournal, toTranscriptCaptures } from './calls/callCaptureJournal';
 import type { CallTranscriptCapture } from '@meeshy/shared/types/call-capture';
-import { persistCallStats as persistCallStatsOn } from './calls/callStatsPersistence';
-import { CALL_BYTE_COUNTER_SELECT, effectiveCallBytes } from './calls/callByteCounters';
+import { persistCallStats as persistCallStatsOn, type CallStatsReport } from './calls/callStatsPersistence';
+import { CALL_SUMMARY_FACTS_SELECT, callSummaryFacts } from './calls/callSummaryFacts';
 
 // Mirror of `CALL_TERMINAL_STATUSES` (@meeshy/shared/types/video-call),
 // typed on the Prisma enum — keep both lists in sync.
@@ -2519,15 +2519,9 @@ export class CallService {
     }
   }
 
-  /**
-   * Persist the latest client-reported call statistics (bytes + network
-   * quality) for the call-summary message — `calls/callStatsPersistence.ts`.
-   */
-  async persistCallStats(
-    callId: string,
-    stats: { bytesSent?: number | null; bytesReceived?: number | null; level?: string | null }
-  ): Promise<void> {
-    await persistCallStatsOn(this.prisma, callId, stats);
+  /** Persiste octets + qualité d'un relevé ; `true` ⇒ le résumé d'un appel terminé est périmé (`calls/callStatsPersistence.ts`). */
+  persistCallStats(callId: string, stats: CallStatsReport): Promise<boolean> {
+    return persistCallStatsOn(this.prisma, callId, stats);
   }
 
   /**
@@ -2560,30 +2554,14 @@ export class CallService {
   ): Promise<{ kind: 'created' | 'updated'; message: Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> } | null> {
     const call = await this.prisma.callSession.findUnique({
       where: { id: callId },
-      select: {
-        id: true,
-        conversationId: true,
-        initiatorId: true,
-        status: true,
-        endReason: true,
-        duration: true,
-        answeredAt: true,
-        metadata: true,
-        ...CALL_BYTE_COUNTER_SELECT,
-        networkQuality: true,
-        invitedUserIds: true,
-        conversation: { select: { type: true } }
-      }
+      select: { ...CALL_SUMMARY_FACTS_SELECT, invitedUserIds: true, conversation: { select: { type: true } } }
     });
     if (!call) {
       return null;
     }
 
-    const sessionMetadata = call.metadata as Record<string, unknown> | null;
-    const metadataType = sessionMetadata?.type;
-    const callType = typeof metadataType === 'string' ? metadataType : null;
-    const endedBy = sessionMetadata?.endedBy;
-    const endedById = typeof endedBy === 'string' ? endedBy : null;
+    const facts = callSummaryFacts(call);
+    const { callType } = facts;
 
     const findExisting = () => this.prisma.message.findFirst({
       where: {
@@ -2626,18 +2604,6 @@ export class CallService {
         logger.warn('Call summary posted without participants', { callId, error: error instanceof Error ? error.message : String(error) });
         return [];
       });
-    const facts = {
-      status: call.status,
-      endReason: call.endReason,
-      callType,
-      durationSeconds: call.duration,
-      callId: call.id,
-      initiatorId: call.initiatorId,
-      ...effectiveCallBytes(call),
-      networkQuality: call.networkQuality,
-      answeredAt: call.answeredAt,
-      endedById
-    };
     const terminal = buildCallSummaryWithMetadata(facts);
     if (!terminal) {
       // Non-terminal → nothing to do. GC housekeeping stays silent UNLESS a
