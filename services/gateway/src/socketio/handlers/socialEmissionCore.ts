@@ -386,6 +386,20 @@ export class SocialEmissionCore {
   ): void {
     const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
+    /* **TOUTE charge sortante passe par ICI**, et c'est structurel (audit
+       adversarial de #20711, constat F1). La loi fait deux choses : elle retire
+       les compagnons séparés du lecteur, et elle retire `repostOf.snapshotAuthorId`
+       — la colonne de DÉCISION, que la composition d'une diffusion garde
+       justement pour que ce site puisse la lire. Une charge qui ne traverserait
+       pas cette fabrique servirait donc la colonne au client ; son témoin de
+       non-fuite tient les trois chemins ensemble. */
+    const served = (shaped: Post, hidden: ReadonlySet<string> | undefined) =>
+      payloadFor(withoutSeparatedCompanions(shaped, hidden));
+    /* Un destinataire NOMMÉ deux fois ne reçoit qu'une charge : `case 'ONLY'`
+       rend la liste brute de `visibilityUserIds`, doublons compris, et la
+       boucle par lecteur émettrait une fois par OCCURRENCE là où l'émission
+       unique est dédoublonnée par Socket.IO (constat F6). */
+    const recipients = [...new Set(recipientIds)];
     /* L'AUTEUR est un LECTEUR, lui aussi : il a pu bloquer un commentateur de
        son propre post, et le REST le lui retire déjà. Son écho suit donc la
        même loi — mais il part TOUJOURS (exemption de #20430), et sur une panne
@@ -394,11 +408,7 @@ export class SocialEmissionCore {
        secret que l'auteur a lui-même hébergé. */
     const authorHidden = companions === null ? undefined : new Set(companions.get(authorId) ?? []);
     const emitToAuthor = () =>
-      emitServerEvent(
-        this.io.to(authorRoom),
-        event,
-        payloadFor(withoutSeparatedCompanions(withAudienceListFor(post, authorId), authorHidden)),
-      );
+      emitServerEvent(this.io.to(authorRoom), event, served(withAudienceListFor(post, authorId), authorHidden));
 
     /* FERMÉ (#20711) — `null` ⇒ la séparation des COMPAGNONS n'a pas pu être
        lue. On ne sert alors AUCUNE adresse d'audience : le raisonnement est
@@ -422,8 +432,8 @@ export class SocialEmissionCore {
     const servedApart = [...companions.keys()];
     const companionSilenced = servedApart.map((id) => ROOMS.user(id));
     const apart = new Set(servedApart);
-    const audiencePayload = payloadFor(withoutAudienceList(post));
-    const audienceRooms = recipientIds
+    const audiencePayload = served(withoutAudienceList(post), undefined);
+    const audienceRooms = recipients
       .filter((id) => id !== authorId && !apart.has(id))
       .map((id) => ROOMS.feed(id));
     /* Chacun sa charge, par la MÊME loi que les douze portes REST — jamais par
@@ -433,14 +443,10 @@ export class SocialEmissionCore {
        sont des REMPLACEMENTS (web `mergeServedPost`, iOS
        `FeedViewModel+Socket`, Android `PostUpdateMerge`), donc une clé ABSENTE
        effacerait l'aperçu rendu au lieu de le corriger. */
-    for (const readerId of recipientIds) {
+    for (const readerId of recipients) {
       if (readerId === authorId || !apart.has(readerId)) continue;
       const hidden = new Set(companions.get(readerId) ?? []);
-      emitServerEvent(
-        this.io.to(ROOMS.feed(readerId)),
-        event,
-        payloadFor(withoutSeparatedCompanions(withoutAudienceList(post), hidden)),
-      );
+      emitServerEvent(this.io.to(ROOMS.feed(readerId)), event, served(withoutAudienceList(post), hidden));
     }
     /* #20430 — la room du post et la séparation qui la gouverne voyagent
        ENSEMBLE. `null` ⇒ on ne l'adresse pas, et les feed rooms partent seules.
@@ -662,7 +668,17 @@ export class SocialEmissionCore {
    * vide veut dire « rien à taire », pas « rien à vérifier ».
    */
   companionSeparation(post: Post): Promise<CompanionSeparation> {
-    return this.separatedRooms.pairsAround(companionSubjectsOf(post));
+    /* `cached: false`, et c'est la règle que le module ÉCRIT déjà (#20337,
+       audit adversarial) : « un ensemble de sujets qui CHANGE à chaque
+       événement a des clés à usage unique ». Les sujets sont ici l'auteur
+       republié et les trois commentateurs d'aperçu — donc une clé PAR
+       PUBLICATION. La cacher ne rend jamais un hit, et au plafond son
+       `cache.clear()` évince les entrées des appelants STABLES, dont les sept
+       diffusions de CONTENU que ce cache garde (#20216). Mesuré par l'audit de
+       ce lot : 512 publications à compagnons évinçaient l'entrée de
+       `contentSeparation`. Ce lot a d'abord posé le défaut que #20337 avait
+       fait corriger sur l'autre question. */
+    return this.separatedRooms.pairsAround(companionSubjectsOf(post), { cached: false });
   }
 
   async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {

@@ -35,7 +35,20 @@ const authorOf = (row: unknown): unknown =>
 const snapshotOf = (row: unknown): unknown =>
   row !== null && typeof row === 'object' ? (row as { snapshotAuthorId?: unknown }).snapshotAuthorId : undefined;
 
-/** `repostOf.snapshotAuthorId` sert la décision, jamais le fil. */
+/**
+ * `repostOf.snapshotAuthorId` sert la décision, jamais le fil — mais il doit
+ * SURVIVRE jusqu'à ce que la décision soit prise.
+ *
+ * Une DIFFUSION compose sa charge très en amont de son audience
+ * (`withMentions(ligne, WIRE_BROADCAST)` dans la route), et la résolution par
+ * lecteur n'arrive qu'au moment d'émettre. Retirer la colonne à la composition
+ * la rendait donc INVISIBLE au résolveur : la moitié « copie d'un contenu
+ * éphémère » de cette loi était morte sur les cinq chemins de production, et
+ * aucun témoin à fixture manuelle ne pouvait le voir (audit adversarial de
+ * #20711). D'où `keepsDecisionColumn` : la charge d'une diffusion la garde, et
+ * `emitPostToAudience` la retire sur CHACUNE de ses charges servies — ce que
+ * son témoin de non-fuite tient.
+ */
 function withoutSnapshotColumn<T>(post: T): T {
   const source = (post as { repostOf?: unknown }).repostOf;
   if (source === null || typeof source !== 'object' || !('snapshotAuthorId' in source)) return post;
@@ -103,11 +116,21 @@ export function hasSeparableCompanions(post: unknown): boolean {
  * Une source est séparée quand son auteur l'est, ou quand elle est la COPIE
  * d'un contenu dont l'auteur d'origine l'est (`snapshotAuthorId`).
  */
-export function withoutSeparatedCompanions<T>(input: T, separated: ReadonlySet<string> | undefined): T {
+export function withoutSeparatedCompanions<T>(
+  input: T,
+  separated: ReadonlySet<string> | undefined,
+  /**
+   * `true` ⇒ la charge n'est pas encore SERVIE : une résolution par lecteur
+   * l'attend en aval, et elle a besoin de la colonne de décision. Le seul
+   * appelant qui le pose est la composition d'une DIFFUSION
+   * (`withMentions(…, WIRE_BROADCAST)`).
+   */
+  options?: { readonly keepsDecisionColumn?: boolean },
+): T {
   const isSeparated = (value: unknown) => typeof value === 'string' && separated !== undefined && separated.has(value);
   const source = (input as { repostOf?: unknown }).repostOf;
   const dropsRepost = isSeparated(authorOf(source)) || isSeparated(snapshotOf(source));
-  const post = withoutSnapshotColumn(input);
+  const post = options?.keepsDecisionColumn === true ? input : withoutSnapshotColumn(input);
   const comments = (post as { comments?: unknown }).comments;
   const listed = Array.isArray(comments) ? comments : undefined;
   const kept = listed?.filter((comment) => !isSeparated(authorOf(comment)));

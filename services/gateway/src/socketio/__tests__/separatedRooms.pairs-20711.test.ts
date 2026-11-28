@@ -138,3 +138,38 @@ describe('#20711 — `pairsAround`', () => {
     expect(rooms).toContain('user:C');
   });
 });
+
+/**
+ * **LE PLAFOND DU CACHE NE DOIT PAS ÉVINCER CE QUE #20216 GARDE** (audit
+ * adversarial de #20711, constat F3).
+ *
+ * Le cache est PARTAGÉ par tout le processus, et sa fraîcheur ne tient pas au
+ * TTL mais à l'invalidation : une entrée évincée est reconstruite, donc juste —
+ * mais le `cache.clear()` du plafond évince les entrées des appelants STABLES,
+ * et ce sont elles qui portent les sept diffusions de CONTENU. Un appelant dont
+ * les clés sont à usage unique doit donc passer `cached: false`.
+ *
+ * Ce témoin exerce la propriété de SURVIE, pas le nombre de lectures : il
+ * tombe si `companionSeparation` revient au cache par défaut.
+ */
+describe('#20711 — un appelant à clés jetables n’évince pas les appelants stables', () => {
+  it('N clés de compagnons laissent intacte l’entrée stable de `roomsAround`', async () => {
+    const { prisma, findMany } = prismaFidele({ stable: ['bloque-stable'] });
+    const resolver = createSeparatedRoomsResolver({ prisma });
+    await resolver.roomsAround(['stable']);
+    const apresAmorce = findMany.mock.calls.length;
+    for (let i = 0; i < 600; i += 1) await resolver.pairsAround([`compagnon-${i}`], { cached: false });
+    await resolver.roomsAround(['stable']);
+    expect(findMany.mock.calls.length).toBe(apresAmorce + 1200);
+  });
+
+  it('… alors qu’avec le cache, le plafond l’évince — la raison du `cached: false`', async () => {
+    const { prisma, findMany } = prismaFidele({ stable: ['bloque-stable'] });
+    const resolver = createSeparatedRoomsResolver({ prisma });
+    await resolver.roomsAround(['stable']);
+    const apresAmorce = findMany.mock.calls.length;
+    for (let i = 0; i < 600; i += 1) await resolver.pairsAround([`compagnon-${i}`]);
+    await resolver.roomsAround(['stable']);
+    expect(findMany.mock.calls.length).toBe(apresAmorce + 1202);
+  });
+});

@@ -106,15 +106,116 @@ INCHANGÉ : une édition qui n'affiche plus l'aperçu de sa propre publication
 serait une dégradation visible payée pour un secret que l'auteur a lui-même
 hébergé.
 
+### Ce que l'audit adversarial a fait changer
+
+Le lot est passé par `auditeur-adversarial` avant fusion (directive #9226, lot de
+contrôle d'accès). Son verdict était **BLOQUANT**, et il avait raison sur deux
+points de fond.
+
+**1. La moitié « copie d'un contenu éphémère » de la loi était MORTE sur les cinq
+chemins de production.** `withoutSeparatedCompanions` retire
+`repostOf.snapshotAuthorId` — la colonne de DÉCISION — et une diffusion compose
+sa charge par `withMentions(ligne, WIRE_BROADCAST)` **dans la route**, très en
+amont de son audience. La colonne était donc déjà partie quand
+`companionSubjectsOf` la cherchait. Vecteur réel : B publie un éphémère, E le
+republie (`snapshotAuthorId` = B), C republie le post de E, A a bloqué B — le
+contenu copié de B atteignait A, puisque l'auteur de la source (E) n'est pas
+bloqué.
+
+> **Une loi peut être juste, testée, et s'appliquer à une forme que personne
+> n'émet.** Les témoins du lot construisaient leur post À LA MAIN ; les
+> producteurs le composent. Mutée, la ligne qui porte cette moitié de la loi
+> laissait **881 témoins verts** — elle n'était gardée par rien, ce qui est
+> cohérent avec le fait qu'elle était inatteignable.
+>
+> La question à poser à toute fixture de diffusion n'est donc pas « porte-t-elle
+> les bons champs ? » mais **« par où le producteur réel la fait-il passer avant
+> d'émettre ? »**.
+
+Réparé par `keepsDecisionColumn` : une DIFFUSION garde la colonne, parce que sa
+charge n'est pas encore servie, et `emitPostToAudience` la retire sur **chacune**
+de ses charges — une fabrique unique (`served()`) que les trois chemins
+traversent, charge commune comprise. Le témoin de non-fuite tient les trois
+ensemble, et sa fixture traverse `withMentions(…, WIRE_BROADCAST)`.
+
+**2. Le lot avait reposé, sur la question NEUVE, le défaut de cache que #20337
+avait fait corriger sur l'ancienne.** `pairsAround` cachait par défaut, alors que
+ses sujets — l'auteur republié et les trois commentateurs d'aperçu — font une
+clé **par publication**. Le doc-comment du module l'interdit explicitement : des
+clés à usage unique ne rendent jamais un hit, et au plafond le `cache.clear()`
+évince les entrées des appelants STABLES, dont les sept diffusions de CONTENU que
+ce cache garde (#20216). Mesuré : 512 publications à compagnons évinçaient
+l'entrée de `contentSeparation`. Réparé par `cached: false`.
+
+> **Une règle écrite dans le module qu'on étend ne s'applique pas d'elle-même à
+> l'extension.** Elle était à quarante lignes du site fautif, motivée par un
+> audit précédent, et le lot l'a lue en écrivant `pairsAround` sans la
+> s'appliquer. C'est « écrire une règle ne l'applique pas au lot qui l'écrit »,
+> rejouée sur une règle qu'on n'a même pas écrite soi-même.
+
+**Et trois gardes JUSTES n'étaient tenues par AUCUN témoin** — chaque mutation
+isolée laissait 881 verts : la réduction de l'écho de l'auteur, et les deux
+couches qui ferment la charge commune (le retrait des `audienceRooms`, et
+l'`except` sur la room `user:`), mutuellement redondantes donc jamais seules en
+cause. Elles ont chacune leur témoin désormais. Une défense en profondeur dont
+aucune couche n'est tenue perd une couche en silence.
+
+Deux témoins posés en réponse à l'audit étaient eux-mêmes **mal visés**, et la
+mesure l'a dit : celui du cache exerçait l'OPTION `cached: false` sans vérifier
+que le site de production la pose, et celui de la seconde couche passait par la
+branche « room du post » alors que la règle vit aussi dans la branche en boucle —
+les six autres familles. **Un seam à deux branches est deux sites, même quand
+elles portent la même règle.**
+
+### Les deux coûts ASSUMÉS, écrits ici parce que l'audit les a mesurés
+
+**Un spectateur de la room du post, séparé d'un compagnon et hors de l'audience,
+ne reçoit plus rien.** Il est exclu de la charge commune (sinon il verrait le
+compagnon), et la boucle par lecteur n'itère que l'audience, seule énumérable.
+Mesuré : zéro livraison, là où il recevait la charge entière — donc la fuite —
+avant le lot. Ce n'est pas un défaut de confidentialité, c'est une perte
+FONCTIONNELLE : une édition n'apparaît plus en direct sur la fiche d'un post pour
+quiconque a bloqué un de ses trois commentateurs d'aperçu. Le prochain fetch
+REST, qui est gardé, la rend. Servir à ce spectateur sa charge réduite
+demanderait d'énumérer les sockets de la room (`fetchSockets`), donc un
+aller-retour d'adaptateur par diffusion : **suivi en #20779**, pas tranché ici.
+
+**Le cache est PROCESS-LOCAL**, et le doc-comment du module affirme que la
+fraîcheur tient à l'invalidation plutôt qu'au TTL. Vrai sur une réplique, faux
+au-delà : `invalidateSeparationAround` n'est appelée que dans le processus qui
+écrit le blocage. La production n'a qu'une passerelle, donc c'est latent — mais
+ce lot étend ce cache à une SECONDE garde de confidentialité, et #9232 vise une
+passerelle sans état. **Suivi en #20780.**
+
 ### Preuve
 
-**RED prouvé avant correction** : 28 rouges sur les sept familles
-(`post:created`, `post:updated`, `post:reposted`, `story:created`,
-`story:updated`, `status:created`, `status:updated`) × les deux compagnons.
+**RED prouvé avant correction**, rejoué contre les témoins LIVRÉS (production
+remise à l'état d'avant le lot) : **60 rouges** sur 91 — 49 sur les sept
+familles × les deux compagnons, 11 sur `pairsAround`. Le premier chiffre publié
+par ce lot, « 28 », était celui de la première rédaction des témoins, avant les
+deux réparations qui en ont AJOUTÉ des cas ; il n'était reproductible sous aucun
+découpage, et l'audit l'a mesuré. **Un compte est une affirmation : il se
+recompte quand ce qu'il compte change.**
 
-**Quatre mutations, toutes rouges sur l'arbre livré** : loi retirée de la charge
-par lecteur (35), fermeture rendue fail-OUVERTE (14), précision par lecteur
-remplacée par l'union des sujets (7), exclusion de la charge commune retirée (5).
+**Dix mutations, toutes rouges sur l'arbre livré** :
+
+| mutation | rouges |
+|---|---|
+| la fabrique servie n'applique plus la loi | 42 |
+| charge par lecteur non réduite | 35 |
+| `pairsAround` toujours vide | 58 |
+| commentaires retirés des sujets | 21 |
+| fermeture rendue fail-OUVERTE | 14 |
+| précision par lecteur → union des sujets | 7 |
+| exclusion de la charge commune retirée | 5 |
+| **`snapshotAuthorId` retiré des sujets** (vert avant le correctif F1) | 2 |
+| **colonne de décision retirée dès la composition** | 3 |
+| **écho de l'auteur non réduit** (vert avant l'audit) | 2 |
+| **couche 1 retirée** (vert avant l'audit) | 2 |
+| **couche 2 retirée, branche sans room de post** (vert avant l'audit) | 1 |
+| **cache rendu aux clés jetables** (vert avant l'audit) | 1 |
+| dédoublonnage des destinataires retiré | 1 |
+| repli de colonne manquante ouvert | 1 |
 
 **Et DEUX de ces quatre témoins ne pouvaient pas tomber à leur première
 rédaction** — c'est le constat le plus utile du lot :
