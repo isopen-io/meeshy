@@ -3017,3 +3017,9 @@ socket jusqu'au client.
 0. Si la PR #20798 n'est pas fusionnée : lire les runs `ci.yml`, `ios.yml` et `android.yml` lancés en `workflow_dispatch` sur sa tête. S'ils sont verts, fusionner `dev` dans la branche, puis la PR, et fermer #20348.
 1. **#20797** (même zone, petit), **#20257** (causes de limitation iOS), **#20788**, **#20335** (iOS, à coordonner avec la routine iOS).
 2. #13775, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933, #20789.
+
+## Cycle 87 — 2026-11-28
+
+- **Base** : `origin/dev` @ `4636b84ed3`. La PR #20798 du cycle 86 (#20348) est fusionnée et l'issue fermée.
+- **Branche** : `claude/determined-volta-wdoo4c`.
+- **Objectif** : **#20797**. Une mesure de paire non finie ou négative compte comme absente, sur les trois miroirs (en cours).
