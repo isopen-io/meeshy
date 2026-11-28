@@ -23,6 +23,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { useOptionalRoute } from '@/lib/router';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 
 /**
  * **LE CADRE DE L'ADMINISTRATION** (#7873) — un back-office, pas un écran de
@@ -199,7 +200,9 @@ function AdminNav({
                   nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.focus();
                   return;
                 }
-                if (event.key === 'Enter') {
+                const enter = enterKeyIntent(event.nativeEvent, { multiline: false });
+                if (enter === 'composing') return;
+                if (enter === 'submit') {
                   event.preventDefault();
                   nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.click();
                   return;

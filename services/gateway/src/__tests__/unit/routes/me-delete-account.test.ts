@@ -116,6 +116,7 @@ function makePrisma(opts: PrismaOpts = {}) {
       update: jest.fn().mockResolvedValue({}),
     },
     relationFeatureSetting: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    notification: { findRaw: jest.fn().mockResolvedValue([]), deleteMany: jest.fn().mockResolvedValue({ count: 0 }) },
     $transaction: opts.transactionError
       ? jest.fn().mockRejectedValue(opts.transactionError)
       : jest.fn().mockResolvedValue(opts.transactionResult || [{ count: 1 }, {}]),

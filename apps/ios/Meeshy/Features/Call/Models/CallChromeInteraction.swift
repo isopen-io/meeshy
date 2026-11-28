@@ -32,8 +32,7 @@ extension CallChromeVisibility {
     /// Un intervalle négatif ou indéfini ne prolonge jamais la grâce : il dit que
     /// l'horloge n'est pas fiable, et le fondu est alors tenu pour achevé.
     static func acceptsTouches(isVisible: Bool, hiddenFor: TimeInterval) -> Bool {
-        guard isVisible || hiddenFor >= 0 else { return false }
-        return MeeshyGlassPillPresenceRule.acceptsTouches(presence: isVisible ? .shown : .stowed, stowedFor: hiddenFor)
+        MeeshyGlassPillPresenceRule.acceptsTouches(presence: isVisible ? .shown : .stowed, stowedFor: hiddenFor)
     }
 }
 

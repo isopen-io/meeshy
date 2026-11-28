@@ -8,14 +8,15 @@ import MeeshySDK
 extension PostDetailViewModel {
 
     /// Réconciliation par l'agrégat ABSOLU d'un événement cœur de commentaire :
-    /// pose `likes = count` sur la ligne (top-level ou réponse), purge le delta
-    /// optimiste, et dérive « mon cœur » de `reactorUserIds` (la liste des
-    /// User.id ayant réagi — PAS `hasCurrentUser`, qui est calculé côté gateway
-    /// relativement à l'ACTEUR de l'événement, donc faux pour les destinataires
-    /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
-    /// serveur sans jamais compter double.
-    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        let resolvedCount = commentHearts.reconcile(commentId: commentId, count: count, reactorUserIds: reactorUserIds,
+    /// pose `likes = count` sur la ligne (top-level ou réponse) et laisse le
+    /// registre décider de « mon cœur » — depuis #20410, à partir de l'ACTEUR et
+    /// de la DIRECTION du geste, jamais d'un roster de réacteurs (ni de
+    /// `hasCurrentUser`, calculé côté gateway relativement à l'ACTEUR, donc faux
+    /// pour les destinataires d'un broadcast). L'affichage `likes + delta`
+    /// converge vers la vérité serveur sans jamais compter double.
+    func applyCommentReactionAggregate(commentId: String, count: Int, wireAction: String, actorUserId: String) {
+        let resolvedCount = commentHearts.reconcile(commentId: commentId, count: count,
+                                                    change: CommentHeartLedger.HeartChange(wireAction: wireAction),
                                                     actorUserId: actorUserId, myUserId: AuthManager.shared.currentUser?.id)
         if let idx = comments.firstIndex(where: { $0.id == commentId }) {
             comments[idx].likes = resolvedCount

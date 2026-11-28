@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Ce que l'hôte demande à la pilule : la montrer, la resserrer autour de son
 /// dessus (la rangée se replie dans le même verre), ou la ranger par son bord.
@@ -50,7 +51,6 @@ public nonisolated enum MeeshyGlassPillPresenceRule {
         now: ContinuousClock.Instant
     ) -> TimeInterval {
         guard let stowedAt else { return .infinity }
-        let elapsed = stowedAt.duration(to: now).components
-        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
+        return stowedAt.duration(to: now).timeInterval
     }
 }

@@ -14,10 +14,16 @@
  * `withMentions`, par où passe chaque post servi : la source d'un auteur séparé
  * part en `repostOf: null` — la forme qu'a déjà un original disparu, que les
  * trois clients rendent « ce contenu n'est plus disponible » — et ses
- * commentaires sortent de l'aperçu. Une diffusion (`WIRE_BROADCAST`) n'a pas de
- * lecteur et ne porte AUCUNE séparation : le web fusionne la charge reçue par
- * dessus sa carte, donc une diffusion peut réinjecter ce que le REST a retiré —
- * dette ouverte, #20204.
+ * commentaires sortent de l'aperçu.
+ *
+ * **Une DIFFUSION n'a pas de lecteur** (`WIRE_BROADCAST`), et c'est par là que
+ * la règle fuyait jusqu'à #20711 : le web fusionne la charge reçue par-dessus
+ * sa carte, donc la diffusion réinjectait ce que le REST venait de retirer, sur
+ * un déclencheur fait par un TIERS. Une diffusion ne reçoit donc plus UNE
+ * charge : `SocialEmissionCore.companionSeparation` résout la séparation des
+ * COMPAGNONS pour toute l'audience en deux lectures
+ * ({@link companionSubjectsOf} → `pairsAround`), puis sert à chaque lecteur
+ * séparé sa propre charge, par CETTE loi — jamais par une forme à part.
  */
 import type { WireReader } from './storyEffectsV3';
 
@@ -29,7 +35,20 @@ const authorOf = (row: unknown): unknown =>
 const snapshotOf = (row: unknown): unknown =>
   row !== null && typeof row === 'object' ? (row as { snapshotAuthorId?: unknown }).snapshotAuthorId : undefined;
 
-/** `repostOf.snapshotAuthorId` sert la décision, jamais le fil. */
+/**
+ * `repostOf.snapshotAuthorId` sert la décision, jamais le fil — mais il doit
+ * SURVIVRE jusqu'à ce que la décision soit prise.
+ *
+ * Une DIFFUSION compose sa charge très en amont de son audience
+ * (`withMentions(ligne, WIRE_BROADCAST)` dans la route), et la résolution par
+ * lecteur n'arrive qu'au moment d'émettre. Retirer la colonne à la composition
+ * la rendait donc INVISIBLE au résolveur : la moitié « copie d'un contenu
+ * éphémère » de cette loi était morte sur les cinq chemins de production, et
+ * aucun témoin à fixture manuelle ne pouvait le voir (audit adversarial de
+ * #20711). D'où `keepsDecisionColumn` : la charge d'une diffusion la garde, et
+ * `emitPostToAudience` la retire sur CHACUNE de ses charges servies — ce que
+ * son témoin de non-fuite tient.
+ */
 function withoutSnapshotColumn<T>(post: T): T {
   const source = (post as { repostOf?: unknown }).repostOf;
   if (source === null || typeof source !== 'object' || !('snapshotAuthorId' in source)) return post;
@@ -55,6 +74,37 @@ function withoutSnapshotColumn<T>(post: T): T {
  * jamais sur une autorisation. S'il répond `false`, il n'y a rien à taire —
  * pas « rien à vérifier ».
  */
+/**
+ * LES AUTEURS DES COMPAGNONS D'UN POST — les sujets dont la séparation décide
+ * (#20711).
+ *
+ * Dérivé des MÊMES accesseurs que {@link withoutSeparatedCompanions} et
+ * {@link hasSeparableCompanions}, pour la raison que le doc-comment du second
+ * écrit déjà : un relevé recopié à la main dériverait au premier compagnon
+ * ajouté, et il dériverait du bon côté — en rendant une liste INCOMPLÈTE, donc
+ * une séparation qu'on ne lit pas, donc une fuite.
+ *
+ * Il rend des SUJETS, pas un verdict : c'est l'ensemble à passer à la loi de
+ * séparation. Vide ⇒ il n'y a RIEN à taire, donc aucune lecture à payer — et
+ * c'est le cas nominal d'une publication neuve (aucun commentaire, pas de
+ * `repostOf`).
+ *
+ * `snapshotAuthorId` y entre à côté de l'auteur de la source : la COPIE d'un
+ * contenu éphémère porte les médias de son auteur d'ORIGINE et lui survit.
+ */
+export function companionSubjectsOf(post: unknown): readonly string[] {
+  const subjects = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.length > 0) subjects.add(value);
+  };
+  const source = (post as { repostOf?: unknown } | null)?.repostOf;
+  add(authorOf(source));
+  add(snapshotOf(source));
+  const comments = (post as { comments?: unknown } | null)?.comments;
+  if (Array.isArray(comments)) for (const comment of comments) add(authorOf(comment));
+  return [...subjects];
+}
+
 export function hasSeparableCompanions(post: unknown): boolean {
   const source = (post as { repostOf?: unknown } | null)?.repostOf;
   if (authorOf(source) !== undefined || snapshotOf(source) !== undefined) return true;
@@ -66,11 +116,21 @@ export function hasSeparableCompanions(post: unknown): boolean {
  * Une source est séparée quand son auteur l'est, ou quand elle est la COPIE
  * d'un contenu dont l'auteur d'origine l'est (`snapshotAuthorId`).
  */
-export function withoutSeparatedCompanions<T>(input: T, separated: ReadonlySet<string> | undefined): T {
+export function withoutSeparatedCompanions<T>(
+  input: T,
+  separated: ReadonlySet<string> | undefined,
+  /**
+   * `true` ⇒ la charge n'est pas encore SERVIE : une résolution par lecteur
+   * l'attend en aval, et elle a besoin de la colonne de décision. Le seul
+   * appelant qui le pose est la composition d'une DIFFUSION
+   * (`withMentions(…, WIRE_BROADCAST)`).
+   */
+  options?: { readonly keepsDecisionColumn?: boolean },
+): T {
   const isSeparated = (value: unknown) => typeof value === 'string' && separated !== undefined && separated.has(value);
   const source = (input as { repostOf?: unknown }).repostOf;
   const dropsRepost = isSeparated(authorOf(source)) || isSeparated(snapshotOf(source));
-  const post = withoutSnapshotColumn(input);
+  const post = options?.keepsDecisionColumn === true ? input : withoutSnapshotColumn(input);
   const comments = (post as { comments?: unknown }).comments;
   const listed = Array.isArray(comments) ? comments : undefined;
   const kept = listed?.filter((comment) => !isSeparated(authorOf(comment)));

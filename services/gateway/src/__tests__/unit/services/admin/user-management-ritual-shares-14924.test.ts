@@ -27,7 +27,7 @@ const service = () => {
   });
   const findUnique = jest.fn(async () => ({ ...compte }));
   const prisma = makePrisma({ update: update as never, findUnique: findUnique as never });
-  Object.assign(prisma, { relationFeatureSetting: reglages.relationFeatureSetting });
+  Object.assign(prisma, { relationFeatureSetting: reglages.relationFeatureSetting, notification: { findRaw: jest.fn(async () => []), deleteMany: jest.fn(async () => ({ count: 0 })) } });
   return { svc: new UserManagementService(prisma), reglages };
 };
 
