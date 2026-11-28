@@ -155,7 +155,7 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     await Promise.all([w.refresh(CALL_ID), w.refresh(CALL_ID), w.refresh(CALL_ID), w.refresh(CALL_ID)]);
 
-    expect(w.prisma.callSession.findUnique.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(w.prisma.message.findFirst.mock.calls.length).toBeLessThanOrEqual(2);
     expect(w.broadcast).toHaveBeenCalledTimes(1);
   });
 
