@@ -75,7 +75,7 @@ const logger = enhancedLogger.child({ module: 'separatedRooms' });
 /** Second filet derrière l'invalidation, jamais la garantie de fraîcheur. */
 export const DEFAULT_TTL_MS = 5_000;
 
-/** Un cache qui grandit avec le trafic est une fuite : au plafond, il repart à vide. */
+/** Un cache qui grandit avec le trafic est une fuite : au plafond, il ÉVINCE. */
 const MAX_ENTRIES = 512;
 
 /**
@@ -92,6 +92,67 @@ type Entry = {
 
 /** PARTAGÉ par tout le processus : une seule chose à invalider quand un blocage bouge. */
 const cache = new Map<string, Entry>();
+
+/** Ce que la production a à dire de son propre remplissage — lu par {@link separationCacheStats}. */
+let evictions = 0;
+let lastPressureLogAt = 0;
+
+/** Une entrée par seconde de pression, pas une par éviction : au plafond, elles se comptent par rafales. */
+const PRESSURE_LOG_INTERVAL_MS = 60_000;
+
+/**
+ * **AU PLAFOND, ON ÉVINCE — JAMAIS UN `clear()`** (#20415, constat 2).
+ *
+ * Ce cache était vidé EN ENTIER à la 512e entrée : les 511 autres partaient
+ * avec elle, dont les clés STABLES des sept diffusions de CONTENU pour
+ * lesquelles il a été écrit (#20216). Un seul appelant à clés volatiles
+ * suffisait à l'éviscérer en boucle — #20337 a retiré celui qu'on connaissait
+ * (`cached: false`), mais le mécanisme restait, et le prochain n'aurait eu
+ * aucun site où rougir.
+ *
+ * ─── L'ORDRE D'ÉVICTION : LES PÉRIMÉES, PUIS LES PLUS ANCIENNES ───────────
+ *
+ * 1. Les entrées **périmées** d'abord : elles ne serviront plus personne, donc
+ *    les retirer ne coûte rien à personne. Un balayage complet ne se paie qu'AU
+ *    plafond, jamais sur le chemin de lecture.
+ * 2. Puis les plus **ANCIENNEMENT ÉCRITES**, dans l'ordre d'insertion que `Map`
+ *    garantit.
+ *
+ * **Et ce n'est pas une LRU, délibérément** : un hit ne PROLONGE pas l'entrée
+ * (ce serait une fenêtre d'expiration glissante, donc #20216 rouvert tant qu'un
+ * couple reste chaud). Toutes les entrées portant le même TTL, l'ordre
+ * d'insertion EST l'ordre d'expiration : la plus anciennement écrite est celle
+ * dont il reste le moins de vie, donc celle dont l'éviction perd le moins — ce
+ * qu'une LRU par récence ne garantit pas, et qui coûterait un `delete`+`set` sur
+ * le chemin de lecture.
+ */
+const evictForInsert = (at: number): void => {
+  if (cache.size < MAX_ENTRIES) return;
+  for (const [key, entry] of cache) if (entry.expiresAt <= at) cache.delete(key);
+  while (cache.size >= MAX_ENTRIES) {
+    const oldest = cache.keys().next();
+    if (oldest.done === true) return;
+    cache.delete(oldest.value);
+    evictions += 1;
+  }
+  if (evictions > 0 && at - lastPressureLogAt >= PRESSURE_LOG_INTERVAL_MS) {
+    lastPressureLogAt = at;
+    logger.warn('diffusion — le cache des séparations est au plafond, éviction de la plus ancienne', {
+      size: cache.size,
+      max: MAX_ENTRIES,
+      evictions,
+    });
+  }
+};
+
+/**
+ * Le remplissage, tel que la production peut le dire — `evictions` à zéro veut
+ * dire que le plafond n'a jamais été atteint depuis le démarrage, ce qu'aucune
+ * lecture de `size` instantanée ne prouve.
+ */
+export function separationCacheStats(): { readonly size: number; readonly max: number; readonly evictions: number } {
+  return { size: cache.size, max: MAX_ENTRIES, evictions };
+}
 
 /** Par lecteur, les sujets dont un blocage le sépare — dans un sens ou l'autre. */
 export type SeparationPairs = ReadonlyMap<string, readonly string[]>;
@@ -153,6 +214,8 @@ export function invalidateSeparationAround(userIds: readonly (string | null | un
 /** Les témoins repartent d'un cache vide — la production, elle, n'a jamais à le vider. */
 export function resetSeparationCacheForTests(): void {
   cache.clear();
+  evictions = 0;
+  lastPressureLogAt = 0;
 }
 
 export function createSeparatedRoomsResolver(deps: {
@@ -208,12 +271,17 @@ export function createSeparatedRoomsResolver(deps: {
 
   /**
    * La lecture, le cache et sa fermeture — partagés par les DEUX questions.
+   *
    * `cached: false` : un ensemble de sujets qui CHANGE à chaque événement a des
-   * clés à usage unique : le cacher ne rend jamais un hit, et au plafond son
-   * `cache.clear()` évince les entrées des appelants STABLES, dont les sept
-   * diffusions de CONTENU pour lesquelles ce cache a été écrit (#20337, audit
-   * adversarial). Mesuré : trois réactions sur le même commentaire rendaient
-   * six lectures et aucun hit.
+   * clés à usage unique : le cacher ne rend jamais un hit, et il pousse les
+   * entrées des appelants STABLES vers la sortie, dont les sept diffusions de
+   * CONTENU pour lesquelles ce cache a été écrit (#20337, audit adversarial).
+   * Mesuré : trois réactions sur le même commentaire rendaient six lectures et
+   * aucun hit. La pression coûte UNE entrée par insertion et non les 512
+   * (#20415, {@link evictForInsert}) — raison d'évincer plutôt que de vider,
+   * jamais raison de revenir sur un `cached: false`. C'est ce que
+   * `SocialEmissionCore.companionSeparation` pose, ses sujets faisant une clé
+   * par publication (#20711).
    */
   const resolve = async (ids: string[], useCache: boolean): Promise<SeparationPairs | null> => {
     const key = ids.join('\u0000');
@@ -225,7 +293,7 @@ export function createSeparatedRoomsResolver(deps: {
     try {
       const pairs = await read(ids);
       if (useCache) {
-        if (cache.size >= MAX_ENTRIES) cache.clear();
+        evictForInsert(at);
         cache.set(key, { expiresAt: at + ttlMs, subjects: ids, pairs });
       }
       return pairs;

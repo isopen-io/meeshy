@@ -365,35 +365,78 @@ final class StoryViewModelTrayPresentationTests: StoryViewModelTestCase {
         XCTAssertFalse(sut.storyGroups[1].hasUnviewed)
     }
 
-    /// When the last unviewed story of a group is marked as viewed, the group
-    /// must drop below any remaining unviewed group on the next sort pass.
-    func test_socketStoryViewed_dropsAllViewedGroupBelowUnviewedPeers() async {
+    /// Deux groupes non vus, Alice la plus fraîche en tête — l'état de départ
+    /// partagé par les deux témoins ci-dessous.
+    private func seedUnviewedAliceAboveBob() {
         let aliceStory = makeStoryItem(id: "alice-1", isViewed: false,
                                        createdAt: Date(timeIntervalSince1970: 2_500_000))
         let bobStory = makeStoryItem(id: "bob-1", isViewed: false,
                                      createdAt: Date(timeIntervalSince1970: 1_000_000))
-        // Alice on top initially (both unviewed, alice more recent).
         sut.storyGroups = [
             makeStoryGroup(userId: "alice", username: "alice", stories: [aliceStory]),
             makeStoryGroup(userId: "bob", username: "bob", stories: [bobStory]),
         ]
+    }
+
+    /// When the last unviewed story of a group is marked as viewed, the group
+    /// must drop below any remaining unviewed group on the next sort pass.
+    ///
+    /// **Le déclencheur est la lecture LOCALE** — ce témoin passait par
+    /// `story:viewed`, qui annonce la vue d'un TIERS et ne marque donc rien
+    /// comme lu (#20457) : il figeait le défaut en invariant. L'invariant de
+    /// TRI qu'il garde, lui, reste juste ; seule sa cause change. Le flip
+    /// reproduit ce que `markViewed` écrit (`var updated = …; updated[j].isViewed
+    /// = true`), sans passer par le registre durable que la lecture persiste.
+    func test_sortPass_dropsAllViewedGroupBelowUnviewedPeers() {
+        seedUnviewedAliceAboveBob()
+        sut.sortStoryGroupsInPlace()
+        XCTAssertEqual(sut.storyGroups[0].id, "alice",
+                       "Alice part en tête : les deux groupes sont non vus, et sa story est la plus fraîche")
+
+        var updated = sut.storyGroups[0].stories
+        updated[0].isViewed = true
+        sut.storyGroups[0] = sut.storyGroups[0].with(stories: updated)
+        sut.sortStoryGroupsInPlace()
+
+        XCTAssertEqual(sut.storyGroups[0].id, "bob",
+                       "Bob keeps unviewed content so he must outrank the now-all-viewed Alice")
+        XCTAssertFalse(sut.storyGroups[1].hasUnviewed,
+                       "Alice's group is now fully viewed")
+    }
+
+    /// #20457 — `story:viewed` ne part JAMAIS pour soi : son producteur
+    /// l'abandonne quand le viewer est l'auteur, et son unique destinataire est
+    /// la feed room de l'AUTEUR. Il annonce la vue d'un TIERS, donc il apporte
+    /// un COMPTEUR et rien d'autre : la bulle de l'auteur reste non vue et garde
+    /// son rang parmi les fraîches.
+    ///
+    /// Le témoin s'écrit sur le RANG autant que sur le drapeau : c'est le rang
+    /// que l'auteur voyait bouger, et un drapeau seul laisserait repasser un
+    /// re-tri qui le ferait descendre pour une autre raison.
+    func test_socketStoryViewed_keepsAuthorStoryUnviewedAndRanked() async {
+        seedUnviewedAliceAboveBob()
+        sut.sortStoryGroupsInPlace()
 
         sut.subscribeToSocketEvents()
 
-        // Mark Alice's only story as viewed → alice.hasUnviewed flips to false,
-        // bob is still unviewed → bob takes the front slot. `SocketStoryViewedData`
-        // is a `Decodable`-only struct (no public memberwise init), so we
-        // synthesize it via the JSON path the live socket would actually use.
+        // `SocketStoryViewedData` is a `Decodable`-only struct (no public
+        // memberwise init), so we synthesize it via the JSON path the live
+        // socket would actually use. L'identité du viewer est ANONYME depuis
+        // #20443 — chaîne vide sur le fil.
         let viewedData: SocketStoryViewedData = JSONStub.decode("""
-        {"storyId":"alice-1","viewerId":"me","viewerUsername":"me","viewCount":1}
+        {"storyId":"alice-1","viewerId":"","viewerUsername":"","viewCount":3}
         """)
         mockSocket.storyViewed.send(viewedData)
         try? await Task.sleep(nanoseconds: 100_000_000)
 
-        XCTAssertTrue(sut.storyGroups[0].id == "bob",
-                      "Bob keeps unviewed content so he must outrank the now-all-viewed Alice")
-        XCTAssertFalse(sut.storyGroups[1].hasUnviewed,
-                       "Alice's group is now fully viewed")
+        XCTAssertEqual(sut.storyGroups[0].stories[0].viewCount, 3,
+                       "le compteur autoritatif de l'event s'applique")
+        XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed,
+                       "la vue d'un TIERS ne marque pas la story comme lue par l'auteur")
+        XCTAssertTrue(sut.storyGroups[0].hasUnviewed,
+                      "le groupe d'Alice garde du contenu non vu")
+        XCTAssertEqual(sut.storyGroups[0].id, "alice",
+                       "et il garde son rang : rien dans cet event ne le fait descendre")
     }
 
     // MARK: - StoryCoverThumbnail (local-first tray cover, hybrid Phase 1)

@@ -10,6 +10,8 @@ import {
   conversationParticipantSchema,
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
+import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError, sendError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
@@ -107,6 +109,7 @@ export function registerInviteRoute(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        429: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -228,7 +231,17 @@ export function registerInviteRoute(
         }
       });
 
+      // #16695 — entrer dans un salon d'une communauté privée, c'est y être
+      // admis : la loi de `POST …/participants` et de la création, une fois.
+      const community = await loadSalonCommunity(fastify.prisma, { communityId: conversation.communityId, actorId: inviterId });
+
       if (!userToInvite) {
+        // #20703 — un identifiant sans compte se paie comme un compte non
+        // ajoutable : sans quoi la différence de débit dirait lequel existe.
+        if (community) {
+          const budget = await spendCommunitySalonAdmission(fastify, inviterId, { kind: 'refused', reason: 'not-addable', attempted: 1 });
+          if (!budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
+        }
         return sendNotFound(reply, 'User not found');
       }
       // #14107 (MSG-03, RG-22) — invité par quelqu'un qui n'est pas au moins sa
@@ -264,10 +277,13 @@ export function registerInviteRoute(
         return sendBadRequest(reply, 'This user is already a member of the conversation');
       }
 
-      // #16695 — entrer dans un salon d'une communauté privée, c'est y être
-      // admis : la loi de `POST …/participants` et de la création, une fois.
-      const community = await loadSalonCommunity(fastify.prisma, { communityId: conversation.communityId, actorId: inviterId });
       const communityAdmission = await planSalonEntry(fastify.prisma, community, { kind: 'registered', userId });
+      // #20703 — la faire entrer sans son accord est un ajout : il se paie
+      // avant d'écrire, comme à `POST …/participants`.
+      if (community) {
+        const budget = await spendCommunitySalonAdmission(fastify, inviterId, communityAdmission);
+        if (!budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
+      }
       if (communityAdmission.kind === 'refused') {
         return communityAdmission.reason === 'invite-forbidden'
           ? sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' })
