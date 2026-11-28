@@ -9,7 +9,8 @@
  * @jest-environment node
  */
 import { describe, it, expect } from '@jest/globals';
-import type { BloodProximityRetraction } from '../../../../services/bloodLocation/bloodProximityRetraction';
+import { retractBloodProximityNotices, type BloodProximityRetraction } from '../../../../services/bloodLocation/bloodProximityRetraction';
+import type { RetractedNotification } from '../../../../services/notifications/retractedNotifications';
 import {
   eraseBloodLocationHistory,
   recordBloodLocation,
@@ -20,7 +21,7 @@ import { settled } from '../../../helpers/settled';
 import { ADULT_BIRTH } from '../../../helpers/messaging-circle-world';
 import { A_300_M, MINUTE, MOI, PARIS, SANG, bloodWorldAvecConsentements } from '../../../helpers/blood-location-world';
 
-type Created = { readonly userId: string; readonly metadata: Record<string, unknown> };
+type Created = { readonly userId: string; readonly type: string; readonly actor: { readonly id: string }; readonly metadata: Record<string, unknown> };
 type Moment = 'cadence' | 'notifieur' | 'ecriture';
 type Retrait = (w: ReturnType<typeof bloodWorldAvecConsentements>) => Promise<unknown>;
 
@@ -32,12 +33,15 @@ const PERSONNES = [
 const RETIRE_PROXIMITE: Retrait = async (w) => w.consentir(SANG, MOI, { proximityShared: false });
 const EFFACE_HISTORIQUE: Retrait = (w) => eraseBloodLocationHistory(w.deps, SANG);
 const FANTOME: Retrait = (w) => updateBloodLocationSettings(w.deps, SANG, { ghost: true });
+const COUPE_MOI: Retrait = async (w) => w.consentir(MOI, SANG, { proximityShared: true, locationShared: true, locationHistoryShared: true, bloodLocationMutedAt: new Date(w.horloge()) });
 
 /** Le monde où `retrait` s'exécute une fois, au moment nommé, pendant l'alerte de MOI. */
-function monde(moment: Moment | null, retrait: Retrait) {
+function monde(moment: Moment | null, retrait: Retrait, options: { readonly relectureEnPanne?: boolean } = {}) {
   const w = bloodWorldAvecConsentements({ users: PERSONNES });
   const created: Created[] = [];
   const retractions: BloodProximityRetraction[] = [];
+  const annonces: RetractedNotification[] = [];
+  const annonceur = { announceNotificationsRetracted: async (rows: readonly RetractedNotification[]) => void annonces.push(...rows) };
   let pret = false;
   let fait = false;
   const intercaler = async (ici: Moment): Promise<void> => {
@@ -57,9 +61,13 @@ function monde(moment: Moment | null, retrait: Retrait) {
     },
     notifications: {
       createNotification: async (params: unknown) => {
-        created.push(params as Created);
+        const ligne = params as Created;
+        created.push(ligne);
+        const id = `6500000000000000000000${String(created.length).padStart(2, '0')}`;
+        w.notifications.insert({ id, userId: ligne.userId, type: ligne.type, actor: ligne.actor, delivery: { pushSent: false } });
         await intercaler('ecriture');
-        return { id: `n${created.length}` } as never;
+        if (options.relectureEnPanne && fait) w.prisma.relationFeatureSetting.findMany = (async () => { throw new Error('mongo injoignable'); }) as never;
+        return { id } as never;
       },
     },
     now: () => w.horloge(),
@@ -74,7 +82,7 @@ function monde(moment: Moment | null, retrait: Retrait) {
     },
     retractProximityNotices: async (scope: BloodProximityRetraction) => {
       retractions.push(scope);
-      return w.deps.retractProximityNotices(scope);
+      return retractBloodProximityNotices(w.notifications.prisma as never, annonceur, scope);
     },
   };
   const rencontre = async (): Promise<void> => {
@@ -83,7 +91,7 @@ function monde(moment: Moment | null, retrait: Retrait) {
     pret = true;
     await settled(recordBloodLocation(deps, MOI, A_300_M));
   };
-  return { ...w, created, retractions, rencontre };
+  return { ...w, created, retractions, annonces, rencontre };
 }
 
 describe('#20689 — sans retrait, l\'alerte part toujours', () => {
@@ -121,12 +129,31 @@ describe('#20689 — un retrait pendant la relecture du notifieur : rien ne s\'�
   });
 });
 
-describe('#20689 — un retrait pendant l\'écriture même retire la ligne écrite', () => {
-  it('la ligne aussitôt créée est retirée chez son lecteur', async () => {
-    const w = monde('ecriture', RETIRE_PROXIMITE);
+describe('#20689 — un retrait pendant l\'écriture même retire la ligne écrite et révoque son push', () => {
+  it.each([
+    ['le retrait de la proximité', RETIRE_PROXIMITE],
+    ['l\'effacement de l\'historique', EFFACE_HISTORIQUE],
+    ['le fantôme global', FANTOME],
+  ])('%s : la ligne quitte la base, le push parti sans être attendu est révoqué, l\'autre ne s\'écrit pas', async (_nom, retrait) => {
+    const w = monde('ecriture', retrait);
     await w.rencontre();
     expect(w.created).toHaveLength(1);
-    const [ecrite] = w.created;
-    expect(w.retractions).toContainEqual({ kind: 'at', ownerId: ecrite.metadata.userId, readerId: ecrite.userId });
+    expect(w.notifications.rows()).toEqual([]);
+    expect(w.annonces.map((a) => ({ userId: a.userId, pushSent: a.pushSent }))).toEqual([{ userId: w.created[0].userId, pushSent: true }]);
+  });
+
+  it('une relecture qui lève vaut paire fermée : la ligne est retirée', async () => {
+    const w = monde('ecriture', async () => undefined, { relectureEnPanne: true });
+    await w.rencontre();
+    expect(w.created).toHaveLength(1);
+    expect(w.notifications.rows()).toEqual([]);
+  });
+});
+
+describe('#20689 — un silence ciblé posé en vol ne coupe que celui qui l\'a posé', () => {
+  it('MOI coupe SANG pendant la relecture du notifieur : rien chez MOI, SANG reçoit la sienne', async () => {
+    const w = monde('notifieur', COUPE_MOI);
+    await w.rencontre();
+    expect(w.created.map((c) => c.userId)).toEqual([SANG]);
   });
 });

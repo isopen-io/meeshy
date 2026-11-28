@@ -89,7 +89,8 @@ export function isPlausibleMove(previous: (Point & { readonly at: number }) | nu
 /**
  * La notification poussée de chaque alerte (#20540), l'une après l'autre : best-effort, un échec
  * n'arrête rien. Le notifieur relit la paire juste avant d'écrire (#20689) ; une ligne écrite
- * pendant qu'un retrait passait est relue APRÈS et retirée chez son lecteur.
+ * pendant qu'un retrait passait est relue APRÈS et retirée chez son lecteur — une relecture qui
+ * lève vaut paire fermée — et son push, parti sans être attendu, est révoqué sans condition.
  */
 async function notifyAll(deps: BloodLocationDeps, notices: readonly BloodProximityNotice[]): Promise<void> {
   const notify = deps.notifyProximity;
@@ -98,8 +99,8 @@ async function notifyAll(deps: BloodLocationDeps, notices: readonly BloodProximi
     try {
       const admits = (): Promise<boolean> => noticeAdmitted(deps, notice);
       const written = await notify(notice, { admits });
-      if (written !== false && !(await admits())) {
-        await deps.retractProximityNotices({ kind: 'at', ownerId: notice.otherId, readerId: notice.recipientId });
+      if (typeof written === 'string' && !(await admits().catch(() => false))) {
+        await deps.retractProximityNotices({ kind: 'at', ownerId: notice.otherId, readerId: notice.recipientId, writtenId: written });
       }
     } catch (error) {
       deps.report?.(error);
