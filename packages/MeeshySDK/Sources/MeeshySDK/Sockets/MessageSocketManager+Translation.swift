@@ -1,5 +1,6 @@
 import Foundation
 import os
+import SocketIO
 
 extension MessageSocketManager {
     // MARK: - Translation Request
