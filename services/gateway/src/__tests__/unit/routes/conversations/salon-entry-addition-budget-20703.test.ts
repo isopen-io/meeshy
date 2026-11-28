@@ -370,3 +370,56 @@ describe('#20703 — le lot de POST /conversations/:id/participants', () => {
     }
   });
 });
+
+/**
+ * #20740 — un débit accepté pour une écriture qui n'a PAS lieu se rend. Sans
+ * quoi un bannissement commis entre la décision et l'écriture (ou une écriture
+ * qui lève) entamait les seaux de l'acteur et de la cible pour un ajout qui
+ * n'a jamais eu lieu : après trois courses, la paire était fermée pour 24 h.
+ */
+describe.each(PORTES)('#20740 — %s rend le budget quand rien n’est écrit', (_nom, ouvrir) => {
+  const ligneInactive = (userId: string) => ({
+    id: `p-${userId}`, conversationId: CONV_ID, userId, role: 'member', isActive: false, bannedAt: null, leftAt: new Date(0), joinedAt: new Date(0), type: 'user', displayName: 'Ancien',
+  });
+  const P2025 = Object.assign(new Error('Record to update not found.'), { code: 'P2025' });
+
+  it('une course de bannissement (rejoin refusé à l’écriture) ne coûte rien : la paire reste ouverte', async () => {
+    const moi = acteur(20);
+    const cible = personne(20);
+    const m = monde({ lignes: [membre(moi, 'admin')] });
+    seatActors(m, [moi]);
+    m.rows.push(ligneInactive(cible));
+    const porte = await ouvrir(m);
+    porte.prisma.participant.update.mockRejectedValue(P2025);
+    try {
+      for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.actorPerHour + 1; i += 1) {
+        expect((await porte.ajouter(moi, { userId: cible })).status).not.toBe(429);
+      }
+      porte.prisma.participant.update.mockImplementation(async (a: any) => ({ id: a.where.id, ...a.data }));
+      expect((await porte.ajouter(moi, { userId: cible })).status).toBe(200);
+    } finally {
+      await porte.close();
+    }
+  });
+
+  it('une création qui lève ne coûte rien : le plafond de l’acteur est intact ensuite', async () => {
+    const moi = acteur(21);
+    const m = monde({ lignes: [membre(moi, 'admin')] });
+    seatActors(m, [moi]);
+    const porte = await ouvrir(m);
+    const create = porte.prisma.participant.create.getMockImplementation();
+    porte.prisma.participant.create.mockRejectedValue(new Error('base indisponible'));
+    try {
+      for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.actorPerHour; i += 1) {
+        expect((await porte.ajouter(moi, { userId: personne(300 + i) }).catch(() => ({ status: 500 }))).status).not.toBe(429);
+      }
+      porte.prisma.participant.create.mockImplementation(create as never);
+      for (let i = 0; i < COMMUNITY_ADDITION_BUDGET.actorPerHour; i += 1) {
+        expect((await porte.ajouter(moi, { userId: personne(400 + i) })).status).toBe(200);
+      }
+      expect((await porte.ajouter(moi, { userId: personne(999) })).status).toBe(429);
+    } finally {
+      await porte.close();
+    }
+  });
+});

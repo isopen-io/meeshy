@@ -283,6 +283,17 @@ describe('#20464 — POST /conversations dans une communauté débite le budget 
     expect(b.prisma.conversation.create).not.toHaveBeenCalled();
   });
 
+  it('#20740 — une création qui lève n’a fait entrer personne : l’acteur et les cibles retrouvent leur débit', async () => {
+    const b = banc();
+    const moi = acteur(8);
+    const cibles = personnes(0, COMMUNITY_ADDITION_BUDGET.actorPerHour);
+    b.prisma.conversation.create.mockRejectedValueOnce(new Error('base indisponible'));
+    expect((await b.creer(moi, cibles)).status).not.toBe(429);
+    b.prisma.conversation.create.mockClear();
+    expect((await b.creer(moi, cibles)).status).not.toBe(429);
+    expect(b.prisma.conversation.create).toHaveBeenCalledTimes(1);
+  });
+
   it('Redis en panne (`consume` rend null) : le salon se crée — fail-open écrit', async () => {
     jest.spyOn(rateLimiter, 'createCustomRateLimiter').mockReturnValue({
       consume: jest.fn<any>().mockResolvedValue(null),

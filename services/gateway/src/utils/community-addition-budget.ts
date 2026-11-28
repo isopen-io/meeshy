@@ -223,16 +223,38 @@ export async function spendCommunityAdditionOfTargets(
   targetIds: readonly string[],
   actorId: string
 ): Promise<CommunityAdditionVerdict> {
+  return (await spendCommunityAdditionOfTargetsUndoable(fastify, targetIds, actorId)).verdict;
+}
+
+/** Un débit accepté que le geste peut encore RENDRE s'il n'écrit rien (#20740). */
+export type UndoableCommunityAddition = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };
+
+/**
+ * `spendCommunityAdditionOfTargets`, dont le débit accepté se REND quand
+ * l'écriture qui le justifiait n'a pas lieu (#20740) : une course de
+ * bannissement, une ligne disparue, une écriture qui lève. Sans quoi le seau de
+ * la cible compterait un ajout qui n'a jamais eu lieu.
+ */
+export async function spendCommunityAdditionOfTargetsUndoable(
+  fastify: FastifyInstance,
+  targetIds: readonly string[],
+  actorId: string
+): Promise<UndoableCommunityAddition> {
   const pris: DebitCible[] = [];
   for (const targetId of targetIds) {
     const debit = await debiterCible(fastify, targetId, actorId);
     if (!debit.verdict.allowed) {
       await Promise.all(pris.map((p) => p.rendre()));
-      return debit.verdict;
+      return { verdict: debit.verdict, rendre: async () => undefined };
     }
     pris.push(debit);
   }
-  return { allowed: true, retryAfter: 0 };
+  return {
+    verdict: { allowed: true, retryAfter: 0 },
+    rendre: async () => {
+      await Promise.all(pris.map((p) => p.rendre()));
+    },
+  };
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {

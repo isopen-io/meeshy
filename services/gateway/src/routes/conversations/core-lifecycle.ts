@@ -32,7 +32,7 @@ import {
 import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { refuserCommeIntrouvable } from './utils/access-control';
 import { applyCommunityAdmission, planCommunityAdmission } from '../../services/conversations/communityMembershipSync';
-import { spendCommunitySalonAdmission } from '../../services/conversations/communitySalonAdmissionBudget';
+import { givenBackOnFailure, spendCommunitySalonAdmissionUndoable } from '../../services/conversations/communitySalonAdmissionBudget';
 import { refuseCommunityAddition } from '../../utils/community-addition-budget';
 import { communityMemberAnnouncerFrom } from '../../services/community-member-broadcast';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -226,8 +226,8 @@ export function registerCreateConversationRoute(
         return sendForbidden(reply, 'Only admins and moderators can add people to a private community', { code: 'COMMUNITY_INVITE_FORBIDDEN' });
       }
       // #20464 — le budget de `POST …/invite` (#19812) se paie au nombre d'entrants, avant toute écriture.
-      const budget = communityAdmission ? await spendCommunitySalonAdmission(fastify, userId, communityAdmission) : null;
-      if (budget && !budget.allowed) return refuseCommunityAddition(reply, budget.retryAfter);
+      const spend = communityAdmission ? await spendCommunitySalonAdmissionUndoable(fastify, userId, communityAdmission) : null;
+      if (spend && !spend.verdict.allowed) return refuseCommunityAddition(reply, spend.verdict.retryAfter);
       if (communityAdmission?.kind === 'refused') return sendNotFound(reply, 'User to invite not found');
 
       // Block enforcement applies to DIRECT conversations only (group / community /
@@ -387,7 +387,7 @@ export function registerCreateConversationRoute(
 
       const nascent = await nascentRegime(nascentRegimeDeps(prisma), { mode: regime.mode, enabledBy: userId });
 
-      const conversation = await prisma.conversation.create({
+      const conversation = await givenBackOnFailure(spend, prisma.conversation.create({
         data: {
           id: nascent.conversationId,
           ...nascent.data,
@@ -448,7 +448,7 @@ export function registerCreateConversationRoute(
             }
           }
         }
-      });
+      }));
 
       // #14490 — un tête-à-tête né `e2ee` fait passer la PAIRE en bout en bout pour la
       // porte du talkie : sa voix en clair déjà ouverte s'arrête à l'instant.
