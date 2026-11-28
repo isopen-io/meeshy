@@ -5,6 +5,7 @@ import { birthDateBounds, birthDateVerdict } from '@/lib/onboarding/age';
 
 import { CardFrame, type CardHost } from './onboarding-cards';
 import { PrimaryButton, SecondaryButton } from './onboarding-visuals';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 
 /**
  * **LA CARTE DE L'ÂGE** (#9928) — facultative : « Passer » enregistre l'étape
@@ -109,7 +110,7 @@ export function AgeCard({
             setError(null);
           }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void confirm();
+            if (enterKeyIntent(event.nativeEvent, { multiline: false }) === 'submit') void confirm();
           }}
         />
       </div>
