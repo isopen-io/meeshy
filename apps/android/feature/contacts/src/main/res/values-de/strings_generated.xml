@@ -60,6 +60,10 @@
     <string name="keypad_no_match_title">Kein Kontakt gefunden</string>
     <string name="keypad_online_lower">online</string>
     <string name="keypad_result_open_profile_a11y">Profil öffnen</string>
+    <string name="location_map_motion_automotive">Im Auto</string>
+    <string name="location_map_motion_cycling">Mit dem Rad</string>
+    <string name="location_map_motion_running">Beim Laufen</string>
+    <string name="location_map_motion_walking">Zu Fuß</string>
     <string name="phone_prompt_benefit">Deine Kontakte finden dich über deine Nummer.</string>
     <string name="phone_prompt_code_label">6-stelliger Code</string>
     <string name="phone_prompt_code_sent">Code per SMS gesendet</string>

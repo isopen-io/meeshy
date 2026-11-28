@@ -42,6 +42,7 @@ bag.fill
 bell
 bell.fill
 bell.slash.fill
+bicycle
 bold
 bolt.fill
 bookmark
@@ -54,6 +55,7 @@ bubble.right
 camera.fill
 camera.filters
 captions.bubble
+car.fill
 cart
 cellularbars
 character.book.closed.fill
@@ -113,6 +115,8 @@ eye.slash.fill
 face.dashed
 face.smiling
 face.smiling.fill
+figure.run
+figure.walk
 film
 flame
 flame.fill

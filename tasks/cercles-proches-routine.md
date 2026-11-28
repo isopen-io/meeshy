@@ -2207,6 +2207,22 @@ Ce fichier RACONTE ce que chaque réveil a fait. L'état fait foi dans les issue
   d'accent verts. iOS ne se compile pas en conteneur : la CI iOS de la PR fait foi.
 - Prochain lot : #20054, #20056 ; puis #13934 (écoute + titre défilant) selon la spec.
 
+## 2026-11-27 — réveil de 13 h : Android du mouvement sur la carte (#20665, tranche de #19887)
+
+- Reprise : #20417 (iOS de #20249) et #20463 (#19884) fusionnées. Aucune PR de la routine ouverte. D'autres sessions
+  vivantes tiennent l'iOS de #20416 (`claude/cercles-20416-ios*`), le web de la carte (`claude/cercles-19888-web`, #20658)
+  et « Ensemble » web (#17990) ; #20514 découpe `SharedLocationSharingCenter.swift` : les lots iOS #20308, #20054,
+  #20056 attendent.
+- Lot : #20665 (ouverte ce réveil). Android décode `motion`, le garde jusqu'à l'épingle, le vieillit à 5 min, ne
+  dessine pas l'immobile ; glyphe sur l'épingle (plein écran et fiche), mot dans TalkBack et dans « Autour de toi ».
+  Iso `LocationMotionGlyph` (iOS). Quatre rôles `MeeshyIcons`, quatre chaînes générées du catalogue iOS.
+- Audit adversarial : non requis (affichage d'un champ déjà tronqué par la passerelle).
+- Gates : `jvm-check -PjvmCheckModelOnly` `SharedLocationMotionTest` 6/6 (rouge à la compilation avant le code),
+  `SharedLocationsMapTest` 6/6, `SharedLocationTest` 12/12 ; i18n `--check` et verbosité verts ; Compose par
+  `android.yml` sur la PR #20690.
+- Suivi ouvert : #20692 (Android capte et envoie son mouvement).
+- Prochain lot : fusionner #20690 ; puis #20692, ou les lots iOS de position une fois #20514 et `cercles-20416-ios` fusionnés.
+
 ## 2026-11-27 — réveil de 13 h (troisième run, même heure) : la pastille « en ligne » s'éteint après une baisse ou une rupture (#19539)
 
 - Reprise : aucune PR de la routine ouverte depuis le 2026-11-23 (#20463 fusionnée). Les lots iOS de la position
