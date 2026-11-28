@@ -103,7 +103,8 @@ export class SocialEventsHandler {
     logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} recipients=${recipients.length}`);
     // U1 — echo the cmid so the author's offline-created optimistic post (keyed
     // by cmid) reconciles to the server id instead of duplicating.
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_CREATED, (p) => ({ post: p, clientMutationId }), post);
+    const companions = await this.core.companionSeparation(post);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_CREATED, (p) => ({ post: p, clientMutationId }), post, companions);
   }
 
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {
@@ -118,7 +119,8 @@ export class SocialEventsHandler {
     // visibilité, les membres déjà joints à la post room reçoivent encore
     // cette update — même sémantique que comment:added, pas d'éviction de room.
     const separated = await this.core.contentSeparation(authorId);
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, { id: post.id, separated });
+    const companions = await this.core.companionSeparation(post);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_UPDATED, (p) => ({ post: p }), post, companions, { id: post.id, separated });
   }
 
   async broadcastPostDeleted(postId: string, authorId: string): Promise<void> {
@@ -174,7 +176,8 @@ export class SocialEventsHandler {
       this.core.emitToFriends(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, data);
       return;
     }
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, (p) => ({ ...data, repost: p }), repost);
+    const companions = await this.core.companionSeparation(repost);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.POST_REPOSTED, (p) => ({ ...data, repost: p }), repost, companions);
   }
 
   /**
@@ -207,7 +210,8 @@ export class SocialEventsHandler {
     );
     // U1 parity — echo the cmid so an offline author's optimistic story
     // (keyed by cmid) reconciles to the server story instead of duplicating.
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_CREATED, (p) => ({ story: p, clientMutationId }), story);
+    const companions = await this.core.companionSeparation(story);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_CREATED, (p) => ({ story: p, clientMutationId }), story, companions);
   }
 
   /// Emitted when an author edits a published story (PUT /posts/:id). Mirrors
@@ -227,7 +231,8 @@ export class SocialEventsHandler {
       communityId: story.communityId,
     });
     const engagementReset = options?.engagementReset ?? false;
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, (p) => ({ story: p, engagementReset }), story);
+    const companions = await this.core.companionSeparation(story);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, (p) => ({ story: p, engagementReset }), story, companions);
   }
 
   /// Emitted when an author deletes a story. Sent to all friends (we don't have
@@ -300,7 +305,8 @@ export class SocialEventsHandler {
     );
     // U1 parity — echo the cmid so an offline author's optimistic status
     // (keyed by cmid) reconciles to the server status instead of duplicating.
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, (p) => ({ status: p, clientMutationId }), status);
+    const companions = await this.core.companionSeparation(status);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, (p) => ({ status: p, clientMutationId }), status, companions);
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {
@@ -310,7 +316,8 @@ export class SocialEventsHandler {
       postId: status.id,
       communityId: status.communityId,
     });
-    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, (p) => ({ status: p }), status);
+    const companions = await this.core.companionSeparation(status);
+    this.core.emitPostToAudience(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, (p) => ({ status: p }), status, companions);
   }
 
   async broadcastStatusDeleted(statusId: string, authorId: string, visibility: string | null | undefined, visibilityUserIds: string[]): Promise<void> {

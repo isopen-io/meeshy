@@ -14,10 +14,16 @@
  * `withMentions`, par où passe chaque post servi : la source d'un auteur séparé
  * part en `repostOf: null` — la forme qu'a déjà un original disparu, que les
  * trois clients rendent « ce contenu n'est plus disponible » — et ses
- * commentaires sortent de l'aperçu. Une diffusion (`WIRE_BROADCAST`) n'a pas de
- * lecteur et ne porte AUCUNE séparation : le web fusionne la charge reçue par
- * dessus sa carte, donc une diffusion peut réinjecter ce que le REST a retiré —
- * dette ouverte, #20204.
+ * commentaires sortent de l'aperçu.
+ *
+ * **Une DIFFUSION n'a pas de lecteur** (`WIRE_BROADCAST`), et c'est par là que
+ * la règle fuyait jusqu'à #20711 : le web fusionne la charge reçue par-dessus
+ * sa carte, donc la diffusion réinjectait ce que le REST venait de retirer, sur
+ * un déclencheur fait par un TIERS. Une diffusion ne reçoit donc plus UNE
+ * charge : `SocialEmissionCore.companionSeparation` résout la séparation des
+ * COMPAGNONS pour toute l'audience en deux lectures
+ * ({@link companionSubjectsOf} → `pairsAround`), puis sert à chaque lecteur
+ * séparé sa propre charge, par CETTE loi — jamais par une forme à part.
  */
 import type { WireReader } from './storyEffectsV3';
 
@@ -55,6 +61,37 @@ function withoutSnapshotColumn<T>(post: T): T {
  * jamais sur une autorisation. S'il répond `false`, il n'y a rien à taire —
  * pas « rien à vérifier ».
  */
+/**
+ * LES AUTEURS DES COMPAGNONS D'UN POST — les sujets dont la séparation décide
+ * (#20711).
+ *
+ * Dérivé des MÊMES accesseurs que {@link withoutSeparatedCompanions} et
+ * {@link hasSeparableCompanions}, pour la raison que le doc-comment du second
+ * écrit déjà : un relevé recopié à la main dériverait au premier compagnon
+ * ajouté, et il dériverait du bon côté — en rendant une liste INCOMPLÈTE, donc
+ * une séparation qu'on ne lit pas, donc une fuite.
+ *
+ * Il rend des SUJETS, pas un verdict : c'est l'ensemble à passer à la loi de
+ * séparation. Vide ⇒ il n'y a RIEN à taire, donc aucune lecture à payer — et
+ * c'est le cas nominal d'une publication neuve (aucun commentaire, pas de
+ * `repostOf`).
+ *
+ * `snapshotAuthorId` y entre à côté de l'auteur de la source : la COPIE d'un
+ * contenu éphémère porte les médias de son auteur d'ORIGINE et lui survit.
+ */
+export function companionSubjectsOf(post: unknown): readonly string[] {
+  const subjects = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value.length > 0) subjects.add(value);
+  };
+  const source = (post as { repostOf?: unknown } | null)?.repostOf;
+  add(authorOf(source));
+  add(snapshotOf(source));
+  const comments = (post as { comments?: unknown } | null)?.comments;
+  if (Array.isArray(comments)) for (const comment of comments) add(authorOf(comment));
+  return [...subjects];
+}
+
 export function hasSeparableCompanions(post: unknown): boolean {
   const source = (post as { repostOf?: unknown } | null)?.repostOf;
   if (authorOf(source) !== undefined || snapshotOf(source) !== undefined) return true;

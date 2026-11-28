@@ -13,7 +13,8 @@ import { emitServerEvent, type ServerEventName, type ServerEventPayload } from '
 import { withAudienceListFor, withoutAudienceList } from '../../services/posts/audienceList';
 import { withServedPostMedia } from '../../services/posts/servedPostMedia';
 import { withoutBlockedRecipients } from '../../utils/blocking';
-import { createSeparatedRoomsResolver, type SeparatedRoomsResolver } from '../separatedRooms';
+import { createSeparatedRoomsResolver, type SeparatedRoomsResolver, type SeparationPairs } from '../separatedRooms';
+import { companionSubjectsOf, withoutSeparatedCompanions } from '../../services/posts/separatedCompanions';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -51,6 +52,49 @@ export type PostRoomTarget = {
   readonly id: string;
   readonly separated: readonly string[] | null;
 };
+
+/**
+ * **CE QU'UN POST DIFFUSÉ PORTE D'UN AUTRE AUTEUR, ET QUI LE SÉPARE DU
+ * LECTEUR** (#20711).
+ *
+ * Deux contenus d'AUTRES auteurs voyagent DANS un post servi : la source d'une
+ * republication (`repostOf`) et l'aperçu des commentaires (`comments`). Les
+ * douze portes REST les retirent par lecteur (#16894, #20204) ; une diffusion
+ * n'a pas de lecteur, et servait donc UNE charge complète à toute son audience.
+ *
+ * La carte dit, PAR LECTEUR, de quels auteurs de compagnon un blocage le
+ * sépare — pas « qui taire ». C'est la différence qui décide de la forme du
+ * correctif : un lecteur séparé du commentateur B a droit au post, et ne perd
+ * que le commentaire de B. L'exclure, comme le fait {@link PostRoomTarget},
+ * lui retirerait le post entier ; lui servir une charge amputée de TOUS les
+ * compagnons lui retirerait l'aperçu d'un auteur que rien ne lui cache.
+ *
+ * Trois états, et non deux :
+ *
+ * | valeur | la phrase | l'audience |
+ * |---|---|---|
+ * | carte VIDE | « personne n'est séparé d'un compagnon » — ou il n'y a aucun compagnon, donc aucune lecture payée | reçoit la charge entière |
+ * | carte PLEINE | « voici qui est séparé de quoi » | chacun sa charge |
+ * | `null` | la lecture a ÉCHOUÉ, on ne sait pas | **ne reçoit RIEN** |
+ *
+ * `null` ferme l'audience ENTIÈRE, et c'est la règle que #20236 et #20430 ont
+ * déjà tranchée pour cette forme exacte : le pré-filtre des feed rooms
+ * (`getVisibilityFilteredRecipients` → `withoutBlockedRecipients`) est keyé sur
+ * l'AUTEUR du post, qu'aucun compagnon n'est. Les feed rooms ne sont donc PAS
+ * gardées contre ces sujets, et n'en fermer qu'une partie ne fermerait rien.
+ * Le coût assumé : sur une panne de lecture, une édition ou une republication
+ * n'apparaît pas en direct — le prochain fetch REST, qui est gardé, la rend.
+ * L'AUTEUR garde son écho, exemption écrite de #20430.
+ */
+export type CompanionSeparation = SeparationPairs | null;
+
+/**
+ * « Ce post ne porte aucun compagnon », à passer EXPLICITEMENT — une carte
+ * VIDE, jamais `null`. Elle sert aux appelants qui SAVENT que leur charge n'a
+ * ni source republiée ni aperçu : dire « rien à taire » par omission est
+ * exactement ce que le paramètre requis interdit.
+ */
+export const NO_SEPARABLE_COMPANIONS: CompanionSeparation = new Map();
 
 /**
  * « Personne à taire », à passer EXPLICITEMENT. Le paramètre `separated` des
@@ -333,12 +377,71 @@ export class SocialEmissionCore {
     event: E,
     payloadFor: (post: Post) => SocialEventPayload<E>,
     loaded: Post,
+    /* #20711 — REQUIS, comme `separated` l'est des deux autres seams, et pour
+       la même raison : une garde dont le défaut est l'OUVERTURE n'est pas une
+       garde. `NO_SEPARABLE_COMPANIONS` est la façon de dire « rien à taire »
+       sans le dire par omission. */
+    companions: CompanionSeparation,
     postRoom?: PostRoomTarget,
   ): void {
     const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
+    /* L'AUTEUR est un LECTEUR, lui aussi : il a pu bloquer un commentateur de
+       son propre post, et le REST le lui retire déjà. Son écho suit donc la
+       même loi — mais il part TOUJOURS (exemption de #20430), et sur une panne
+       de lecture il part INCHANGÉ : une édition qui n'affiche plus l'aperçu de
+       sa propre publication serait une dégradation visible payée pour un
+       secret que l'auteur a lui-même hébergé. */
+    const authorHidden = companions === null ? undefined : new Set(companions.get(authorId) ?? []);
+    const emitToAuthor = () =>
+      emitServerEvent(
+        this.io.to(authorRoom),
+        event,
+        payloadFor(withoutSeparatedCompanions(withAudienceListFor(post, authorId), authorHidden)),
+      );
+
+    /* FERMÉ (#20711) — `null` ⇒ la séparation des COMPAGNONS n'a pas pu être
+       lue. On ne sert alors AUCUNE adresse d'audience : le raisonnement est
+       celui du bloc ci-dessous appliqué au bon sujet. Le pré-filtre des feed
+       rooms est keyé sur l'AUTEUR du post ; un compagnon n'est pas l'auteur,
+       donc ses feed rooms ne sont PAS gardées contre lui, et n'en fermer
+       qu'une partie ne fermerait rien — exactement la raison pour laquelle
+       #20236 et #20338 n'émettent rien sur un sujet d'ACTIVITÉ. */
+    if (companions === null) {
+      emitToAuthor();
+      return;
+    }
+
+    /* Les lecteurs que la loi des compagnons sert AUTREMENT. Ils sortent de la
+       charge commune — par `except`, qui porte sur les rooms `user:` et les
+       retire donc de TOUTES ses adresses à la fois, feed comme post — et
+       reçoivent chacun la leur. La carte est celle de TOUS les lecteurs
+       séparés, pas seulement ceux de l'audience : un spectateur présent dans la
+       room du post sans être dans l'audience doit être tu lui aussi, et c'est
+       la seule adresse où on ne peut pas l'énumérer. */
+    const servedApart = [...companions.keys()];
+    const companionSilenced = servedApart.map((id) => ROOMS.user(id));
+    const apart = new Set(servedApart);
     const audiencePayload = payloadFor(withoutAudienceList(post));
-    const audienceRooms = recipientIds.filter((id) => id !== authorId).map((id) => ROOMS.feed(id));
+    const audienceRooms = recipientIds
+      .filter((id) => id !== authorId && !apart.has(id))
+      .map((id) => ROOMS.feed(id));
+    /* Chacun sa charge, par la MÊME loi que les douze portes REST — jamais par
+       une forme à part. `repostOf` sort à `null` et l'aperçu perd les seuls
+       commentaires qu'un blocage sépare : la clé reste PRÉSENTE, ce qui est la
+       propriété dont les trois clients dépendent — mesuré, leurs trois fusions
+       sont des REMPLACEMENTS (web `mergeServedPost`, iOS
+       `FeedViewModel+Socket`, Android `PostUpdateMerge`), donc une clé ABSENTE
+       effacerait l'aperçu rendu au lieu de le corriger. */
+    for (const readerId of recipientIds) {
+      if (readerId === authorId || !apart.has(readerId)) continue;
+      const hidden = new Set(companions.get(readerId) ?? []);
+      emitServerEvent(
+        this.io.to(ROOMS.feed(readerId)),
+        event,
+        payloadFor(withoutSeparatedCompanions(withoutAudienceList(post), hidden)),
+      );
+    }
     /* #20430 — la room du post et la séparation qui la gouverne voyagent
        ENSEMBLE. `null` ⇒ on ne l'adresse pas, et les feed rooms partent seules.
 
@@ -362,35 +465,34 @@ export class SocialEmissionCore {
        Fermer ici les feed rooms en plus ne protégerait personne et priverait
        l'audience légitime sur une panne de lecture.
 
-       ─── CE QUE CE SEAM NE FERME PAS ───
+       ─── CE QUE CE SEAM FERME, ET CE QUE L'AUTRE FERME ───
 
-       La charge d'audience n'est PAS réduite au seul auteur : `postInclude`
-       y attache `comments` (aperçu, auteurs et textes) et `repostOf` (la
-       source republiée, auteur et contenu), et la loi qui retire ces
-       compagnons séparés est un NO-OP sur une diffusion
-       (`separatedCompanions.ts` lit `reader.separatedUserIds`, absent de
-       `WIRE_BROADCAST`). Un lecteur séparé de C, mais pas de A, reçoit donc
-       encore le commentaire de C sur le post de A — ce que le REST lui
-       retire. **Dette ouverte et tracée : #20204**, hors périmètre de ce lot,
-       et c'est pourquoi ce seam ne revendique PAS d'être complet : il ferme la
-       room du post pour le sujet AUTEUR, et rien de plus. */
+       Celui-ci ferme la room du post pour le sujet AUTEUR, et rien de plus.
+       La charge d'audience porte aussi `comments` (aperçu, auteurs et textes)
+       et `repostOf` (la source republiée, auteur et contenu) — deux contenus
+       d'AUTRES auteurs, que ce `separated`-ci ne regarde pas : il est keyé sur
+       l'auteur du post. C'est `companions` qui les tient (#20711, voir
+       {@link CompanionSeparation}), et les deux lois se composent sans se
+       recouvrir — la première décide QUI reçoit, la seconde QUOI. */
     const postRoomRooms = postRoom === undefined || postRoom.separated === null
       ? []
       : [ROOMS.post(postRoom.id)];
     const separated = postRoom?.separated;
     if (postRoomRooms.length > 0 && separated != null) {
       emitServerEvent(
-        this.exceptSeparated([...audienceRooms, ...postRoomRooms], [...separated, authorRoom]),
+        this.exceptSeparated([...audienceRooms, ...postRoomRooms], [...separated, ...companionSilenced, authorRoom]),
         event,
         audiencePayload,
       );
     } else {
-      for (const room of audienceRooms) emitServerEvent(this.io.to(room), event, audiencePayload);
+      for (const room of audienceRooms) {
+        emitServerEvent(this.exceptSeparated(room, companionSilenced), event, audiencePayload);
+      }
     }
     /* L'AUTEUR reçoit TOUJOURS son propre contenu, avec sa liste d'audience :
        sa feed room ne contient que ses sockets, aucun tiers n'y lit, et un
        sujet ne se tait pas à lui-même. Exemption ÉCRITE, pas oubli. */
-    emitServerEvent(this.io.to(authorRoom), event, payloadFor(withAudienceListFor(post, authorId)));
+    emitToAuthor();
   }
 
   /**
@@ -542,6 +644,25 @@ export class SocialEmissionCore {
        comme porteuse de sens sans qu'aucun témoin la tienne (audit du lot : mutée,
        299 suites restaient vertes). */
     return this.separatedRooms.roomsAround([postAuthorId]);
+  }
+
+  /**
+   * **LA SÉPARATION DES COMPAGNONS D'UN POST** (#20711) — résolue par
+   * l'APPELANT, avant la diffusion, et passée à `emitPostToAudience`.
+   *
+   * Le coût du cas nominal est NUL, et c'est ce qui rend la loi tenable :
+   * `companionSubjectsOf` rend `[]` dès qu'un post n'a ni source republiée ni
+   * commentaire en aperçu — ce qui est la forme de toute publication NEUVE —
+   * et `pairsAround([])` répond une carte vide sans ouvrir de requête. Quand
+   * il y a des compagnons, c'est DEUX lectures, quel que soit leur nombre, et
+   * le cache de `separatedRooms` les rend une fois par jeu de sujets (les
+   * éditions successives d'un même post rejouent la même clé).
+   *
+   * Le prédicat porte sur ce qui SORT, jamais sur une autorisation : une carte
+   * vide veut dire « rien à taire », pas « rien à vérifier ».
+   */
+  companionSeparation(post: Post): Promise<CompanionSeparation> {
+    return this.separatedRooms.pairsAround(companionSubjectsOf(post));
   }
 
   async commentEmitter(rooms: string | string[], commentAuthorId: string | null | undefined) {
