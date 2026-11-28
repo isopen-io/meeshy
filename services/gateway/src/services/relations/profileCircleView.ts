@@ -55,7 +55,7 @@ export async function readProfileCircleView(
     grantedByTarget: accords.byTarget,
     sharesCommunity: coMembers.has(targetId),
     blockedEitherWay: blocked.has(targetId),
-    targetDeactivated: target?.deactivated ?? false,
+    targetDeactivated: !target?.usable,
     viewerMinor: viewer?.age ?? 'unknown',
     targetMinor: target?.age ?? 'unknown',
     viewerRole: viewer?.role ?? null,
@@ -114,7 +114,7 @@ export async function readProfileSeenAs(
       ...facts,
       targetShowOnlineStatus: prefs.showOnlineStatus,
       targetShowLastSeen: prefs.showLastSeen,
-      targetIsDeactivated: owner?.deactivated ?? true,
+      targetIsDeactivated: !owner?.usable,
     }),
   };
 }

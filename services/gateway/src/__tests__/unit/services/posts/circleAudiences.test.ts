@@ -28,6 +28,9 @@ import { relationStore } from '../../../helpers/user-relation-store';
 import { matchesMongoWhere } from '../../../helpers/mongo-where';
 import type { CacheStore } from '../../../../services/CacheStore';
 
+const usableAccountsOf = async ({ where }: any) =>
+  where?.blockedUserIds ? [] : ((where?.id?.in ?? []) as string[]).map((id) => ({ id, birthDate: null, role: null, isActive: true, deletedAt: null, deactivatedAt: null }));
+
 const hex = (letter: string): string => letter.repeat(24);
 
 const AUTHOR = hex('a');
@@ -78,8 +81,9 @@ const world = (extra: { readonly dmContacts?: readonly string[]; readonly relati
   });
   const prisma = {
     ...store.prisma,
-    // Aucun compte de l'équipe dans ce monde : la loi lit rôle et âge (#16623) et ne trouve que des inconnus.
-    user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => null) },
+    // Aucun compte de l'équipe dans ce monde : la loi lit rôle et âge (#16623) et ne trouve que des
+    // adultes sans rôle, tous utilisables — un compte absent ou parti n'ouvre rien (#20679).
+    user: { findMany: jest.fn<any>(usableAccountsOf), findUnique: jest.fn<any>(async () => null) },
     communityMember: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
     participant: {
       findMany: participantFindMany,
@@ -239,7 +243,7 @@ describe('les cercles du lecteur — loadFeedCircles et les filtres qui les lise
     const store = relationStore({ relations: [l(ACQ, 'ACQUAINTANCE'), l(FRI, 'FRIEND'), l(CLS, 'CLOSE'), l(BLD, 'BLOOD')] });
     const prisma = {
       ...store.prisma,
-      user: { findMany: jest.fn<any>(async () => []), findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })) },
+      user: { findMany: jest.fn<any>(usableAccountsOf), findUnique: jest.fn<any>(async () => ({ blockedUserIds: [] })) },
       communityMember: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
       participant: { findMany: jest.fn<any>(async () => []), findFirst: jest.fn<any>(async () => null) },
     };

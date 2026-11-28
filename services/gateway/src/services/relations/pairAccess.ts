@@ -8,8 +8,10 @@
  * bouclier des mineurs. Ici, les lectures sont celles que la feature EXIGE
  * (`relationAccessReads`) : l'âge pour le bouclier et la Connaissance
  * automatique, la communauté quand un plancher s'atteint par elle, le rôle des
- * deux côtés quand le privilège d'équipe peut ouvrir la feature (#16623). L'âge et
- * le rôle partent en UNE lecture, parallèle à celle du niveau : elle n'allonge rien.
+ * deux côtés quand le privilège d'équipe peut ouvrir la feature (#16623). L'âge, le
+ * rôle et l'état du compte partent en UNE lecture, parallèle à celle du niveau : elle
+ * n'allonge rien. Elle est TOUJOURS faite : un compte inutilisable des deux côtés ferme
+ * toute feature (#20679), et ce verdict-là ne dépend pas de ce que la feature exige.
  *
  * Le niveau vient du site unique (`niveauxParmi`) ; aucune comparaison de
  * niveaux n'est écrite ici. Une lecture qui échoue LÈVE : l'appelant ferme.
@@ -49,8 +51,7 @@ export type PairPerson = {
   readonly age: DeclaredAgeClass;
   readonly birthDate: Date | null;
   readonly role: string | null;
-  readonly deactivated: boolean;
-  /** Actif, ni supprimé, ni désactivé (`isUsableAccount`). */
+  /** Actif, ni supprimé, ni désactivé (`isUsableAccount`) — la SEULE lecture de l'état du compte (#20679). */
   readonly usable: boolean;
 };
 
@@ -62,7 +63,7 @@ export async function peopleOf(prisma: PairAccessDb, ids: readonly string[], now
   return new Map(
     rows.map((row) => [
       row.id,
-      { age: declaredAgeClass(row.birthDate ?? null, now), birthDate: row.birthDate ?? null, role: lawRoleOf(row), deactivated: row.deactivatedAt != null, usable: isUsableAccount(row) },
+      { age: declaredAgeClass(row.birthDate ?? null, now), birthDate: row.birthDate ?? null, role: lawRoleOf(row), usable: isUsableAccount(row) },
     ]),
   );
 }
@@ -93,7 +94,7 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
   const [levels, blocked, people, coMembers] = await Promise.all([
     niveauxParmi(prisma, subjectId, ids),
     getBlockedUserIdsAmong(prisma, subjectId, ids),
-    reads.age || reads.role ? peopleOf(prisma, [subjectId, ...ids], now) : Promise.resolve(new Map<string, PairPerson>()),
+    peopleOf(prisma, [subjectId, ...ids], now),
     reads.community ? coMembersAmong(prisma, subjectId, ids) : Promise.resolve(new Set<string>()),
   ]);
 
@@ -117,11 +118,27 @@ export async function pairAccessAmong(prisma: PairAccessDb, params: PairAccessAm
         feature,
       };
       const probe = resolveRelationAccess({ ...input, consent: 'unknown' });
+      if (!people.get(subjectId)?.usable || !people.get(id)?.usable) return [id, unusableVerdict(probe)];
       const consentOf = params.consentOf;
       return [id, !probe.requiresConsent || !consentOf ? probe : resolveRelationAccess({ ...input, consent: consentOf(id, probe.effectiveLevel, { targetMinor: input.targetMinor === 'minor', realLevel: effectiveRelationLevel(input), minorProtected: minorProtectedBetween({ emitterBirthDate: people.get(targetId)?.birthDate, otherBirthDate: people.get(viewerId)?.birthDate, now }) }) })];
     }),
   );
 }
+
+/**
+ * Un compte qui ne peut ni agir ni recevoir (`isUsableAccount` : inactif, supprimé en
+ * attente de purge, désactivé, ou ligne absente) n'ouvre RIEN, d'un côté comme de l'autre
+ * (#20679). La suppression demandée par la personne écrit `{ isActive: false, deletedAt }`
+ * sans `deactivatedAt` : un juge qui ne lisait que la désactivation laissait la fiche, la
+ * position et l'écoute d'un compte parti à ses Sangs pendant toute la grâce. Le verdict
+ * dit `level` et `PUBLIC`, comme une paire sans lien : il ne révèle ni un blocage ni un départ.
+ */
+const unusableVerdict = (probe: RelationAccess): RelationAccess => ({
+  allowed: false,
+  effectiveLevel: 'PUBLIC',
+  reason: 'level',
+  requiresConsent: probe.requiresConsent,
+});
 
 /** Le verdict de la loi pour UNE paire : `viewerId` voit ou agit envers `targetId`. */
 export async function pairAccess(

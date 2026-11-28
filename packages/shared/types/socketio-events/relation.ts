@@ -43,6 +43,11 @@ export interface RelationLevelRaisedEventData {
  * `relation:level-lowered` (#19366) — à la room de L'ACTEUR seulement. `userId` est
  * l'autre ; `grantedByMe` mon nouvel accord ; `effectiveLevel` le lien qui en résulte.
  * Ni cool-down, ni accord de l'autre : ce que mes autres appareils savent déjà lire.
+ *
+ * Les deux niveaux sont la valeur SERVIE, jamais la ligne brute (#20668, #20679) : vers un
+ * compte inutilisable (inactif, supprimé en attente de purge, désactivé), ils valent la vue
+ * fermée que rend `GET /relations/:userId` — `PUBLIC` — comme la réponse HTTP de la baisse.
+ * Un client les recopie tels quels : il ne reconstitue pas un accord que le serveur a fermé.
  */
 export interface RelationLevelLoweredEventData {
   readonly userId: string;
