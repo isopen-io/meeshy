@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { MessageEditState } from '@/lib/view/use-message-edit';
+import { enterKeyIntent } from '@/lib/view/ime-enter';
 
 import { Glyph } from './glyph';
 
@@ -123,10 +124,10 @@ function MessageEditComposer({
                 onCancel();
                 return;
               }
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                onSubmit(text);
-              }
+              const enter = enterKeyIntent(e.nativeEvent, { multiline: true });
+              if (enter === 'none') return;
+              e.preventDefault();
+              if (enter === 'submit') onSubmit(text);
             }}
             aria-label={translateMessagePieces(language, 'message.edit.field')}
             className="min-w-0 flex-1 resize-none bg-transparent py-3 text-input leading-[22px] outline-none"

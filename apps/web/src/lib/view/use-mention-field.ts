@@ -5,13 +5,14 @@ import type { MentionCandidate } from '@/lib/api/mention-suggestions';
 import { insertMention } from './mention-query';
 import type { MentionSource } from './mention-source';
 import { useMentionSuggestions, type MentionSuggestions } from './use-mention-suggestions';
+import { confirmsComposition } from './ime-enter';
 
 /** L'identifiant d'une rangée — `aria-activedescendant` du champ le vise. */
 export const mentionOptionId = (listId: string, index: number): string => `${listId}-option-${index}`;
 
 export type MentionFieldElement = HTMLTextAreaElement | HTMLInputElement;
 
-export type MentionKeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'isComposing' | 'preventDefault' | 'stopPropagation'>;
+export type MentionKeyEvent = Pick<KeyboardEvent, 'key' | 'shiftKey' | 'isComposing' | 'preventDefault' | 'stopPropagation'> & { readonly keyCode?: number };
 
 export type MentionFieldAria = {
   readonly 'aria-autocomplete': 'list';
@@ -101,7 +102,7 @@ export function useMentionField(input: {
   };
 
   const onKeyDown = (event: MentionKeyEvent): boolean => {
-    if (!suggestions.open || event.isComposing) return false;
+    if (!suggestions.open || confirmsComposition(event)) return false;
     if (event.key === 'Escape') {
       suggestions.dismiss();
       return consumed(event);
