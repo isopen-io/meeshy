@@ -308,14 +308,19 @@ préparé » :
 > ne reproduit pas est un rouge d'arbre jusqu'à preuve du contraire.
 
 **Et la quatrième ligne n'est pas un ARTEFACT : c'est un BINAIRE SYSTÈME absent**
-(mesuré le 2026-11-28). `src/__tests__/unit/services/UploadProcessor.heif-conversion.test.ts`
-rend **2 rouges** dans un conteneur de session, sur un arbre PARFAITEMENT à jour
-de `dev` et préparé selon les trois commandes ci-dessus :
+(mesuré le 2026-11-28). **Trois suites** rendent **4 rouges** dans un conteneur
+de session, sur un arbre PARFAITEMENT à jour de `dev` et préparé selon les trois
+commandes ci-dessus :
 
-```
-✕ multipart : la ligne désigne un JPEG lisible, l'original HEIC est gardé dans `renditions`
-✕ chemin chiffré serveur : c'est un JPEG qui est chiffré et persisté, jamais le HEIC
-```
+| suite | ce qui tombe |
+|---|---|
+| `services/gateway/src/__tests__/unit/services/UploadProcessor.heif-conversion.test.ts` | « la ligne désigne un JPEG lisible, l'original HEIC est gardé dans `renditions` » et son jumeau chiffré |
+| `services/gateway/src/routes/uploads/__tests__/tus-handler-heif-conversion.test.ts` | le même défaut sur le transport résumable |
+| `services/gateway/src/services/attachments/__tests__/ExifStrip.gain-map.test.ts` | la carte de gain d'un HEIC |
+
+Les trois sont dans la **voie de parité** (`node scripts/ci/voie-parite.mjs
+--liste gateway`), donc elles rougissent au premier job de la CI — celui qu'on
+regarde en premier.
 
 La cause est que la CI installe `ffmpeg`, `jpegtran`, `avifenc` et **`heif-convert`**
 (étape « Install ffmpeg, jpegtran, avifenc and heif-convert (gateway) ») et que les
