@@ -243,12 +243,33 @@ public final class MeeshyConfig: @unchecked Sendable {
         apiBaseURL = origin + path
     }
 
+    /// Le choix du serveur existe au simulateur et dans toute build Debug
+    /// (#8287, #17050), décidé à la COMPILATION. Un binaire Release d'appareil
+    /// ne le propose pas, et n'honore pas non plus une valeur persistée : une
+    /// préférence écrite hors de l'app (sauvegarde altérée, profil) y
+    /// enverrait les jetons du trousseau vers l'hôte qu'elle nomme.
+    public static var allowsServerChoice: Bool {
+        #if targetEnvironment(simulator) || DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    static func honoredEnvironment(persisted: String?, allowsServerChoice: Bool) -> ServerEnvironment {
+        guard allowsServerChoice, let persisted, let environment = ServerEnvironment(rawValue: persisted) else {
+            return .production
+        }
+        return environment
+    }
+
     /// Currently selected environment, persisted in UserDefaults
     public var selectedEnvironment: ServerEnvironment {
         get {
-            guard let raw = UserDefaults.standard.string(forKey: Self.environmentKey),
-                  let env = ServerEnvironment(rawValue: raw) else { return .production }
-            return env
+            Self.honoredEnvironment(
+                persisted: UserDefaults.standard.string(forKey: Self.environmentKey),
+                allowsServerChoice: Self.allowsServerChoice
+            )
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: Self.environmentKey)

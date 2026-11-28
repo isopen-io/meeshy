@@ -349,7 +349,7 @@ public actor TusUploadManager {
 
         if !isCheckpointStale, !isFinishLost,
            let cp = resumed,
-           let url = URL(string: cp.uploadURL, relativeTo: baseURL),
+           let url = TusUploadLocation.resolve(cp.uploadURL, baseURL: baseURL),
            cp.fileSize == fileSize {
             Self.logger.info("Resuming TUS upload at offset \(cp.byteOffset, privacy: .public) of \(fileSize, privacy: .public) (\(fileName, privacy: .public))")
             patchURL = url
@@ -365,7 +365,7 @@ public actor TusUploadManager {
                 transcription: transcription,
                 capturedInApp: capturedInApp
             )
-            guard let url = URL(string: location, relativeTo: baseURL) else {
+            guard let url = TusUploadLocation.resolve(location, baseURL: baseURL) else {
                 throw URLError(.badURL)
             }
             patchURL = url
