@@ -82,7 +82,7 @@ const world = (options: { call: CallRow; summaryMetadata: unknown }) => {
     participant: { findMany: jest.fn(async () => []) }
   };
   const broadcast = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
-  const refresh = createLateCallSummaryRefresher({ prisma: () => prisma as never, broadcastEdited: () => broadcast });
+  const refresh = createLateCallSummaryRefresher({ prisma: () => prisma as never, broadcastEdited: () => broadcast, sealed: async () => false });
   return { prisma, broadcast, refresh, metadata: () => state.metadata as Record<string, unknown> };
 };
 

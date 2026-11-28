@@ -160,7 +160,8 @@ export class CallEventsHandler {
    * Stays null in unit tests that don't exercise the live-message path.
    */
   private messageUpdateBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
-  private readonly refreshLateCallSummary = createLateCallSummaryRefresher({ prisma: () => this.prisma, broadcastEdited: () => this.messageUpdateBroadcaster });
+  private messageMeasuresBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
+  private readonly refreshLateCallSummary = createLateCallSummaryRefresher({ prisma: () => this.prisma, broadcastEdited: () => this.messageMeasuresBroadcaster, sealed: (message) => this.sealedByObsolescence(message) });
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -1480,6 +1481,9 @@ export class CallEventsHandler {
     this.messageUpdateBroadcaster = broadcaster;
   }
 
+  /** #20747 — l'édition de MESURES d'un résumé (relevé tardif) : `message:edited` sans remonter la conversation. */
+  setMessageMeasuresBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void { this.messageMeasuresBroadcaster = broadcaster; }
+
   /**
    * Public entry point for external terminal paths (currently
    * `CallCleanupService`'s GC tiers) that end a call without going through
@@ -1591,20 +1595,14 @@ export class CallEventsHandler {
       const result = await (attempt < MAX_ATTEMPTS
         ? this.callService.createCallSummaryMessage(callId)
         : this.callService.createCallSummaryMessage(callId, { participantsBestEffort: true }));
-      if (!result || (await this.sealedByObsolescence(result.message))) {
-        return;
-      }
-      // `created` → the summary is a brand-new message (message:new fanout);
-      // `updated` → the live "en cours" message was edited in-place to its
-      // terminal state (message:edited full-payload fanout).
-      const broadcaster = result.kind === 'updated'
-        ? this.messageUpdateBroadcaster
-        : this.messageBroadcaster;
-      if (!broadcaster) {
-        return;
-      }
+      if (!result || (await this.sealedByObsolescence(result.message))) return;
+      // `created` → brand-new message (message:new); `updated` → the live message edited in-place (message:edited).
+      const broadcaster = result.kind === 'updated' ? this.messageUpdateBroadcaster : this.messageBroadcaster;
+      if (!broadcaster) return;
       const [served] = await withCallSummaryParticipantNames(this.prisma, [result.message]);
       await broadcaster(served, result.message.conversationId);
+      // #20747 — a report persisted after the summary read its CallSession must still reach the bubble.
+      await this.refreshLateCallSummary(callId);
     } catch (error) {
       logger.error('[CallEventsHandler] Failed to post call summary message', {
         callId,

@@ -6,8 +6,8 @@
  * arrive pourtant APRÈS (fenêtre de grâce de #20459). Plutôt que de retarder
  * la bulle de tous les appels de la durée de cette fenêtre, on l'ÉDITE en
  * place quand ce relevé tardif a changé une mesure persistée, et on la
- * rediffuse par le diffuseur `message:edited` déjà utilisé pour la bascule
- * « en cours » → terminal.
+ * rediffuse en `message:edited` — même événement et même charge que la bascule
+ * « en cours » → terminal, sans remonter la conversation (#20747).
  *
  * Seules les trois mesures de la métadonnée changent (`bytesTotal`,
  * `bytesEstimated`, `networkQuality`), recalculées par le MÊME constructeur
@@ -47,30 +47,30 @@ const asTerminalSummary = (metadata: unknown): (Record<string, unknown> & Measur
     ? (metadata as Record<string, unknown> & Measures)
     : null;
 
-/**
- * Réécrit les mesures du résumé TERMINAL d'un appel terminé depuis la ligne
- * `CallSession` ; rend le message édité, ou `null` quand rien n'a changé, que
- * le résumé n'existe pas encore, est encore « en cours » ou a été effacé.
- * L'écriture est conditionnée à l'instantané lu (`updatedAt`) : une écriture
- * concurrente la fait renoncer (`P2025`), jamais écraser.
- */
-export async function refreshEndedCallSummaryMeasures(
+type PostedSummary = { readonly id: string; readonly updatedAt: Date; readonly metadata: Record<string, unknown> & Measures };
+
+async function postedSummary(
   prisma: LateCallSummaryRefreshPrisma,
+  conversationId: string,
   callId: string
-): Promise<CallSummaryMessage | null> {
-  const call = await prisma.callSession.findUnique({ where: { id: callId }, select: CALL_SUMMARY_FACTS_SELECT });
-  const fresh = call ? buildCallSummaryMetadata(callSummaryFacts(call)) : null;
-  if (!call || !fresh) return null;
+): Promise<PostedSummary | null> {
   const existing = await prisma.message.findFirst({
-    where: { conversationId: call.conversationId, clientMessageId: callSummaryClientMessageId(call.id), ...unsetOrNull('deletedAt') },
+    where: { conversationId, clientMessageId: callSummaryClientMessageId(callId), ...unsetOrNull('deletedAt') },
     select: { id: true, metadata: true, updatedAt: true }
   });
-  const posted = asTerminalSummary(existing?.metadata);
-  if (!existing || !posted || sameMeasures(posted, fresh)) return null;
+  const metadata = asTerminalSummary(existing?.metadata);
+  return existing && metadata ? { id: existing.id, updatedAt: existing.updatedAt, metadata } : null;
+}
+
+function rewriteMeasures(
+  prisma: LateCallSummaryRefreshPrisma,
+  posted: PostedSummary,
+  fresh: Measures
+): Promise<CallSummaryMessage | null> {
   return prisma.message
     .update({
-      where: { id: existing.id, updatedAt: existing.updatedAt },
-      data: { metadata: { ...posted, ...measuresOf(fresh) } as Prisma.InputJsonValue },
+      where: { id: posted.id, updatedAt: posted.updatedAt },
+      data: { metadata: { ...posted.metadata, ...measuresOf(fresh) } as Prisma.InputJsonValue },
       include: CALL_SUMMARY_MESSAGE_INCLUDE
     })
     .catch((error: unknown) => {
@@ -80,24 +80,61 @@ export async function refreshEndedCallSummaryMeasures(
 }
 
 /**
- * Le rafraîchisseur que branche le gestionnaire de `call:quality-report` : il
- * coalesce par appel, diffuse le résumé édité en `message:edited` (noms des
- * participants réhydratés, comme à la pose) et avale toute panne.
+ * Réécrit les mesures des résumés TERMINAUX d'un appel terminé depuis la ligne
+ * `CallSession` — celui de sa conversation et, pour un appel basculé, la bulle
+ * miroir de son tête-à-tête d'origine (#19650) ; rend les messages édités
+ * (aucun quand rien n'a changé, que le résumé n'existe pas encore, est encore
+ * « en cours » ou a été effacé). Les bulles sont lues AVANT l'instantané des
+ * mesures, et chaque écriture est conditionnée à l'`updatedAt` lu : une
+ * écriture concurrente la fait renoncer (`P2025`), jamais écraser par un
+ * relevé plus ancien (#20747).
+ */
+export async function refreshEndedCallSummaryMeasures(
+  prisma: LateCallSummaryRefreshPrisma,
+  callId: string
+): Promise<ReadonlyArray<CallSummaryMessage>> {
+  const anchor = await prisma.callSession.findUnique({
+    where: { id: callId },
+    select: { conversationId: true, originConversationId: true }
+  });
+  if (!anchor) return [];
+  const conversationIds = [anchor.conversationId, anchor.originConversationId].filter((id): id is string => typeof id === 'string');
+  const posted = (await Promise.all(conversationIds.map((id) => postedSummary(prisma, id, callId))))
+    .filter((summary): summary is PostedSummary => summary !== null);
+  if (posted.length === 0) return [];
+  const call = await prisma.callSession.findUnique({ where: { id: callId }, select: CALL_SUMMARY_FACTS_SELECT });
+  const fresh = call && call.conversationId === anchor.conversationId ? buildCallSummaryMetadata(callSummaryFacts(call)) : null;
+  if (!fresh) return [];
+  const edited = await Promise.all(
+    posted.filter((summary) => !sameMeasures(summary.metadata, fresh)).map((summary) => rewriteMeasures(prisma, summary, fresh))
+  );
+  return edited.filter((message): message is CallSummaryMessage => message !== null);
+}
+
+/**
+ * Le rafraîchisseur que branchent le gestionnaire de `call:quality-report` et
+ * la pose du résumé : il coalesce par appel, diffuse chaque résumé édité en
+ * `message:edited` (noms des participants réhydratés, comme à la pose) par le
+ * diffuseur d'édition de MESURES — qui ne remonte pas la conversation —, tait
+ * celui qu'une conversation obsolète a scellé (#14643) et avale toute panne.
  */
 export function createLateCallSummaryRefresher(deps: {
   readonly prisma: () => LateCallSummaryRefreshPrisma;
   readonly broadcastEdited: () => EditedBroadcaster | null;
+  readonly sealed: (message: { readonly id: string; readonly conversationId: string }) => Promise<boolean>;
 }): (callId: string) => Promise<void> {
   const running = new Map<string, Promise<void>>();
   const rerun = new Set<string>();
 
   const refreshOnce = async (callId: string): Promise<void> => {
     const prisma = deps.prisma();
-    const message = await refreshEndedCallSummaryMeasures(prisma, callId);
-    const broadcast = deps.broadcastEdited();
-    if (!message || !broadcast) return;
-    const [served] = await withCallSummaryParticipantNames(prisma, [message]);
-    await broadcast(served, message.conversationId);
+    const edited = await refreshEndedCallSummaryMeasures(prisma, callId);
+    for (const message of edited) {
+      const broadcast = deps.broadcastEdited();
+      if (!broadcast || (await deps.sealed(message))) continue;
+      const [served] = await withCallSummaryParticipantNames(prisma, [message]);
+      await broadcast(served, message.conversationId);
+    }
   };
 
   const drain = async (callId: string): Promise<void> => {
