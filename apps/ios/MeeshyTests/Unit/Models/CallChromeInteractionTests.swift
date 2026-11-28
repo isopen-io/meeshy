@@ -35,7 +35,32 @@ final class CallChromeInteractionTests: XCTestCase {
         XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: -1))
         XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: -.infinity))
         XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: .nan))
+        XCTAssertFalse(CallChromeVisibility.acceptsTouches(isVisible: false, hiddenFor: -0.05))
     }
+
+    func test_acceptsTouches_visible_ignoresAnUnreliableInterval() {
+        XCTAssertTrue(CallChromeVisibility.acceptsTouches(isVisible: true, hiddenFor: -0.05))
+        XCTAssertTrue(CallChromeVisibility.acceptsTouches(isVisible: true, hiddenFor: .nan))
+    }
+
+    /// #20726 — la grâce du retrait n'a qu'une source, la loi du kit : le chrome d'appel
+    /// n'y ajoute aucun garde.
+    func test_acceptsTouches_delegatesToTheKitLawWithoutItsOwnGuard() throws {
+        let source = try String(contentsOf: Self.chromeInteractionURL, encoding: .utf8)
+        let start = try XCTUnwrap(source.range(of: "static func acceptsTouches(isVisible: Bool, hiddenFor: TimeInterval) -> Bool {"))
+        let end = try XCTUnwrap(source.range(of: "\n    }", range: start.upperBound..<source.endIndex))
+        let body = source[start.upperBound..<end.lowerBound]
+        XCTAssertFalse(body.contains("hiddenFor >= 0"))
+        XCTAssertFalse(body.contains("guard"))
+        XCTAssertTrue(body.contains("MeeshyGlassPillPresenceRule.acceptsTouches("))
+    }
+
+    private static let chromeInteractionURL = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Meeshy/Features/Call/Models/CallChromeInteraction.swift")
 
     // MARK: - #20300 la grâce du fondu se mesure sur une horloge monotone
 

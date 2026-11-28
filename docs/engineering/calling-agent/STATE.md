@@ -2952,3 +2952,30 @@ socket jusqu'au client.
 0. Si la PR de #20747 n'est pas fusionnée : lire son `ci.yml` en `workflow_dispatch`. S'il est vert, fusionner `dev` dans la branche, puis la PR.
 1. **#20726** (une seule source de la grâce, iOS et SDK), **#20335** (iOS, à coordonner avec la routine iOS).
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging, à étendre à la bulle tardive et à son miroir), #11932, #12236, #16933.
+
+## Cycle 85 — 2026-11-28
+
+- **Base** : `origin/dev` @ `92950be45`. La PR #20774 du cycle 84 (#20747) était déjà fusionnée (`24baa401f`). L'issue restait ouverte : elle a été fermée, avec sa preuve en commentaire.
+- **Branche** : `claude/determined-volta-20726`, qui contient `dev` @`75125484c`.
+- **Objectif** : **#20726**. La grâce de retrait n'a plus qu'une source, et la conversion `Duration` → secondes non plus.
+- **Livré** (iOS + SDK + doc du kit, aucun fichier de `Features/Call/Views/`) :
+  - `MeeshyCore/Utils/Duration+TimeInterval.swift` (nouveau) : `Duration.timeInterval`, la seule lecture `secondes + attosecondes / 1e18`. Elle est appelée par `CallMonotonicClock.seconds`, `MeeshyGlassPillPresenceRule.stowedFor` et `ScrollMotionFromOffset` (le `seconds(_:)` privé de ce dernier est retiré).
+  - `CallChromeVisibility.acceptsTouches` délègue à la règle du kit, sans garde propre. L'ancien `hiddenFor >= 0` répétait `stowedFor >= 0`.
+  - Les vecteurs K10 ont deux lignes de plus, `stowed`, `-0.05` → `false` (avec et sans « réduire les animations »). La loi est écrite dans `K10-MeeshyGlassPill.md`.
+- **Tests** :
+  - `DurationTimeIntervalTests` (SDK) : la conversion (0, 1,5 s, négatif, 1 attoseconde, 1 ns), une garde « aucune lecture de `attoseconds` hors de la source » (≥ 100 fichiers balayés) et la garde des trois sites.
+  - `CallChromeInteractionTests` : −0,05 caché ⇒ refus, visible ⇒ accepté, et une garde de texte « pas de garde propre ».
+  - Le rouge est raisonné par mutation (pas de Swift dans le conteneur). Les gardes de texte tombaient sur l'arbre d'avant.
+  - Gardes iOS rejouées sur l'arbre fusionné : house rules (42), cohésion, inscription (2 076) et couleurs, toutes ok.
+  - CI en `workflow_dispatch` sur `0ddd69494f` : `sdk-tests.yml` 46113339007 et `ios.yml` 46113341558.
+- **QA** (indépendante) : **favorable avec réserves**.
+  - Équivalence vérifiée cas par cas.
+  - Le seul écart numérique est le délai de défilement, passé de `* 1e-18` à `/ 1e18`. Il bouge d'un ulp pour certaines durées (environ 1e-17 s), et le nouveau résultat est le bon arrondi.
+  - Réserves 1 et 3 ouvertes en **#20788** (une 4e conversion, `StoryTrayProjection`, et la garde à élargir) et **#20789** (la loi de grâce K10 sur Android et le web). La réserve 4 (`nonisolated` redondant dans MeeshyCore) est inoffensive.
+- **Limites** : la compilation n'est prouvée que par la CI. Rien n'a été vérifié sur appareil.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR de #20726 n'est pas fusionnée : lire les runs 46113339007 (SDK) et 46113341558 (iOS). S'ils sont verts, fusionner `dev` dans la branche, puis la PR.
+1. **#20335** (iOS, à coordonner avec la routine iOS), **#20788**.
+2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933, #20789 (kit, hors appels).

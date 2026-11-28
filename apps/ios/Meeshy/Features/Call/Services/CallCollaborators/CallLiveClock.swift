@@ -128,8 +128,7 @@ nonisolated enum CallMonotonicClock {
     private static let origin = ContinuousClock.now
 
     static func seconds() -> TimeInterval {
-        let elapsed = origin.duration(to: ContinuousClock.now).components
-        return TimeInterval(elapsed.seconds) + TimeInterval(elapsed.attoseconds) / 1e18
+        origin.duration(to: ContinuousClock.now).timeInterval
     }
 }
 
