@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
-  refundCommunityAdditionByActor,
   spendCommunityAdditionByActor,
+  spendCommunityAdditionByActorUndoable,
   spendCommunityAdditionOfTargetsUndoable,
   type CommunityAdditionVerdict,
   type UndoableCommunityAddition,
@@ -76,17 +76,17 @@ async function spendCommunityEntrantsUndoable(
   invited: readonly string[]
 ): Promise<UndoableCommunityAddition> {
   if (invited.length === 0) return settled(ALLOWED);
-  const byActor = await spendCommunityAdditionByActor(fastify, actorId, invited.length);
-  if (!byActor.allowed) return settled(byActor);
+  const byActor = await spendCommunityAdditionByActorUndoable(fastify, actorId, invited.length);
+  if (!byActor.verdict.allowed) return settled(byActor.verdict);
   const ofTargets = await spendCommunityAdditionOfTargetsUndoable(fastify, invited, actorId);
   if (!ofTargets.verdict.allowed) {
-    await refundCommunityAdditionByActor(fastify, actorId, invited.length - 1);
+    await byActor.rendre(invited.length - 1);
     return settled(ofTargets.verdict);
   }
   return {
     verdict: ofTargets.verdict,
     rendre: once(async () => {
-      await Promise.all([ofTargets.rendre(), refundCommunityAdditionByActor(fastify, actorId, invited.length)]);
+      await Promise.all([ofTargets.rendre(), byActor.rendre(invited.length)]);
     }),
   };
 }

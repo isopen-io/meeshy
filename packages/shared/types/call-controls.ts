@@ -41,10 +41,15 @@ export const callReactionSchema = z
 
 export type CallReactionEvent = z.infer<typeof callReactionSchema>;
 
-/** L'accusé commun aux trois verbes. */
+/**
+ * L'accusé commun aux trois verbes. `retryAfter` (secondes, #20795) accompagne
+ * un `RATE_LIMITED` dont le serveur connaît l'échéance — l'invitation refusée
+ * par le budget des ajouts à une communauté. Absent ailleurs : un client qui
+ * ne le lit pas reste juste.
+ */
 export type CallControlAck =
   | { readonly success: true }
-  | { readonly success: false; readonly code: CallControlErrorCode };
+  | { readonly success: false; readonly code: CallControlErrorCode; readonly retryAfter?: number };
 
 export type CallInvitedUser = {
   readonly userId: string;

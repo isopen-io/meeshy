@@ -143,7 +143,7 @@ describe('#20740 — l’invitation dans un appel paie le budget', () => {
     setCommunityAdmissionBudgetHost(app);
     mockAdmit.mockResolvedValue({ userId: CIBLE, outcome: 'throttled', retryAfter: 60 });
     const outcome = await deps().admit({ conversationId: CONV, inviterUserId: ACTEUR, inviteeUserId: CIBLE, community });
-    expect(outcome).toBe('throttled');
+    expect(outcome).toEqual({ outcome: 'throttled', retryAfter: 60 });
     const [ports] = mockAdmit.mock.calls[0] as [{ communityBudget: unknown }];
     expect(typeof ports.communityBudget).toBe('function');
     const spend = await (ports.communityBudget as (a: string, b: CommunityAdmission) => Promise<{ verdict: { allowed: boolean } }>)(ACTEUR, entre(CIBLE));

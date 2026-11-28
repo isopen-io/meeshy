@@ -10,7 +10,8 @@ import { activeCallStanding } from './callModerationPolicy';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { isConversationClosed } from '../messaging/conversationWriteAdmission';
 import { newMemberRefusal } from '../conversations/newMemberAdmission';
-import { loadSalonCommunity, planSalonEntry, type SalonCommunity } from '../conversations/communityMembershipSync';
+import { loadSalonCommunity, planSalonEntry, type CommunityAdmission, type SalonCommunity } from '../conversations/communityMembershipSync';
+import type { CommunityAdmissionBudget } from '../conversations/memberAdmission';
 import { callInvitationRoute, type CallInvitationRoute } from './callInvitationRoute';
 
 /**
@@ -57,6 +58,11 @@ export type CallInvitationDeps = {
   readonly callService: Pick<CallService, 'getCallSession'>;
   /** Les invitées dont la sonnerie court encore (`CallInvitationLifecycle.pendingFor`) : elles comptent dans le plafond. */
   readonly ringingInviteeIds?: (callId: string) => readonly string[];
+  /**
+   * #20795 — le budget des ajouts sans accord : un refus vers un compte non
+   * ajoutable du salon d'une communauté privée s'y paie, comme à la route.
+   */
+  readonly communityBudget?: CommunityAdmissionBudget | null;
 };
 
 /** La conversation de l'appel, telle que les gardes d'entrée la lisent. */
@@ -84,7 +90,7 @@ export type CallInvitationGrant = {
   readonly inviteeIsMember: boolean;
 };
 
-export type CallInvitationRefusal = { readonly ok: false; readonly code: CallControlErrorCode };
+export type CallInvitationRefusal = { readonly ok: false; readonly code: CallControlErrorCode; readonly retryAfter?: number };
 
 const refuse = (code: CallControlErrorCode): CallInvitationRefusal => ({ ok: false, code });
 
@@ -140,17 +146,19 @@ export async function authorizeCallInvitation(
   };
   const inviter = toInvited(input.inviterUserId);
   const invitee = toInvited(input.inviteeUserId);
-  if (!inviter || !invitee || !isLiveAccount(users.find((u) => u.id === input.inviteeUserId))) return refuse('NOT_A_CONTACT');
+  const refuseEntrant = (code: CallControlErrorCode) => refuseNotAddable(deps, { conversation, ...input }, code);
+  if (!inviter || !invitee) return refuse('NOT_A_CONTACT');
+  if (!isLiveAccount(users.find((u) => u.id === input.inviteeUserId))) return refuseEntrant('NOT_A_CONTACT');
 
   const presentUserIds = present.flatMap((p) => (p.participant?.userId ? [p.participant.userId] : []));
-  if (await blockedWithAnyone(deps.prisma, input.inviteeUserId, presentUserIds)) return refuse('PERMISSION_DENIED');
+  if (await blockedWithAnyone(deps.prisma, input.inviteeUserId, presentUserIds)) return refuseEntrant('PERMISSION_DENIED');
 
   const entry = await callEntryForInvitee(deps.prisma, {
     conversationId: session.conversationId,
     inviterUserId: input.inviterUserId,
     inviteeUserId: input.inviteeUserId,
   });
-  if (entry === 'banned') return refuse('PERMISSION_DENIED');
+  if (entry === 'banned') return refuseEntrant('PERMISSION_DENIED');
 
   const conversationRoute = callInvitationRoute(conversation);
   const route = conversationRoute === 'admit-member' && entry === 'guest-only' ? 'legacy-guest' : conversationRoute;
@@ -160,7 +168,7 @@ export async function authorizeCallInvitation(
   if (route === 'admit-member') {
     if (newMemberRefusal(conversation)) return refuse('PERMISSION_DENIED');
     const entry = await planSalonEntry(deps.prisma, community, { kind: 'registered', userId: input.inviteeUserId });
-    if (entry.kind === 'refused') return refuse('PERMISSION_DENIED');
+    if (entry.kind === 'refused') return refusePaying(deps, input.inviterUserId, attemptOf(entry), 'PERMISSION_DENIED');
   }
 
   return {
@@ -174,6 +182,58 @@ export async function authorizeCallInvitation(
     community,
     inviteeIsMember: entry === 'member',
   };
+}
+
+const NOT_ADDABLE_ATTEMPT: CommunityAdmission = { kind: 'refused', reason: 'not-addable', attempted: 1 };
+
+/**
+ * Ce qu'une tentative REFUSÉE coûte à l'inviteur (#20795), sous la loi des
+ * routes (#20703) : un refus d'AUTORISATION (`invite-forbidden`) ne coûte rien ;
+ * une personne qui serait ENTRÉE dans la communauté et ne le peut pas coûte une
+ * unité ; un membre déjà actif n'entre pas, il ne coûte rien.
+ */
+function attemptOf(entry: CommunityAdmission): CommunityAdmission | null {
+  if (entry.kind === 'refused') return entry.reason === 'not-addable' ? entry : null;
+  return entry.creations.length + entry.reactivations.length > 0 ? NOT_ADDABLE_ATTEMPT : null;
+}
+
+async function refusePaying(
+  deps: CallInvitationDeps,
+  inviterUserId: string,
+  attempt: CommunityAdmission | null,
+  code: CallControlErrorCode
+): Promise<CallInvitationRefusal> {
+  if (!attempt || !deps.communityBudget) return refuse(code);
+  const spend = await deps.communityBudget(inviterUserId, attempt);
+  return spend.verdict.allowed ? refuse(code) : { ok: false, code: 'RATE_LIMITED', retryAfter: spend.verdict.retryAfter };
+}
+
+/**
+ * Une personne bloquée avec un présent, désactivée ou bannie du salon d'une
+ * communauté PRIVÉE : la tentative se paie comme à la route, sans quoi l'appel
+ * serait un sondage gratuit des comptes ajoutables (#20795). Le seau de
+ * l'ACTEUR épuisé répond `RATE_LIMITED`, quelle que soit la raison du refus.
+ * Ne paient pas : un salon fermé aux nouveaux membres (refusé gratuitement de
+ * toute façon), et un ancien membre qui ne serait revenu qu'en invité de CET
+ * appel (`guest-only`) — accordé, il ne coûte rien, refusé non plus.
+ */
+async function refuseNotAddable(
+  deps: CallInvitationDeps,
+  input: { readonly conversation: CallInvitationConversation; readonly inviterUserId: string; readonly inviteeUserId: string },
+  code: CallControlErrorCode
+): Promise<CallInvitationRefusal> {
+  if (!deps.communityBudget || callInvitationRoute(input.conversation) !== 'admit-member') return refuse(code);
+  if (newMemberRefusal(input.conversation)) return refuse(code);
+  const entry = await callEntryForInvitee(deps.prisma, {
+    conversationId: input.conversation.id,
+    inviterUserId: input.inviterUserId,
+    inviteeUserId: input.inviteeUserId,
+  });
+  if (entry === 'guest-only') return refuse(code);
+  const community = await loadSalonCommunity(deps.prisma, { communityId: input.conversation.communityId, actorId: input.inviterUserId });
+  if (!community) return refuse(code);
+  const plan = await planSalonEntry(deps.prisma, community, { kind: 'registered', userId: input.inviteeUserId });
+  return refusePaying(deps, input.inviterUserId, attemptOf(plan), code);
 }
 
 const isLiveAccount = (user: { readonly isActive?: boolean | null; readonly deletedAt?: Date | null } | undefined): boolean =>
