@@ -31,6 +31,7 @@ Journal, pas pilotage : l'état de chaque tâche vit dans son issue GitHub, qui 
 | 2026-11-21 | Un commentaire d'un auteur bloqué n'arrive plus en direct et ne se traduit ni ne se like (passerelle) | #20237 | #20216 | fusionnée dans dev (`17c7f207a`) |
 | 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause, et le lien en pause ne fait plus entrer (passerelle) | voir réveil du 2026-11-21 17:38 | #19661 (première moitié) | voir réveil du 2026-11-21 17:38 |
 | 2026-11-21 | L'intendant d'une communauté met son lien d'entrée en pause depuis la fiche du lien (web) ; « mes communautés » sert l'état (passerelle) | voir réveil du 2026-11-21 23:38 | #20255 (moitié web) | voir réveil du 2026-11-21 23:38 |
+| 2026-11-28 | Une invitation dans un appel refusée par le budget dit « réessayez dans un instant » (iOS, Android) | voir réveil du 2026-11-28 11:37 | #20802 | voir réveil du 2026-11-28 11:37 |
 
 ## 2026-11-07 — lot 1
 
