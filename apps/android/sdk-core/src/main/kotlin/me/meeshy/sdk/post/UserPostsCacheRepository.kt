@@ -62,6 +62,15 @@ class UserPostsCacheRepository @Inject constructor(
         }
     }
 
+    /**
+     * #16879 — les publications d'une communauté, gardées comme la page d'un auteur sous le même préfixe :
+     * un geste en direct ([patchEverywhere]) ou une suppression ([removeEverywhere]) les atteint aussi.
+     */
+    suspend fun cachedCommunity(communityId: String): CacheResult<UserPostsSnapshot> = cached(COMMUNITY + communityId)
+
+    suspend fun persistCommunity(communityId: String, snapshot: UserPostsSnapshot, ticket: AccountTicket?) =
+        persist(COMMUNITY + communityId, snapshot, ticket)
+
     /** #19426 — the viewer's saved posts, kept like an author's page (iOS `bookmarks` key of the `feed` store). */
     suspend fun cachedBookmarks(): CacheResult<UserPostsSnapshot> = cached(BOOKMARKS)
 
@@ -134,6 +143,9 @@ class UserPostsCacheRepository @Inject constructor(
 
         /** Not a user id (ObjectIds are hex): the saved posts live under their own key, in reach of [patchEverywhere]. */
         private const val BOOKMARKS = "bookmarks"
+
+        /** Not a user id either: a community's posts live under `profile_posts:community:{id}`. */
+        private const val COMMUNITY = "community:"
         fun key(userId: String): String = KEY_PREFIX + userId
     }
 }

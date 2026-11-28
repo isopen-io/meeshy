@@ -115,7 +115,7 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
     func test_chromeVisibility_cutsTouchesAtTheEndOfTheFade_notItsStart() throws {
         let glass = try view("CallControlGlass.swift")
         let modifier = try block("private struct CallChromeVisibilityModifier: ViewModifier {", until: "enum CallButtonFill {", in: glass)
-        XCTAssertTrue(modifier.contains("CallChromeVisibility.acceptsTouches("))
+        XCTAssertTrue(modifier.contains("fade.acceptsTouches(isVisible: isVisible, now: clock)"), "La grâce se lit sur l'horloge monotone (#20300)")
         XCTAssertTrue(modifier.contains(".allowsHitTesting(accepts)"))
         XCTAssertFalse(glass.contains(".allowsHitTesting(isVisible)"), "Couper le toucher au DÉBUT du fondu laisse un bouton visible et sourd")
         XCTAssertTrue(modifier.contains("reportInteraction?(.revive)"), "Un toucher reçu pendant le fondu rallume le chrome")
