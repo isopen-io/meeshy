@@ -22,7 +22,8 @@ import { EngagementService } from '../services/engagement/EngagementService';
 import { creditCallInvitation } from '../services/calls/callEngagementCredits';
 import type { CallInvitationLifecycle, PendingCallInvitation } from './call-invite-lifecycle';
 import { rebranchCall, type RebranchInput, type RebranchOutcome } from '../services/calls/callConversationRebranch';
-import { admitConversationMember, type ParticipantAdmissionVerdict } from '../services/conversations/memberAdmission';
+import { admitConversationMember, type CommunityAdmissionBudget, type ParticipantAdmissionVerdict } from '../services/conversations/memberAdmission';
+import { hostedCommunityAdmissionBudget } from '../services/conversations/communitySalonAdmissionBudget';
 import { noticeActor } from '../services/conversations/conversationNotice';
 import { newMemberRefusal } from '../services/conversations/newMemberAdmission';
 import { loadSalonCommunity, type SalonCommunity } from '../services/conversations/communityMembershipSync';
@@ -162,6 +163,8 @@ export function callInviteDependencies(input: {
   /** Le diffuseur `message:new` des messages d'appel (`wireCallMessageBroadcasters`). */
   readonly broadcastMessage?: () => ((message: unknown, conversationId: string) => Promise<void>) | null;
   readonly notificationService?: () => Pick<NotificationService, 'createAddedToConversationNotification' | 'createMemberJoinedNotificationsBatch'> | null;
+  /** Le budget des ajouts sans accord (#20740) — par défaut celui du serveur posé au montage de Socket.IO. */
+  readonly communityBudget?: () => CommunityAdmissionBudget | null;
 }): CallInviteEventDeps {
   const { io, prisma, callService } = input;
   let engagement: EngagementService | null = null;
@@ -212,6 +215,8 @@ export function callInviteDependencies(input: {
       const community = request.community !== undefined
         ? request.community
         : await loadSalonCommunity(prisma, { communityId: conversation.communityId, actorId: request.inviterUserId });
+      const communityBudget = (input.communityBudget ?? hostedCommunityAdmissionBudget)();
+      if (community && !communityBudget) logger.warn('call-invite: no community addition budget host — admission not debited', { conversationId: request.conversationId });
       const verdict = await admitConversationMember(
         {
           prisma,
@@ -220,9 +225,9 @@ export function callInviteDependencies(input: {
           broadcastMessage,
           notificationService: input.notificationService?.() ?? null,
           engagement: (engagement ??= new EngagementService(prisma)),
-          // #20703 — l'invitation dans un appel n'a pas encore son débit : ses
-          // seaux vivent sur le serveur Fastify, que ce transport ne tient pas.
-          communityBudget: null,
+          // #20740 — faire sonner quelqu'un dans le salon d'une communauté
+          // privée l'y fait entrer : il paie les MÊMES seaux que les routes.
+          communityBudget,
         },
         {
           conversationId: request.conversationId,
@@ -362,6 +367,7 @@ async function joinCallConversation(
       inviteeUserId: input.inviteeUserId,
       community: grant.community,
     });
+    if (outcome === 'throttled') return { ok: false, code: 'RATE_LIMITED' };
     return ADMITTED.has(outcome) ? stay : { ok: false, code: 'PERMISSION_DENIED' };
   }
 
@@ -380,5 +386,6 @@ async function joinCallConversation(
     inviteeUserId: input.inviteeUserId,
     blockCheck: 'members',
   });
+  if (admitted === 'throttled') return { ok: false, code: 'RATE_LIMITED' };
   return ADMITTED.has(admitted) ? { conversationId: outcome.conversationId, moved: true, title: null } : { ok: false, code: 'PERMISSION_DENIED' };
 }

@@ -49,6 +49,15 @@
  * actif de la communauté n'y entre pas : il ne coûte rien ; un identifiant
  * sans compte coûte une unité, comme un compte non ajoutable.
  *
+ * L'invitation dans un appel (`call:invite-participant`) s'y ajoute depuis
+ * #20740 : le transport socket atteint ces seaux par le serveur posé au
+ * montage de Socket.IO (`setCommunityAdmissionBudgetHost`). Et un débit
+ * accepté pour une écriture qui n'a PAS lieu — course de bannissement, ligne
+ * disparue, écriture qui lève — se REND ; une tentative vers un compte non
+ * ajoutable, jamais. Le débannissement le paie quand il fait RENTRER dans la
+ * communauté ; l'entrée par lien, volontaire, en est dispensée
+ * (`decisions/2026-11-28-…-20740.md`).
+ *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau
  * de la cible, et son refus ne touche pas ce dernier. Un administrateur qui
@@ -223,16 +232,38 @@ export async function spendCommunityAdditionOfTargets(
   targetIds: readonly string[],
   actorId: string
 ): Promise<CommunityAdditionVerdict> {
+  return (await spendCommunityAdditionOfTargetsUndoable(fastify, targetIds, actorId)).verdict;
+}
+
+/** Un débit accepté que le geste peut encore RENDRE s'il n'écrit rien (#20740). */
+export type UndoableCommunityAddition = { readonly verdict: CommunityAdditionVerdict; rendre(): Promise<void> };
+
+/**
+ * `spendCommunityAdditionOfTargets`, dont le débit accepté se REND quand
+ * l'écriture qui le justifiait n'a pas lieu (#20740) : une course de
+ * bannissement, une ligne disparue, une écriture qui lève. Sans quoi le seau de
+ * la cible compterait un ajout qui n'a jamais eu lieu.
+ */
+export async function spendCommunityAdditionOfTargetsUndoable(
+  fastify: FastifyInstance,
+  targetIds: readonly string[],
+  actorId: string
+): Promise<UndoableCommunityAddition> {
   const pris: DebitCible[] = [];
   for (const targetId of targetIds) {
     const debit = await debiterCible(fastify, targetId, actorId);
     if (!debit.verdict.allowed) {
       await Promise.all(pris.map((p) => p.rendre()));
-      return debit.verdict;
+      return { verdict: debit.verdict, rendre: async () => undefined };
     }
     pris.push(debit);
   }
-  return { allowed: true, retryAfter: 0 };
+  return {
+    verdict: { allowed: true, retryAfter: 0 },
+    rendre: async () => {
+      await Promise.all(pris.map((p) => p.rendre()));
+    },
+  };
 }
 
 export function refuseCommunityAddition(reply: FastifyReply, retryAfter: number): void {
