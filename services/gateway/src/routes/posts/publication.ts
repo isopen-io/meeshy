@@ -72,6 +72,8 @@ import type { ExtractedHashtag } from '../../services/HashtagService';
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { withAudienceListFor } from '../../services/posts/audienceList';
 import { WIRE_BROADCAST, wireReaderFromRequest } from '../../services/posts/storyEffectsV3';
+import { servedWireReader, type SeparatedReaderPrisma } from '../../services/posts/separatedReader';
+import { hasSeparableCompanions } from '../../services/posts/separatedCompanions';
 import { logError, logWarn } from '../../utils/logger.js';
 
 /**
@@ -192,17 +194,43 @@ export async function finalReferences(params: {
  * C'est la seule fonction qui compose une réponse de publication : trois
  * compositions parallèles, c'était trois corps SERVIS différents pour une même
  * ligne écrite, et c'est ce que le témoin de #4151 mesure sur le JSON.
+ *
+ * ─── POURQUOI ELLE LIT, PLUTÔT QUE DE RECEVOIR (#20204) ──────────────────
+ *
+ * Son lecteur portait la seule négociation de scène (`wireReaderFromRequest`),
+ * dont la SÉPARATION est absente : la source republiée d'un auteur qu'un
+ * blocage sépare du lecteur, et ses commentaires en aperçu, partaient entiers —
+ * à un geste de distance de la liste qui les tait depuis #16894.
+ *
+ * Elle résout donc la séparation ELLE-MÊME (`servedWireReader`), au prix d'un
+ * `await` et d'un `prisma`. Un paramètre `reader` optionnel aurait été un
+ * demi-correctif : son absence désactive la garde, et chaque porte de
+ * publication future l'aurait oublié sans qu'aucun témoin ne tombe. Ici il n'y
+ * a rien à oublier — c'est la fonction qui lit.
+ *
+ * Et toutes ses portes en ont besoin, les CRÉATIONS comprises : un repost sert
+ * `repostOf`, c'est-à-dire la ligne d'un TIERS, et rien n'empêche de republier
+ * la publication publique de quelqu'un qu'on a bloqué.
  */
-export function servePublishedPost(params: {
+export async function servePublishedPost(params: {
   readonly post: Record<string, unknown>;
   readonly references?: readonly PostReference[] | undefined;
   readonly request: FastifyRequest;
-}): Record<string, unknown> {
-  const { post, references, request } = params;
+  readonly prisma: SeparatedReaderPrisma;
+}): Promise<Record<string, unknown>> {
+  const { post, references, request, prisma } = params;
   const viewerId = (request as UnifiedAuthRequest).authContext?.registeredUser?.id;
+  /* La lecture des blocages n'est payée que si la charge porte un compagnon à
+     taire — sans source republiée ni commentaire, elle ne déciderait de RIEN,
+     et c'est le cas nominal d'une porte de CRÉATION. Le prédicat porte sur ce
+     qui SORT, jamais sur une autorisation : `false` veut dire « rien à taire »,
+     pas « rien à vérifier ». */
+  const reader = hasSeparableCompanions(post)
+    ? await servedWireReader(prisma, request as UnifiedAuthRequest)
+    : wireReaderFromRequest(request as UnifiedAuthRequest);
   return withMentions(
     graftReferences(hoistLocation(withAudienceListFor(post, viewerId)), references),
-    wireReaderFromRequest(request as UnifiedAuthRequest)
+    reader
   );
 }
 
@@ -554,5 +582,5 @@ export async function runPublicationEffects(
     });
   }
 
-  return servePublishedPost({ post, references, request });
+  return servePublishedPost({ post, references, request, prisma });
 }

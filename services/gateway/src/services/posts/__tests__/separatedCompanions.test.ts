@@ -8,6 +8,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import { withMentions } from '../postReferences';
 import { readerSeparatedFrom } from '../separatedReader';
 import { buildPostVisibilityOrFilter } from '../postVisibility';
+import { hasSeparableCompanions, withoutSeparatedCompanions } from '../separatedCompanions';
 
 const READER = '507f1f77bcf86cd799439001';
 const AUTHOR = '507f1f77bcf86cd799439002';
@@ -105,3 +106,58 @@ describe('buildPostVisibilityOrFilter — la copie d’un auteur séparé ne pas
   });
 });
 
+
+/**
+ * #20204 — le prédicat qui décide si une porte UNITAIRE doit LIRE les blocages.
+ *
+ * Il n'est pas une garde : il répond « cette charge a-t-elle un compagnon qu'un
+ * blocage pourrait retirer ? ». Son contrat est donc exactement l'ENSEMBLE des
+ * formes que `withoutSeparatedCompanions` sait toucher — et c'est cette
+ * équivalence que ces témoins gardent, parce que c'est elle qui se casserait
+ * silencieusement le jour où un troisième compagnon est ajouté au filtre sans
+ * l'être au prédicat.
+ */
+describe('#20204 — hasSeparableCompanions', () => {
+  it('une publication nue n’a rien à taire — c’est le cas nominal d’une création', () => {
+    expect(hasSeparableCompanions({ id: 'p1', authorId: AUTHOR, content: 'bonjour' })).toBe(false);
+  });
+
+  it('`repostOf: null` et `comments: []` n’ouvrent rien non plus', () => {
+    expect(hasSeparableCompanions({ id: 'p1', repostOf: null, comments: [] })).toBe(false);
+  });
+
+  it('une source republiée qui NOMME son auteur en ouvre un', () => {
+    expect(hasSeparableCompanions({ id: 'p1', repostOf: { id: 'src', author: person(BLOCKED) } })).toBe(true);
+  });
+
+  it('la COPIE d’un contenu éphémère en ouvre un par `snapshotAuthorId`, sans auteur déclaré', () => {
+    expect(hasSeparableCompanions({ id: 'p1', repostOf: { id: 'src', snapshotAuthorId: BLOCKED } })).toBe(true);
+  });
+
+  it('un seul commentaire en aperçu suffit', () => {
+    expect(hasSeparableCompanions({ id: 'p1', comments: [comment('c1', FRIEND)] })).toBe(true);
+  });
+
+  it('TOUTE forme que le filtre sait toucher est reconnue par le prédicat', () => {
+    const formes = [
+      post(),
+      { id: 'p1', repostOf: { id: 'src', author: person(BLOCKED) } },
+      { id: 'p1', repostOf: { id: 'src', snapshotAuthorId: BLOCKED } },
+      { id: 'p1', comments: [comment('c1', BLOCKED)] },
+    ];
+    for (const forme of formes) {
+      // Le filtre CHANGE la charge sur chacune de ces formes quand l'auteur est
+      // séparé : le prédicat doit donc l'annoncer, sinon la lecture est sautée
+      // et le filtre ne tourne jamais.
+      const filtre = withoutSeparatedCompanions(forme, new Set([BLOCKED, FRIEND]));
+      expect(JSON.stringify(filtre) !== JSON.stringify(forme)).toBe(true);
+      expect(hasSeparableCompanions(forme)).toBe(true);
+    }
+  });
+
+  it('ne jette pas sur `null`, `undefined` ni sur une forme qui n’est pas un objet', () => {
+    expect(hasSeparableCompanions(null)).toBe(false);
+    expect(hasSeparableCompanions(undefined)).toBe(false);
+    expect(hasSeparableCompanions('pas un post')).toBe(false);
+  });
+});

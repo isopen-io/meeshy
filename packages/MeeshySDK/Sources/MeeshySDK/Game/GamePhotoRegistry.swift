@@ -102,7 +102,7 @@ public struct GamePhotoBlock: Codable, Sendable, Equatable {
         atmosphere = try container.decodeIfPresent(String.self, forKey: .atmosphere)
         invitations = try container.decode(PhotoInvitationsSetting.self, forKey: .invitations)
         baselineAt = try container.decodeIfPresent(String.self, forKey: .baselineAt)
-        baseline = ((try? container.decodeIfPresent(StandingPayload.self, forKey: .baseline)) ?? nil)?.standing
+        baseline = ((try? container.decodeIfPresent(PhotoStandingPayload.self, forKey: .baseline)) ?? nil)?.standing
         treasuryPeakTier = (try? container.decodeIfPresent(TreasuryTierKey.self, forKey: .treasuryPeakTier)) ?? nil
         let moments = try container.decode([GamePhotoMomentRow].self, forKey: .moments)
         guard moments.count <= GamePhotoRegistry.servedMax else {
@@ -116,7 +116,7 @@ public struct GamePhotoBlock: Codable, Sendable, Equatable {
         try container.encode(atmosphere, forKey: .atmosphere)
         try container.encode(invitations, forKey: .invitations)
         try container.encode(baselineAt, forKey: .baselineAt)
-        try container.encode(baseline.map(StandingPayload.init(standing:)), forKey: .baseline)
+        try container.encode(baseline.map(PhotoStandingPayload.init(standing:)), forKey: .baseline)
         try container.encode(treasuryPeakTier, forKey: .treasuryPeakTier)
         try container.encode(moments, forKey: .moments)
     }
@@ -124,7 +124,7 @@ public struct GamePhotoBlock: Codable, Sendable, Equatable {
 
 /// `PhotoCatchUpStandingPayload` : la ligne de base telle qu'elle voyage. Un rang ou une division inconnus la rendent
 /// illisible, comme `servedBaseline` du web.
-private struct StandingPayload: Codable {
+struct PhotoStandingPayload: Codable {
     let rank: String
     let division: Int?
     let levelRecord: Int
