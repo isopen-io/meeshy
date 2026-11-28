@@ -73,3 +73,9 @@ export function pairMeasure(entries: readonly StatsEntry[], elected: StatsEntry 
   };
   return carried(elected) ?? electionOrder(entries).map(carried).find((value) => value !== undefined);
 }
+
+/** Le `roundTripTime` (s) que rapporte le pair : le premier `remote-inbound-rtp` de `streamOrder` qui en porte un fini et positif ou nul (#20348). */
+export function remoteRoundTripTime(entries: readonly StatsEntry[]): number | undefined {
+  const valid = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return streamOrder(entries.filter((entry) => entry.type === 'remote-inbound-rtp')).map((entry) => entry.roundTripTime).find(valid);
+}

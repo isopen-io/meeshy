@@ -1,6 +1,6 @@
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 
-import { pairMeasure, receivedCodecMime, selectedCandidatePair, type StatsEntry } from './call-stats-election';
+import { pairMeasure, receivedCodecMime, remoteRoundTripTime, selectedCandidatePair, type StatsEntry } from './call-stats-election';
 import type { SurvivalStage } from './call-survival';
 
 /**
@@ -89,19 +89,24 @@ const routeOf = (entries: readonly StatsEntry[], pair: StatsEntry | undefined): 
   return types.length === 0 ? null : types.includes('relay') ? 'relay' : 'direct';
 };
 
+/** La borne de vraisemblance d'une estimation de débit (b/s), la même sur iOS et Android (`Int.MAX_VALUE`, ~2,1 Gb/s, #20348). */
+export const MAX_BITRATE_ESTIMATE_BPS = 2_147_483_647;
+
+/** Une estimation non finie, nulle, négative ou au-delà de `MAX_BITRATE_ESTIMATE_BPS` n'est pas une estimation (#20348). */
+export const bitrateEstimate = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_BITRATE_ESTIMATE_BPS ? value : null;
+
 export function readStats(report: StatsReportLike, at: number): StatsRead {
   const entries: StatsEntry[] = [];
   report.forEach((entry) => entries.push(entry));
   const inbound = entries.filter((entry) => entry.type === 'inbound-rtp');
   const outbound = entries.filter((entry) => entry.type === 'outbound-rtp');
   const pair = selectedCandidatePair(entries);
-  const remote = entries.find((entry) => entry.type === 'remote-inbound-rtp' && typeof entry.roundTripTime === 'number');
   const sum = (list: readonly StatsEntry[], field: string, kind?: string): number => positive(list.filter((entry) => kind === undefined || entry.kind === kind).reduce((total, entry) => total + numberOf(entry[field]), 0));
-  const estimate = pair?.availableOutgoingBitrate;
   const uplink = entries.find((entry) => entry.type === 'remote-inbound-rtp' && entry.kind === 'video' && typeof entry.fractionLost === 'number');
   return {
     at,
-    rtt: milliseconds(pairMeasure(entries, pair, 'currentRoundTripTime') ?? remote?.roundTripTime),
+    rtt: milliseconds(pairMeasure(entries, pair, 'currentRoundTripTime') ?? remoteRoundTripTime(entries)),
     jitter: audioJitterMs(inbound),
     lost: sum(inbound, 'packetsLost'),
     received: sum(inbound, 'packetsReceived'),
@@ -111,7 +116,7 @@ export function readStats(report: StatsReportLike, at: number): StatsRead {
     bytesReceived: sum(inbound, 'bytesReceived'),
     codec: subtype(receivedCodecMime(entries)),
     path: routeOf(entries, pair),
-    availableOutgoingBitrate: typeof estimate === 'number' && Number.isFinite(estimate) && estimate > 0 ? estimate : null,
+    availableOutgoingBitrate: bitrateEstimate(pair?.availableOutgoingBitrate),
     uplinkLoss: uplink === undefined ? null : numberOf(uplink.fractionLost) * 100,
   };
 }
