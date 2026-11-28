@@ -23,11 +23,26 @@ public object CallStatValue {
 
     public const val MAX_SAFE_BYTES: Long = 9_007_199_254_740_991L
 
+    /**
+     * La borne de VRAISEMBLANCE d'une estimation de débit (`availableOutgoingBitrate`, b/s),
+     * la même sur iOS et le web (#20348) : ~2,1 Gb/s, aucun lien d'appel réel n'y arrive.
+     */
+    public const val MAX_BITRATE_ESTIMATE_BPS: Int = Int.MAX_VALUE
+
     public fun measured(value: Double): Double = if (value.isFinite() && value > 0.0) value else 0.0
 
     public fun count(value: Double): Int {
         val valid = measured(value)
         return if (valid > MAX_SAFE_COUNT.toDouble()) MAX_SAFE_COUNT else valid.toInt()
+    }
+
+    /**
+     * Une estimation non finie, nulle, négative ou au-delà de [MAX_BITRATE_ESTIMATE_BPS] n'est pas
+     * une estimation et vaut 0 (#20348) : elle ne sature pas, sinon elle choisirait le palier le plus haut.
+     */
+    public fun bitrateEstimate(value: Double): Int {
+        val valid = measured(value)
+        return if (valid > MAX_BITRATE_ESTIMATE_BPS.toDouble()) 0 else valid.toInt()
     }
 
     public fun sum(lhs: Int, rhs: Int): Int =

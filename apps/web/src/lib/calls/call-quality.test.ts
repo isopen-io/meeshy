@@ -231,3 +231,50 @@ describe('la route est relayée dès qu’un des deux candidats de la paire élu
     expect(pathOf([{ type: 'remote-candidate', id: 'autre', candidateType: 'relay' }])).toBeNull();
   });
 });
+
+describe('une estimation hors bornes et un RTT absent de la paire se lisent comme sur iOS et Android (#20348)', () => {
+  const read = (entries: readonly Entry[]) => readStats(report(entries), 0);
+  const elected = (fields: Entry = {}): Entry => ({ type: 'candidate-pair', id: 'CP1', nominated: true, state: 'succeeded', ...fields });
+
+  test('une estimation au-delà de 2 147 483 647 b/s n’est pas une estimation', () => {
+    expect(read([elected({ availableOutgoingBitrate: 2_147_483_648 })]).availableOutgoingBitrate).toBeNull();
+  });
+
+  test('une estimation à 2 147 483 647 b/s est gardée', () => {
+    expect(read([elected({ availableOutgoingBitrate: 2_147_483_647 })]).availableOutgoingBitrate).toBe(2_147_483_647);
+  });
+
+  test('une estimation non finie, nulle ou négative n’est pas une estimation', () => {
+    [Number.NaN, Number.POSITIVE_INFINITY, 0, -5].forEach((value) => expect(read([elected({ availableOutgoingBitrate: value })]).availableOutgoingBitrate).toBeNull());
+  });
+
+  test('sans RTT sur aucune paire, le RTT du pair (remote-inbound-rtp) se lit en ms', () => {
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0.12 }]).rtt).toBeCloseTo(120);
+  });
+
+  test('le RTT de la paire gagne sur celui du pair', () => {
+    expect(read([elected({ currentRoundTripTime: 0.05 }), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0.4 }]).rtt).toBeCloseTo(50);
+  });
+
+  test('ni la paire ni le pair ne le disent : le RTT reste à 0', () => {
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio' }]).rtt).toBe(0);
+  });
+
+  test('le repli lit le premier remote-inbound-rtp de l’ordre des flux (audio d’abord, puis plus petit id), quel que soit l’ordre du relevé', () => {
+    const video = { type: 'remote-inbound-rtp', id: 'RV', kind: 'video', roundTripTime: 0.3 };
+    const audioB = { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 };
+    const audioA = { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0.12 };
+    expect(read([elected(), video, audioB, audioA]).rtt).toBeCloseTo(120);
+    expect(read([audioA, audioB, video, elected()]).rtt).toBeCloseTo(120);
+  });
+
+  test('un RTT du pair non fini ou négatif est sauté au profit du suivant', () => {
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: Number.NaN }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: -1 }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: Number.POSITIVE_INFINITY }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBeCloseTo(200);
+  });
+
+  test('un RTT du pair à 0 est une mesure : il arrête le repli, comme sur iOS et Android', () => {
+    expect(read([elected(), { type: 'remote-inbound-rtp', id: 'RA', kind: 'audio', roundTripTime: 0 }, { type: 'remote-inbound-rtp', id: 'RB', kind: 'audio', roundTripTime: 0.2 }]).rtt).toBe(0);
+  });
+});

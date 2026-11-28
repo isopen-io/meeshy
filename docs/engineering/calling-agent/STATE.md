@@ -2979,3 +2979,41 @@ socket jusqu'au client.
 0. Si la PR de #20726 n'est pas fusionnée : lire les runs 46113339007 (SDK) et 46113341558 (iOS). S'ils sont verts, fusionner `dev` dans la branche, puis la PR.
 1. **#20335** (iOS, à coordonner avec la routine iOS), **#20788**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933, #20789 (kit, hors appels).
+
+## Cycle 86 — 2026-11-28
+
+- **Base** : `origin/dev` @ `be1f816c9`. La PR #20790 du cycle 85 (#20726) est fusionnée et l'issue fermée.
+- **Branche** : `claude/determined-volta-lk211d`.
+- **Objectif** : **#20348**. iOS, Android et le web lisent pareil une estimation de débit hors bornes et un RTT absent de la paire élue.
+- **PR** : #20798, vers `dev`. `dev` @`be1f816c9` et ses suivants sont fusionnés dans la branche.
+- **Livré** :
+  - **Débit.** `bitrateEstimate` (web), `CallStatValue.bitrateEstimate` (iOS, Android) et la borne nommée de 2 147 483 647 b/s. Une estimation non finie, ≤ 0 ou au-delà de la borne vaut « pas d'estimation ».
+    - Avant, Android saturait la valeur, donc le palier EXCELLENT. iOS gardait tout jusqu'à 2^53.
+    - `count` ne change pas pour les paquets et les octets.
+  - **RTT.** On lit la paire élue, puis l'`electionOrder`, puis le `roundTripTime` du premier `remote-inbound-rtp` de `streamOrder` dont la valeur est finie et ≥ 0.
+    - iOS et Android rendaient 0 au lieu de faire ce repli.
+    - Le web prenait l'ordre du relevé.
+  - **Collecte.** `roundTripTime` est ajouté aux clés numériques collectées : `RawEntry.numericKeys` sur iOS, `CallStatsCollector.NUMERIC_KEYS` sur Android. Il y manquait des deux côtés.
+- **Tests** :
+  - Rouge : `7f95b9665`. Web : 3 échecs sur 34. Android `:core:model` : référence non résolue.
+  - Vert :
+    - web `src/lib/calls/` : 2 511 tests passés, 0 échec ;
+    - `tsc` web : sortie 0 ;
+    - Android `jvm-check -PjvmCheckModelOnly` : `CallStatValueTest` à 30 sur 30 ;
+    - gardes iOS : house rules (42), cohésion, inscription (2 077) et couleurs, toutes ok.
+  - L'orchestrateur a rejoué `call-quality.test.ts` : 35 sur 35.
+  - Swift et `:sdk-core` ne sont prouvés que par la CI : `ci.yml`, `ios.yml` et `android.yml` sont lancés en `workflow_dispatch`.
+- **QA** (indépendante) : **favorable avec réserves**.
+  - 11 mutations par plateforme. Deux survivaient : un RTT infini, et `>= 0` changé en `> 0`. Le témoin `951134810` les tue.
+  - Aucun consommateur ne supposait la saturation.
+  - Aucun seuil RTT ne déclenche de raccrochage ni de redémarrage ICE.
+  - Réserve 3 ouverte en **#20797** : une `currentRoundTripTime` aberrante sur la paire élue ne cède pas au repli. C'est cohérent sur les trois plateformes, et ça l'était déjà avant le lot.
+- **Limites** :
+  - Rien n'a été vérifié sur appareil.
+  - Effet visible : sans `currentRoundTripTime` sur les paires, iOS et Android lisent maintenant le RTT réel au lieu de 0. Le palier, l'encodage et la survie en audio seul le suivent.
+
+### Cycle suivant : par où reprendre
+
+0. Si la PR #20798 n'est pas fusionnée : lire les runs `ci.yml`, `ios.yml` et `android.yml` lancés en `workflow_dispatch` sur sa tête. S'ils sont verts, fusionner `dev` dans la branche, puis la PR, et fermer #20348.
+1. **#20797** (même zone, petit), **#20257** (causes de limitation iOS), **#20788**, **#20335** (iOS, à coordonner avec la routine iOS).
+2. #13775, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933, #20789.

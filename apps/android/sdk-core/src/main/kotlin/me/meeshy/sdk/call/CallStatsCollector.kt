@@ -68,6 +68,8 @@ public class CallStatsCollector internal constructor(
             // #19895 — gels, NACK/PLI, tampon de gigue, échantillons masqués.
             "freezeCount", "totalFreezesDuration", "nackCount", "pliCount",
             "jitterBufferDelay", "jitterBufferEmittedCount", "concealedSamples",
+            // #20348 — le RTT que rapporte le pair (`remote-inbound-rtp`), repli sans RTT de paire.
+            "roundTripTime",
         )
 
         /** Du candidat local, seuls `candidateType` et `relayProtocol` : jamais adresse, port, ufrag ni URL. */

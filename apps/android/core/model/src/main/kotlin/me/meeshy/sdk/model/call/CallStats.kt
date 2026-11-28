@@ -110,12 +110,14 @@ public data class CallStats(
          *   longer overwrites the live path's figure. When no pair is elected, or the
          *   elected one lacks the field, the `candidate-pair` carrying it first in the
          *   election order (strongest `priority`, then smallest `id`, #20121) gives it —
-         *   never the report's order.
+         *   never the report's order. No pair carrying it at all: the peer's
+         *   `remote-inbound-rtp` `roundTripTime`, first in [streamOrder] (#20348, web `readStats`).
          * - [availableOutgoingBitrateBps] (`availableOutgoingBitrate`, truncated) is read
          *   ONLY on the selected pair, with no fallback (#20284, web `readStats`): a pair
          *   that carries no traffic holds a weak or stale estimate, and the video tier
          *   would settle on it. No elected pair, or one without the field, yields `0` —
          *   "no estimate", never "no bandwidth".
+         *   An estimate beyond [CallStatValue.MAX_BITRATE_ESTIMATE_BPS] reads `0` too (#20348).
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
          *   [RawEntry.kind]; and accumulates the audio jitter mean.
@@ -170,6 +172,11 @@ public data class CallStats(
 
         private fun pairMeasure(key: String, elected: RawEntry?, entries: List<RawEntry>): Double? =
             elected?.values?.get(key) ?: electionOrder(entries).firstNotNullOfOrNull { it.values[key] }
+
+        /** #20348 — le `roundTripTime` (s) du pair : le premier `remote-inbound-rtp` de [streamOrder] qui en porte un fini et `>= 0` (web `remoteRoundTripTime`). */
+        private fun remoteRoundTripTime(entries: List<RawEntry>): Double? =
+            streamOrder(entries.filter { it.type == "remote-inbound-rtp" })
+                .firstNotNullOfOrNull { entry -> entry.values["roundTripTime"]?.takeIf { it.isFinite() && it >= 0.0 } }
 
         public fun reduce(entries: List<RawEntry>): CallStats {
             var packetsLost = 0
@@ -228,7 +235,8 @@ public data class CallStats(
             val elected = selectedCandidatePair(entries)
 
             return CallStats(
-                roundTripTimeMs = pairMeasure("currentRoundTripTime", elected, entries)?.let { CallStatValue.measured(it * 1000) } ?: 0.0,
+                roundTripTimeMs = (pairMeasure("currentRoundTripTime", elected, entries) ?: remoteRoundTripTime(entries))
+                    ?.let { CallStatValue.measured(it * 1000) } ?: 0.0,
                 packetsLost = packetsLost,
                 bandwidth = bytesSent,
                 bytesReceived = bytesReceived,
@@ -237,7 +245,7 @@ public data class CallStats(
                 inboundAudioPackets = inboundAudio,
                 inboundVideoPackets = inboundVideo,
                 outboundPacketsSent = outbound,
-                availableOutgoingBitrateBps = elected?.values?.get("availableOutgoingBitrate")?.let(CallStatValue::count) ?: 0,
+                availableOutgoingBitrateBps = elected?.values?.get("availableOutgoingBitrate")?.let(CallStatValue::bitrateEstimate) ?: 0,
                 jitterMs = jitterMs,
                 inboundAudioBytes = inboundAudioBytes,
                 inboundVideoBytes = inboundVideoBytes,

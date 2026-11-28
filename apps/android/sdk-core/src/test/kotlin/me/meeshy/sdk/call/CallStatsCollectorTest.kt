@@ -82,4 +82,14 @@ class CallStatsCollectorTest {
     fun `hors appel il n'y a rien à lire`() = runTest {
         assertThat(CallStatsCollector { null }.collect()).isNull()
     }
+
+    @Test
+    fun `le RTT du pair (remote-inbound-rtp) est transmis et sert de repli sans RTT de paire (#20348)`() = runTest {
+        val report = report(
+            stat("P", "candidate-pair", mapOf("state" to "succeeded", "nominated" to true)),
+            stat("RA", "remote-inbound-rtp", mapOf("kind" to "audio", "roundTripTime" to 0.12)),
+        )
+        assertThat(CallStatsCollector.rawEntries(report).first { it.id == "RA" }.values["roundTripTime"]).isEqualTo(0.12)
+        assertThat(CallStatsCollector { handle(report) }.collect()!!.roundTripTimeMs).isWithin(1e-9).of(120.0)
+    }
 }
