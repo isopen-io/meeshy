@@ -1,63 +1,10 @@
-import { z } from 'zod';
-
-export const agentNewMessageSchema = z.object({
-  type: z.literal('agent:new-message'),
-  conversationId: z.string(),
-  messageId: z.string(),
-  senderId: z.string(),
-  senderDisplayName: z.string().optional(),
-  senderUsername: z.string().optional(),
-  content: z.string(),
-  originalLanguage: z.string(),
-  replyToId: z.string().optional(),
-  mentionedUserIds: z.array(z.string()).default([]),
-  timestamp: z.number(),
-});
-
-export const agentConfigUpdatedSchema = z.object({
-  type: z.literal('agent:config-updated'),
-  conversationId: z.string(),
-  config: z.record(z.string(), z.unknown()),
-});
-
-export const agentUserStatusSchema = z.object({
-  type: z.literal('agent:user-status-changed'),
-  userId: z.string(),
-  isOnline: z.boolean(),
-  lastActiveAt: z.string(),
-});
-
-export const agentEventSchema = z.discriminatedUnion('type', [
-  agentNewMessageSchema,
+export {
   agentConfigUpdatedSchema,
+  agentEventSchema,
+  agentNewMessageSchema,
   agentUserStatusSchema,
-]);
-
-export type AgentEvent = z.infer<typeof agentEventSchema>;
-export type AgentNewMessage = z.infer<typeof agentNewMessageSchema>;
-
-export type AgentResponse = {
-  type: 'agent:response';
-  conversationId: string;
-  asUserId: string;
-  content: string;
-  originalLanguage: string;
-  replyToId?: string;
-  mentionedUsernames?: string[];
-  messageSource: 'agent';
-  /** Article source d'un sujet lancé : la passerelle joint son image Open Graph (#6192). */
-  illustration?: { sourceUrl: string };
-  metadata: {
-    agentType: 'impersonator' | 'animator' | 'orchestrator';
-    roleConfidence: number;
-    archetypeId?: string;
-  };
-};
-
-export type AgentReaction = {
-  type: 'agent:reaction';
-  conversationId: string;
-  asUserId: string;
-  targetMessageId: string;
-  emoji: string;
-};
+  type AgentEvent,
+  type AgentNewMessage,
+  type AgentReaction,
+  type AgentResponse,
+} from '@meeshy/shared/agent/zmq-contract';

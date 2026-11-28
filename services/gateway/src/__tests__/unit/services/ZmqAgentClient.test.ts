@@ -142,14 +142,20 @@ describe('initialize', () => {
 // ─── sendEvent ────────────────────────────────────────────────────────────────
 
 describe('sendEvent', () => {
+  const CONFIG_UPDATED = {
+    type: 'agent:config-updated',
+    conversationId: '507f1f77bcf86cd799439011',
+    config: { enabled: true },
+  } as const;
+
   it('sends the serialized JSON followed by its signature frame (#10288)', async () => {
     const client = new ZmqAgentClient('localhost', 5560, 5561, TOKEN);
     await client.initialize();
 
-    await client.sendEvent({ action: 'ping', data: 42 });
+    await client.sendEvent(CONFIG_UPDATED);
 
     const [frames] = mockPushSocket.send.mock.calls[0] as [string[]];
-    expect(frames[0]).toBe(JSON.stringify({ action: 'ping', data: 42 }));
+    expect(frames[0]).toBe(JSON.stringify(CONFIG_UPDATED));
     expect(verifyAgentZmqPayload(frames[0], frames[1], TOKEN)).toMatchObject({ ok: true });
     expect(verifyAgentZmqPayload(frames[0], frames[1], 'x'.repeat(48))).toMatchObject({ ok: false, reason: 'bad-signature' });
   });
@@ -158,13 +164,13 @@ describe('sendEvent', () => {
     const client = new ZmqAgentClient('localhost', 5560, 5561, null);
     await client.initialize();
 
-    await expect(client.sendEvent({ action: 'ping' })).rejects.toThrow(/AGENT_INTERNAL_TOKEN/);
+    await expect(client.sendEvent(CONFIG_UPDATED)).rejects.toThrow(/AGENT_INTERNAL_TOKEN/);
     expect(mockPushSocket.send).not.toHaveBeenCalled();
   });
 
   it('throws when the push socket is not initialized', async () => {
     const client = new ZmqAgentClient();
-    await expect(client.sendEvent({ action: 'ping' })).rejects.toThrow();
+    await expect(client.sendEvent(CONFIG_UPDATED)).rejects.toThrow();
   });
 });
 

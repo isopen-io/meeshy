@@ -1,3 +1,4 @@
+import type { AgentEventInput } from '@meeshy/shared/agent/zmq-contract';
 import { messageRowSealedFromServer } from '../../services/messaging/e2eePlaintextAdmission';
 import { revealAtRest, type AtRestKeyring, type AtRestReadableRow } from '../../services/messaging/serverAtRest';
 
@@ -36,7 +37,7 @@ export type AgentNotifiedMessage = {
 };
 
 export type AgentEventSink = {
-  sendEvent(event: Record<string, unknown>): Promise<void>;
+  sendEvent(event: AgentEventInput): Promise<void>;
 };
 
 export const agentMayReadMessage = (message: Pick<AgentNotifiedMessage, 'encryptionMode' | 'isEncrypted'>): boolean =>

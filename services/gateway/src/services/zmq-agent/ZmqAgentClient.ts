@@ -1,41 +1,16 @@
 import type { Push, Subscriber } from 'zeromq';
 import * as zmq from 'zeromq';
-import { z } from 'zod';
+import {
+  agentMessageSchema,
+  type AgentEventInput,
+  type AgentReaction,
+  type AgentResponse,
+} from '@meeshy/shared/agent/zmq-contract';
 import { signAgentZmqPayload } from '@meeshy/shared/utils/agent-zmq-auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { agentInternalToken } from '../AgentHttpClient.js';
 
 const logger = enhancedLogger.child({ module: 'ZmqAgentClient' });
-
-const agentResponseSchema = z.object({
-  type: z.literal('agent:response'),
-  conversationId: z.string().min(1),
-  asUserId: z.string().min(1),
-  content: z.string().min(1),
-  originalLanguage: z.string().min(1),
-  replyToId: z.string().optional(),
-  mentionedUsernames: z.array(z.string()).optional(),
-  messageSource: z.literal('agent'),
-  illustration: z.object({ sourceUrl: z.string().url() }).optional(),
-  metadata: z.object({
-    agentType: z.enum(['impersonator', 'animator', 'orchestrator']),
-    roleConfidence: z.number().min(0).max(1),
-    archetypeId: z.string().optional(),
-  }),
-});
-
-const agentReactionSchema = z.object({
-  type: z.literal('agent:reaction'),
-  conversationId: z.string().min(1),
-  asUserId: z.string().min(1),
-  targetMessageId: z.string().min(1),
-  emoji: z.string().min(1),
-});
-
-const agentMessageSchema = z.discriminatedUnion('type', [agentResponseSchema, agentReactionSchema]);
-
-type AgentResponse = z.infer<typeof agentResponseSchema>;
-type AgentReaction = z.infer<typeof agentReactionSchema>;
 
 export class ZmqAgentClient {
   private pushSocket: Push | null = null;
@@ -76,7 +51,7 @@ export class ZmqAgentClient {
     }
   }
 
-  async sendEvent(event: Record<string, unknown>): Promise<void> {
+  async sendEvent(event: AgentEventInput): Promise<void> {
     if (!this.pushSocket) throw new Error('Agent PUSH socket not initialized');
     if (!this.internalToken) throw new Error('AGENT_INTERNAL_TOKEN is not configured — agent events are not sent');
     const payload = JSON.stringify(event);
