@@ -32,6 +32,7 @@ final class AuthManagerLogoutSyncCheckpointsPurgeTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        await UnownedSessionPurge.shared.settle()
         await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
         AuthManager.shared.keychain = originalKeychain

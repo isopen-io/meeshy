@@ -49,6 +49,7 @@ final class AccountDeletedSignalTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        await UnownedSessionPurge.shared.settle()
         if let observerToken { NotificationCenter.default.removeObserver(observerToken) }
         MessageSocketManager.shared.disconnect()
         await AuthManager.shared.cancelPendingTokenRefreshForTesting()

@@ -46,6 +46,7 @@ final class SessionExitRefusalTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        await UnownedSessionPurge.shared.settle()
         authService.releaseSessions()
         AuthManager.shared.isSwitchingAccount = false
         await AuthManager.shared.awaitRefusedSessionClosuresForTesting()

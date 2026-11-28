@@ -6,6 +6,7 @@ import Foundation
 /// passe par ici, la session fermée par le serveur comprise.
 @MainActor
 final class UnownedSessionPurge {
+    nonisolated deinit {}
     static let shared = UnownedSessionPurge()
 
     /// La purge des files qu'une session fermée par le serveur a lancée.
