@@ -559,12 +559,15 @@ export class SocialEmissionCore {
    * **LA SÉPARATION AUTOUR D'UNE ACTIVITÉ DE COMMENTAIRE** (#20236), résolue
    * par l'APPELANT, AVANT sa mutation, et passée aux deux diffusions.
    *
-   * Ce n'est pas une commodité : rendre ces diffusions asynchrones décorrélait
-   * l'ORDRE du fil de l'ordre des écritures, et leur charge est ABSOLUE
-   * (`likeCount`) — un `comment:unliked` qui double son `comment:liked` fige
-   * chez le lecteur un compteur que la base contredit, et iOS le PERSISTE.
-   * Résolue avant l'écriture, l'émission redevient synchrone juste après elle
-   * (audit adversarial du lot).
+   * Leur charge est ABSOLUE (`likeCount`) : un `comment:unliked` livré avant
+   * son `comment:liked` fige chez le lecteur un compteur que la base contredit,
+   * et iOS le PERSISTE. Résoudre avant l'écriture RESSERRE cette fenêtre d'un
+   * `await` — ce n'est donc pas une commodité, et ce n'est pas davantage une
+   * garantie : **aucun ordre de livraison n'est promis**, deux gestes
+   * concurrents étant deux gestionnaires indépendants dont les accusés peuvent
+   * s'inverser. Ce qui rattrape l'écart est une relecture autoritative — le
+   * prochain chargement REST du détail, qui réécrit le total persisté
+   * (décision du 2026-11-27, #20414).
    */
   commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
     return this.activitySeparation(actorId, commentAuthorId);

@@ -149,7 +149,9 @@ export class PostReactionHandler {
     /* La SEPTIÈME famille de #20338, et la seule hors de `SocialEventsHandler`.
        `separated` est résolu par l'APPELANT, AVANT sa mutation : la charge porte
        un agrégat ABSOLU, donc un réordonnancement fige un compteur faux chez le
-       lecteur. `null` ⇒ on n'annonce rien. */
+       lecteur. Lire avant RESSERRE cette fenêtre sans la fermer — aucun ordre de
+       livraison n'est promis, la relecture rattrape (décision du 2026-11-27, #20414).
+       `null` ⇒ on n'annonce rien. */
     if (separated === null) return;
     const target = this.io.to(ROOMS.post(postId));
     emitServerEvent(separated.length > 0 ? target.except([...separated]) : target, event, updateEvent);
@@ -225,8 +227,9 @@ export class PostReactionHandler {
       // AUSSI, pour de vrai : la résolution ci-dessus l'a traversée et la rend.
       /* AVANT la mutation (#20338) : `target.authorId` est en main depuis
          `resolveInteractionTarget`, et la charge de la diffusion porte un
-         agrégat ABSOLU — résolue après, elle décorrélait l'ordre du fil de
-         l'ordre des écritures. */
+         agrégat ABSOLU — résolue après, elle ÉLARGIRAIT d'un `await` la fenêtre
+         de réordonnancement, qu'aucun des deux arrangements ne ferme. Aucun
+         ordre de livraison n'est promis (décision du 2026-11-27, #20414). */
       const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const reaction = await this.postReactionService.addReaction({
         postId: targetPostId,
@@ -368,8 +371,9 @@ export class PostReactionHandler {
       const targetPostId = target.id;
 
       /* AVANT la mutation (#20338), même raison que la pose : charge ABSOLUE,
-         ordre. Et c'est le chemin où la moitié « auteur » de la loi compte le
-         plus : retirer sa réaction reste permis après un blocage. */
+         fenêtre resserrée, aucun ordre promis (décision du 2026-11-27, #20414). Et c'est le
+         chemin où la moitié « auteur » de la loi compte le plus : retirer sa
+         réaction reste permis après un blocage. */
       const separated = await this.socialEvents.activitySeparation(userId, target.authorId);
       const removed = await this.postReactionService.removeReaction({
         postId: targetPostId,
