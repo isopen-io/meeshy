@@ -82,7 +82,7 @@ const world = (options: { call: CallRow; summaryMetadata: unknown }) => {
     participant: { findMany: jest.fn(async () => []) }
   };
   const broadcast = jest.fn(async (_message: unknown, _conversationId: string) => undefined);
-  const refresh = createLateCallSummaryRefresher({ prisma: () => prisma as never, broadcastEdited: () => broadcast });
+  const refresh = createLateCallSummaryRefresher({ prisma: () => prisma as never, broadcastEdited: () => broadcast, sealed: async () => false });
   return { prisma, broadcast, refresh, metadata: () => state.metadata as Record<string, unknown> };
 };
 
@@ -155,7 +155,7 @@ describe('createLateCallSummaryRefresher — un relevé tardif met la bulle de r
 
     await Promise.all([w.refresh(CALL_ID), w.refresh(CALL_ID), w.refresh(CALL_ID), w.refresh(CALL_ID)]);
 
-    expect(w.prisma.callSession.findUnique.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(w.prisma.message.findFirst.mock.calls.length).toBeLessThanOrEqual(2);
     expect(w.broadcast).toHaveBeenCalledTimes(1);
   });
 
