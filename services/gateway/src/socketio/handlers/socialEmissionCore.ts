@@ -15,6 +15,7 @@ import { withServedPostMedia } from '../../services/posts/servedPostMedia';
 import { withoutBlockedRecipients } from '../../utils/blocking';
 import { createSeparatedRoomsResolver, type SeparatedRoomsResolver, type SeparationPairs } from '../separatedRooms';
 import { companionSubjectsOf, withoutSeparatedCompanions } from '../../services/posts/separatedCompanions';
+import { separatedCompanionSpectators } from './separatedCompanionSpectators';
 import { amisAcceptes } from '../../services/friendship';
 import { circleAudienceIds } from '../../services/posts/postAudience';
 import { POST_CIRCLE_VISIBILITIES, postCircleAudienceFloor } from '@meeshy/shared/utils/relation-levels';
@@ -371,7 +372,7 @@ export class SocialEmissionCore {
    * Cinquième seam, contraint comme les quatre du cycle 100 : `payloadFor` rend
    * un `SocialEventPayload<E>`, le couple (événement, charge) reste vérifié.
    */
-  emitPostToAudience<E extends SocialEventName>(
+  async emitPostToAudience<E extends SocialEventName>(
     recipientIds: readonly string[],
     authorId: string,
     event: E,
@@ -383,7 +384,7 @@ export class SocialEmissionCore {
        sans le dire par omission. */
     companions: CompanionSeparation,
     postRoom?: PostRoomTarget,
-  ): void {
+  ): Promise<void> {
     const post = withServedPostMedia(loaded);
     const authorRoom = ROOMS.feed(authorId);
     /* **TOUTE charge sortante passe par ICI**, et c'est structurel (audit
@@ -499,6 +500,55 @@ export class SocialEmissionCore {
        sa feed room ne contient que ses sockets, aucun tiers n'y lit, et un
        sujet ne se tait pas à lui-même. Exemption ÉCRITE, pas oubli. */
     emitToAuthor();
+
+    /* #20779 — LE SPECTATEUR HORS AUDIENCE, et il arrive EN DERNIER par
+       nécessité, pas par commodité.
+
+       La boucle ci-dessus n'itère que `recipients` ; `companionSilenced` a
+       pourtant retiré TOUS les lecteurs séparés de l'émission commune, room du
+       post comprise. Un spectateur présent dans `ROOMS.post(postId)` sans être
+       dans l'audience sortait donc de la charge commune sans en recevoir
+       aucune autre — zéro livraison (le coût assumé de #20711). La room du post
+       est la seule adresse d'une diffusion de contenu qui ne s'énumère pas
+       autrement : il faut la LIRE, et c'est la seule chose de cette méthode qui
+       attende quoi que ce soit. Toutes les émissions ci-dessus sont déjà parties
+       quand ce `await` commence.
+
+       **Ce site ne décide que de ce que lui seul sait** : la room du post
+       est-elle adressée ? `postRoom === undefined` ⇒ cette famille ne l'adresse
+       pas (sept des huit sites d'appel : seul `broadcastPostUpdated` la passe) ;
+       `separated === null` ⇒ elle ne l'est pas non plus, l'axe de l'AUTEUR
+       n'ayant pas pu être lu (#20430). « Y a-t-il quelque chose à énumérer ? »
+       appartient au module, et à lui SEUL — la condition l'a d'abord porté
+       aussi (`apart.size === 0`), et mutée elle laissait 131 témoins verts,
+       chacune des deux couches couvrant l'autre. Détail et mesure dans
+       {@link separatedCompanionSpectators}. */
+    if (postRoom === undefined || postRoom.separated === null) return;
+    const spectateurs = await separatedCompanionSpectators({
+      io: this.io,
+      postRoom: ROOMS.post(postRoom.id),
+      separatedFromCompanion: apart,
+      /* Les deux soustractions « déjà servi », passées SANS composition : les
+         ensembles se construisent après le court-circuit du module, et un
+         tableau composé ici les paierait avant lui. L'audience sort parce que
+         la boucle ci-dessus l'a servie ; l'AUTEUR, parce que son écho part
+         TOUJOURS sur sa feed room (exemption de #20430). */
+      audience: recipients,
+      authorId,
+      /* L'axe de l'AUTEUR (#20430) ferme ces rooms : leur servir une charge
+         amputée des compagnons leur livrerait le POST, que le blocage de
+         l'auteur leur refuse. */
+      closedRooms: postRoom.separated,
+    });
+    for (const { socketId, readerId } of spectateurs) {
+      /* `withoutAudienceList` : un spectateur n'est pas l'auteur, et la liste
+         d'audience ne part qu'à la salle de celui-ci (#7407). La charge passe
+         par la MÊME fabrique `served` que les trois autres chemins — c'est elle
+         qui applique la loi ET retire la colonne de décision (constat F1 de
+         l'audit de #20711). */
+      const hidden = new Set(companions.get(readerId) ?? []);
+      emitServerEvent(this.io.to(socketId), event, served(withoutAudienceList(post), hidden));
+    }
   }
 
   /**
