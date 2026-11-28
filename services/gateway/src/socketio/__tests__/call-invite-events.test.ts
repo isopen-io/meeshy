@@ -47,7 +47,8 @@ const harness = (options: {
   route?: Route;
   inviteeIsMember?: boolean;
   rebranch?: RebranchOutcome;
-  admitted?: string;
+  admitted?: unknown;
+  refusalRetryAfter?: number;
 } = {}) => {
   const handlers = new Map<string, (raw: unknown, ack?: (r: CallControlAck) => void) => Promise<void>>();
   const emitted: Emission[] = [];
@@ -55,7 +56,9 @@ const harness = (options: {
   const armed: PendingCallInvitation[] = [];
   const record = jest.fn(async (_session: unknown, _invitee: string) => undefined);
   const authorize = jest.fn(async (_input: unknown) =>
-    options.refusal ? { ok: false as const, code: options.refusal } : grant(options.route, options.inviteeIsMember)
+    options.refusal
+      ? { ok: false as const, code: options.refusal, ...(options.refusalRetryAfter ? { retryAfter: options.refusalRetryAfter } : {}) }
+      : grant(options.route, options.inviteeIsMember)
   );
   const order: string[] = [];
   const rebranch = jest.fn(async (_input: unknown): Promise<RebranchOutcome> => {
@@ -195,6 +198,23 @@ describe('call:invite-participant — inviter, c’est faire entrer dans la conv
     const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP }, admitted: 'throttled' });
     expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED' });
     expect(h.rings).toEqual([]);
+  });
+
+  it('#20795 — le refus du budget dit QUAND réessayer : l’accusé porte `retryAfter`', async () => {
+    const h = harness({ route: 'admit-member', admitted: { outcome: 'throttled', retryAfter: 42 } });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED', retryAfter: 42 });
+    expect(h.record).not.toHaveBeenCalled();
+    expect(h.rings).toEqual([]);
+  });
+
+  it('#20795 — après la bascule vers un groupe, le refus du budget porte aussi `retryAfter`', async () => {
+    const h = harness({ route: 'rebranch', rebranch: { kind: 'lost', conversationId: GROUP }, admitted: { outcome: 'throttled', retryAfter: 7 } });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED', retryAfter: 7 });
+  });
+
+  it('#20795 — un refus d’autorisation payé et refusé par le budget porte `retryAfter` jusqu’à l’accusé', async () => {
+    const h = harness({ refusal: 'RATE_LIMITED', refusalRetryAfter: 90 });
+    expect(await h.invite({ callId: CALL, userId: DAVE })).toEqual({ success: false, code: 'RATE_LIMITED', retryAfter: 90 });
   });
 
   it('une admission refusée n’invite personne', async () => {
