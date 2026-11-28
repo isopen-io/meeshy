@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:feed": {
+      "resDir": "feature/feed/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "community.posts.empty.title",
+          "androidName": "community_posts_empty_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "community.posts.failed.title",
+          "androidName": "community_posts_failed_title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "community.posts.loading",
+          "androidName": "community_posts_loading",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.retry",
+          "androidName": "community_posts_retry",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}

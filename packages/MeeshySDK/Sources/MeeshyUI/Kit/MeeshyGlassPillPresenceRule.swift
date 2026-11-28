@@ -32,11 +32,25 @@ public nonisolated enum MeeshyGlassPillPresenceRule {
         (extent.isFinite ? max(extent, 0) : 0) + margin
     }
 
+    /// Un intervalle négatif ou indéfini ne prolonge jamais la grâce : il dit
+    /// que l'horloge n'est pas fiable, et le retrait est tenu pour achevé.
     public static func acceptsTouches(
         presence: MeeshyGlassPillPresence,
         stowedFor: TimeInterval,
         reduceMotion: Bool = false
     ) -> Bool {
-        !presence.isStowed || stowedFor < duration(reduceMotion: reduceMotion)
+        guard presence.isStowed else { return true }
+        return stowedFor >= 0 && stowedFor < duration(reduceMotion: reduceMotion)
+    }
+
+    /// Le temps écoulé depuis le retrait, lu sur l'horloge MONOTONE : une heure
+    /// murale qui recule ne le rend pas négatif. Jamais rangée : infini.
+    public static func stowedFor(
+        since stowedAt: ContinuousClock.Instant?,
+        now: ContinuousClock.Instant
+    ) -> TimeInterval {
+        guard let stowedAt else { return .infinity }
+        let elapsed = stowedAt.duration(to: now).components
+        return Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18
     }
 }
