@@ -2979,3 +2979,10 @@ socket jusqu'au client.
 0. Si la PR de #20726 n'est pas fusionnée : lire les runs 46113339007 (SDK) et 46113341558 (iOS). S'ils sont verts, fusionner `dev` dans la branche, puis la PR.
 1. **#20335** (iOS, à coordonner avec la routine iOS), **#20788**.
 2. #13775, #20348, #20257, #20280, #20288, puis #20185 (recette staging), #11932, #12236, #16933, #20789 (kit, hors appels).
+
+## Cycle 86 — 2026-11-28
+
+- **Base** : `origin/dev` @ `be1f816c9`. La PR #20790 du cycle 85 (#20726) est fusionnée et l'issue fermée.
+- **Branche** : `claude/determined-volta-lk211d`.
+- **Objectif** : **#20348**. iOS, Android et le web lisent pareil une estimation de débit hors bornes et un RTT absent de la paire élue.
+- *(en cours)*
