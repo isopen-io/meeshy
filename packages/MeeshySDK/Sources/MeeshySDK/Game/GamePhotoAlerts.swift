@@ -75,7 +75,7 @@ public struct PhotoAlertPolicy: Equatable, Sendable {
 public struct PhotoAlertPacing: Equatable, Sendable {
     public enum Surface: String, Sendable { case gesture, passive }
 
-    public struct Shown: Equatable, Sendable {
+    public struct Shown: Codable, Equatable, Sendable {
         public let at: Int
         public let dayKey: String
 
