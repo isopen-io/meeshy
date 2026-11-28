@@ -66,6 +66,20 @@ enum StoryTrayRules {
     }
 
     /// `story:viewed` — `true` quand la story est dans le tray.
+    ///
+    /// **Cet événement n'apporte qu'un COMPTEUR, jamais une marque de lecture**
+    /// (#20457). Il ne part JAMAIS pour soi — son producteur l'abandonne quand
+    /// le viewer est l'auteur (`routes/social/events.ts` : `post.authorId ===
+    /// actor.userId` ⇒ `return`) et son unique destinataire est la feed room de
+    /// l'AUTEUR : il annonce la vue d'un TIERS. Y dériver `isViewed` marquait
+    /// donc la story de l'auteur « vue » dans son propre plateau dès qu'une
+    /// autre personne l'ouvrait — elle sortait des bulles fraîches et descendait
+    /// au tri sans qu'il l'ait lui-même jamais ouverte.
+    ///
+    /// `isViewed` dit « MOI, le lecteur, j'ai vu cette story » : il se dérive de
+    /// la lecture LOCALE (`StoryViewedLedger`, `markViewed`), et d'elle seule.
+    /// Le correctif n'est pas de comparer le viewer à soi — ce test serait
+    /// toujours vrai, le serveur n'émettant jamais vers l'auteur.
     static func applyViewed(_ viewedData: SocketStoryViewedData, to groups: inout [StoryGroup]) -> Bool {
         for i in groups.indices {
             if let j = groups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
@@ -74,7 +88,6 @@ enum StoryTrayRules {
                 // (Avant : ignoré → le compteur de vues restait stale chez l'auteur
                 // qui regarde sa propre story pendant que des viewers arrivent.)
                 updatedStories[j].viewCount = viewedData.viewCount
-                updatedStories[j].isViewed = true
                 groups[i] = groups[i].with(stories: updatedStories)
                 return true
             }
