@@ -13,6 +13,7 @@ import type { GameBlock } from '@meeshy/shared/types/game';
 import { logger } from '../utils/logger';
 import { socketIOAdminRoutes } from './socketio-admin-routes';
 import { setEngagementEmitIOProvider } from '../services/engagement/engagement-emit-registry';
+import { setCommunityAdmissionBudgetHost } from '../services/conversations/communitySalonAdmissionBudget';
 import { shareTogetherCuts } from '../services/together/togetherDeps';
 import { GameStateBroadcast, setGameStateBroadcast } from '../services/game/GameStateBroadcast';
 import { gravedGameRevision } from '../services/game/GameRevision';
@@ -61,6 +62,8 @@ export class MeeshySocketIOHandler {
     await this.socketIOManager.initialize();
     // Les crédits d'engagement annoncent « N (M) 🔥 » au crédité (#8906).
     setEngagementEmitIOProvider(() => this.socketIOManager?.getIO());
+    // L'invitation dans un appel paie les seaux des ajouts de CE serveur (#20740).
+    setCommunityAdmissionBudgetHost(fastify);
     // Les enveloppes libsignal partent vers la room de LEUR appareil (#3706).
     setE2EEEnvelopeIOProvider(() => this.socketIOManager?.getIO());
     // Une séance « ensemble » s'arrête dans le geste qui ferme sa porte, dès le démarrage (#17022).

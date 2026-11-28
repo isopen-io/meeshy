@@ -154,7 +154,13 @@ export function withMentions<T extends { postMentions?: unknown; mentions?: unkn
   post: T,
   reader?: WireReader
 ): Omit<T, 'postMentions' | 'mentions'> & { mentions: PostReference[] } {
-  const { postMentions, mentions, ...rest } = withoutSeparatedCompanions(post, reader?.separatedUserIds);
+  const { postMentions, mentions, ...rest } = withoutSeparatedCompanions(post, reader?.separatedUserIds, {
+    /* Une diffusion n'est pas une charge SERVIE : `emitPostToAudience` y
+       résout la séparation par lecteur, et il lui faut `snapshotAuthorId`
+       pour le faire (#20711). Lui c'est lui qui retire la colonne, sur chacune
+       de ses charges. */
+    keepsDecisionColumn: reader?.broadcast === true,
+  });
   const flat = postMentions === undefined && Array.isArray(mentions)
     ? { ...rest, mentions: mentions as PostReference[] }
     : { ...rest, mentions: toPostReferences(postMentions as never) };

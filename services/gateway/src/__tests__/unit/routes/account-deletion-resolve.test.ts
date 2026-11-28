@@ -73,6 +73,9 @@ function buildApp(etat: EtatDemande | null) {
       updateMany: jest.fn(async (a: unknown) => { ecritures.push({ userAnonymize: a }); return { count: 1 }; }),
     },
     userSession: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
+    // #20688 — l'annulation efface les alertes de proximité avant de rendre le compte ; la purge,
+    // sans `notification.deleteMany`, s'arrête au même endroit qu'avant.
+    notification: { findRaw: jest.fn(async (_a: unknown) => []) },
     pushToken: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userVoiceModel: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },
     userRelation: { deleteMany: jest.fn(async (_a: unknown) => ({ count: 0 })) },

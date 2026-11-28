@@ -54,7 +54,8 @@ function monde(options: { readonly settings?: readonly Row[]; readonly emetteur?
     ...(options.settings ?? []),
   ]);
   const settings = { ...rows, findUnique: (args: { where: Row; select?: Record<string, unknown> }) => rows.findUnique({ ...args, where: (args.where.ownerId_otherId as Row | undefined) ?? args.where }) };
-  return { prisma: { ...world.prisma, relationFeatureSetting: settings } as unknown as PrismaClient };
+  const notification = { findRaw: async () => [], deleteMany: async () => ({ count: 0 }) };
+  return { prisma: { ...world.prisma, relationFeatureSetting: settings, notification } as unknown as PrismaClient };
 }
 
 const now = new Date('2026-11-15T10:00:00.000Z');

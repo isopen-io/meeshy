@@ -20,6 +20,7 @@ import { eraseProfileAddressesOf } from './profile-addresses/address-links';
 import { eraseProfileLinkVisitsOf } from './profile-link-visits/profileLinkVisits';
 import { eraseSentInvitationsOf } from './referrals/emailInvitations';
 import type { ShareLinkRevocationLive } from './cleanupExpiredData';
+import { bloodProximityRetractorOf } from './bloodLocation/bloodProximityRetraction';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -198,6 +199,8 @@ export async function purgeAccountIsolatedData(
       prisma.bloodLocationPoint.deleteMany({ where: { ownerId: userId } }),
       prisma.bloodLocationConsultation.deleteMany({ where: { OR: [{ observedId: userId }, { observerId: userId }] } }),
       options.endSharedLocation?.(userId),
+      // #20688 : les alertes « un Sang s'approche » qui le nomment, chez chacun de ses Sangs.
+      bloodProximityRetractorOf(prisma)({ kind: 'everywhere', ownerId: userId }),
     ]);
 
   const summary: AccountPurgeSummary = {
