@@ -193,7 +193,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
                 + "le plein écran n'offre aucune rangée de réaction (#6084, critère 1)."
         )
         XCTAssertNotNil(
-            corps("private func mediaActions(", dans: code),
+            corps("func mediaActions(", dans: code),
             "`mediaActions` introuvable — le bouton n'a pas de rangée d'actions à rejoindre."
         )
     }
@@ -208,7 +208,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     /// bougé : la membership, le geste, l'icône.
     func test_leBoutonReagir_rejointLaRangeeDActions() throws {
         let code = try gallerieSource()
-        guard let rangee = corps("private func mediaActions(", dans: code) else {
+        guard let rangee = corps("func mediaActions(", dans: code) else {
             return XCTFail("`mediaActions` introuvable")
         }
         let plat = compact(rangee)
@@ -282,7 +282,7 @@ final class FullscreenAttachmentReactionTests: XCTestCase {
     /// mais l'intention serait déjà fausse.
     func test_changerDePage_refermeLaRangee() throws {
         let code = try gallerieSource()
-        guard let relais = corps("private func handlePageChange(", dans: code) else {
+        guard let relais = corps("func handlePageChange(", dans: code) else {
             return XCTFail("`handlePageChange` introuvable")
         }
         XCTAssertTrue(

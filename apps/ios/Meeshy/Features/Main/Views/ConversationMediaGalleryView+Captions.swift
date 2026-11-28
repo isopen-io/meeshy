@@ -57,4 +57,53 @@ extension ConversationMediaGalleryView {
         }
         return String(localized: "gallery.image", defaultValue: "Image", bundle: .main)
     }
+
+    /// La rangée de langues de la légende (`GalleryCaptionLanguageRow`) — absente
+    /// dès qu'il n'y a rien à basculer (loi 4).
+    @ViewBuilder
+    func captionLanguageRow(_ id: String) -> some View {
+        let langues = captionLanguages(id)
+        if !langues.isEmpty {
+            GalleryCaptionLanguageRow(languages: langues,
+                                      active: activeCaptionLanguage(id)) { code in
+                captionLanguage[id] = code
+            }
+        }
+    }
+
+    /// **La légende du plein écran rejoint la couche PARTAGÉE.**
+    ///
+    /// Une troisième façon de replier la même chose — `Text` brut,
+    /// `lineLimit(4)`, aucune bascule — serait la forme INERTE : une légende de
+    /// cinq lignes s'y arrêterait au milieu d'une phrase, sans que rien n'indique
+    /// qu'il en reste, ni ne permette de la lire.
+    ///
+    /// > Deux surfaces converties sur trois, c'est une règle qui a l'air
+    /// > partagée. La troisième ne rougit pas : elle affiche un texte, tronqué
+    /// > proprement, et seule la comparaison avec ses sœurs le révèle.
+    ///
+    /// Ce qui passe au composant est la RÈGLE — 15 mots de tête au-delà de 30,
+    /// l'invite, l'ancrage bas-gauche déplié. Le retrait reste 16 pt, celui de
+    /// `bottomMetadataOverlay` juste au-dessus : la légende s'aligne sur sa
+    /// colonne, comme en réel.
+    func captionOverlay(_ text: String, links: [String: String]) -> some View {
+        MediaCaptionOverlay(caption: text,
+                            isExpanded: captionExpanded,
+                            trackedLinks: links,
+                            horizontalInset: 16,
+                            maxExpandedHeight: cadreCaptionMaxHeight,
+                            // **« JUSTE afficher le texte déplié avec effet
+                            // ombre »** — donc pas de voile en plus. Le
+                            // dégradé noir du composant sert les hôtes qui
+                            // n'ont rien d'autre pour détacher le texte ; ici
+                            // l'ombre suffit, et le voile masquait le média
+                            // que l'utilisateur est venu regarder.
+                            dimsBackgroundWhenExpanded: false,
+                            onToggle: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    captionExpanded.toggle()
+                                }
+                            })
+            .padding(.vertical, MeeshySpacing.sm)
+    }
 }
