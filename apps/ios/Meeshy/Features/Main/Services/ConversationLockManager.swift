@@ -50,6 +50,25 @@ protocol ConversationLockProbing: AnyObject {
     func mayBeLocked(_ conversationId: String) -> Bool
 }
 
+// MARK: - La sortie de session
+
+/// **Une sortie de session lève-t-elle les verrous ?** Le coffre est propre à
+/// l'appareil, pas au compte : il s'efface quand la session de son
+/// propriétaire SE TERMINE, jamais quand un compte gardé est seulement quitté.
+/// Un compte gardé se rouvre sans mot de passe : effacer ses verrous à la
+/// bascule les levait en deux touchers, sans aucun secret.
+nonisolated enum ConversationLockExitRule {
+    /// `exiting` : le compte qui sort. `owner` : celui sous lequel le PIN
+    /// maître a été posé, `nil` pour un coffre des versions antérieures.
+    /// `keptAccountIds` : les comptes dont l'appareil garde encore la session.
+    static func wipesLocks(exiting: String?, owner: String?, keptAccountIds: Set<String>) -> Bool {
+        if let exiting, keptAccountIds.contains(exiting) { return false }
+        guard let owner else { return keptAccountIds.isEmpty }
+        if owner == exiting { return true }
+        return !keptAccountIds.contains(owner)
+    }
+}
+
 // MARK: - Le gestionnaire
 
 @MainActor
@@ -110,12 +129,21 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     private var pendingVaultWipe = false
     /// Où s'annonce `.conversationContentLocksDidChange`.
     private let notificationCenter: NotificationCenter
+    /// Le compte de la session ouverte : celui qui pose le PIN maître devient
+    /// le propriétaire du coffre.
+    private let activeAccountId: @MainActor () -> String?
+    /// Les comptes dont l'appareil garde la session (jetons au trousseau).
+    private let keptAccountIds: @MainActor () -> Set<String>
+    /// Le dernier compte vu ouvert : celui qui sort quand la session se ferme.
+    private var lastActiveAccountId: String?
 
     private let masterPinKey = "meeshy_master_pin"
     private let lockKeyPrefix = "meeshy_lock_"
     private let throttleSuffix = ".attempts"
     private let biometricStateKey = "meeshy_lock_biometric_state"
     private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
+    /// Hors du préfixe des verrous : ce n'est pas une conversation.
+    private let masterPinOwnerKey = "meeshy_master_pin.owner"
 
     private var openingPasses: [String: Date] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -130,7 +158,11 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         contentLockMirrorFile: URL? = nil,
         purgeDeliveredBanners: @escaping @MainActor (String) -> Void = { _ in },
         isProtectedDataAvailable: @escaping @MainActor () -> Bool = { UIApplication.shared.isProtectedDataAvailable },
-        notificationCenter: NotificationCenter = .default
+        notificationCenter: NotificationCenter = .default,
+        activeAccountId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        keptAccountIds: @escaping @MainActor () -> Set<String> = {
+            Set(AuthManager.shared.savedAccounts.map(\.id).filter { AuthManager.shared.hasPreservedSession(for: $0) })
+        }
     ) {
         self.vault = vault
         self.defaults = defaults
@@ -142,6 +174,8 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
         self.purgeDeliveredBanners = purgeDeliveredBanners
         self.isProtectedDataAvailable = isProtectedDataAvailable
         self.notificationCenter = notificationCenter
+        self.activeAccountId = activeAccountId
+        self.keptAccountIds = keptAccountIds
         loadLockedIds()
         wireProtectedDataReload(notificationCenter)
         wireAuthLogoutHook()
@@ -212,16 +246,40 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     }
 
     /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
-    /// à la déconnexion (`isAuthenticated` → false, valeur initiale ignorée),
-    /// wipe des verrous + master PIN pour qu'aucun état de A ne s'applique à B.
+    /// à la sortie de session (`isAuthenticated` → false, valeur initiale
+    /// ignorée), `sessionDidExit` décide si les verrous partent.
     private func wireAuthLogoutHook() {
+        AuthManager.shared.$currentUser
+            .compactMap { $0?.id }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] accountId in self?.lastActiveAccountId = accountId }
+            .store(in: &cancellables)
         AuthManager.shared.$isAuthenticated
             .removeDuplicates()
             .dropFirst()
             .filter { !$0 }
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.resetForLogout() }
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.sessionDidExit(exiting: self.lastActiveAccountId ?? self.activeAccountId())
+            }
             .store(in: &cancellables)
+    }
+
+    /// Une session vient de se fermer ou d'être quittée. Les verrous ne
+    /// partent que si `ConversationLockExitRule` le dit ; gardés, ils ne
+    /// laissent aucune ouverture déjà accordée au compte suivant.
+    func sessionDidExit(exiting: String?) {
+        guard ConversationLockExitRule.wipesLocks(
+            exiting: exiting,
+            owner: read(masterPinOwnerKey),
+            keptAccountIds: keptAccountIds()
+        ) else {
+            openingPasses.removeAll()
+            return
+        }
+        resetForLogout()
     }
 
     // MARK: - Master PIN (6 digits)
@@ -235,12 +293,19 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     @discardableResult
     func setMasterPin(_ pin: String) -> Bool {
         guard store(pin, under: masterPinKey) else { return false }
+        if let owner = activeAccountId() { write(owner, for: masterPinOwnerKey) }
         noteMasterPin(true)
         return true
     }
 
+    /// Un PIN maître prouvé sous un coffre sans propriétaire (versions
+    /// antérieures) le donne au compte ouvert.
     func attemptMasterPin(_ pin: String) -> PinAttemptOutcome {
-        attempt(pin, against: masterPinKey)
+        let outcome = attempt(pin, against: masterPinKey)
+        if outcome == .granted, read(masterPinOwnerKey) == nil, let owner = activeAccountId() {
+            write(owner, for: masterPinOwnerKey)
+        }
+        return outcome
     }
 
     func verifyMasterPin(_ pin: String) -> Bool {
@@ -267,16 +332,18 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating, C
     /// autorisée par lui, part avec lui.
     func forceRemoveMasterPin() {
         erase(masterPinKey)
+        vault.delete(masterPinOwnerKey)
         noteMasterPin(false)
         disableBiometricUnlock()
     }
 
-    /// P7-11 — logout = purge cross-compte totale (invariant 9). Le keychain
-    /// (`me.meeshy.app.conversation-locks`) survit au logout ET à la
-    /// réinstallation, et n'est pas namespacé par compte : sans wipe, le
-    /// master PIN et les verrous du compte A s'appliquent au compte B.
-    /// Après logout les conversations elles-mêmes sont purgées (7 tables +
-    /// prefs + URLCache) — leurs PINs n'ont plus d'objet.
+    /// P7-11 — la session du propriétaire du coffre se termine : purge totale
+    /// (invariant 9). Le keychain (`me.meeshy.app.conversation-locks`) survit
+    /// à la déconnexion ET à la réinstallation, et n'est pas namespacé par
+    /// compte : sans wipe, le master PIN et les verrous du compte A
+    /// s'appliquent au compte B. Un compte seulement QUITTÉ (session gardée)
+    /// garde ses conversations sur l'appareil, donc ses verrous
+    /// (`ConversationLockExitRule`).
     ///
     /// Le coffre s'efface EN BLOC, pas seulement les codes que la liste
     /// connaît : liste inconnue, un code laissé là, la reconstruction suivante

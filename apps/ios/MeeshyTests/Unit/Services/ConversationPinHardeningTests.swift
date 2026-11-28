@@ -22,7 +22,9 @@ final class ConversationPinHardeningTests: XCTestCase {
     private func makeSUT(
         vault: InMemoryConversationLockVault = InMemoryConversationLockVault(),
         biometrics: StubBiometricUnlocker = StubBiometricUnlocker(),
-        clock: PinLockClock? = nil
+        clock: PinLockClock? = nil,
+        activeAccount: String? = nil,
+        keptAccounts: Set<String> = []
     ) -> (sut: ConversationLockManager, vault: InMemoryConversationLockVault, clock: PinLockClock) {
         let clock = clock ?? PinLockClock(now: start)
         let sut = ConversationLockManager(
@@ -30,7 +32,9 @@ final class ConversationPinHardeningTests: XCTestCase {
             defaults: UserDefaults(suiteName: "pin-hardening-\(UUID().uuidString)")!,
             biometrics: biometrics,
             iterations: 1_000,
-            now: { clock.now }
+            now: { clock.now },
+            activeAccountId: { activeAccount },
+            keptAccountIds: { keptAccounts }
         )
         return (sut, vault, clock)
     }
@@ -320,6 +324,98 @@ final class ConversationPinHardeningTests: XCTestCase {
 
         XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
         XCTAssertFalse(sut.biometricUnlockEnabled)
+        XCTAssertFalse(sut.masterPinConfigured)
+    }
+
+    // MARK: - La sortie de session ne lève pas les verrous d'un compte gardé
+
+    /// Un compte gardé se rouvre sans mot de passe : quitter sa session puis
+    /// y revenir ne lève ni ses verrous ni son PIN maître.
+    func test_sessionDidExit_keptAccount_keepsTheLocksAndTheMasterPin() {
+        let (sut, _, _) = makeSUT(activeAccount: "alice", keptAccounts: ["alice"])
+        sut.setMasterPin("123456")
+        sut.setLock(conversationId: conversationId, pin: "4321")
+
+        sut.sessionDidExit(exiting: "alice")
+
+        XCTAssertTrue(sut.isLocked(conversationId))
+        XCTAssertTrue(sut.masterPinConfigured)
+        XCTAssertFalse(sut.admitsOpening(conversationId))
+    }
+
+    /// Une ouverture accordée avant la sortie ne sert pas à la session suivante.
+    func test_sessionDidExit_keptAccount_dropsAGrantedOpening() {
+        let (sut, _, _) = makeSUT(activeAccount: "alice", keptAccounts: ["alice"])
+        sut.setLock(conversationId: conversationId, pin: "4321")
+        XCTAssertEqual(sut.attemptLock(conversationId: conversationId, pin: "4321"), .granted)
+
+        sut.sessionDidExit(exiting: "alice")
+
+        XCTAssertFalse(sut.admitsOpening(conversationId))
+    }
+
+    /// Un second compte ajouté puis déconnecté n'emporte pas les verrous du
+    /// compte gardé qui les a posés.
+    func test_sessionDidExit_anotherAccountEnds_whileTheOwnerIsKept_keepsTheLocks() {
+        let (sut, _, _) = makeSUT(activeAccount: "alice", keptAccounts: ["alice"])
+        sut.setMasterPin("123456")
+        sut.setLock(conversationId: conversationId, pin: "4321")
+
+        sut.sessionDidExit(exiting: "bob")
+
+        XCTAssertTrue(sut.isLocked(conversationId))
+        XCTAssertTrue(sut.masterPinConfigured)
+    }
+
+    /// La session du propriétaire se termine : rien de lui ne reste au coffre.
+    func test_sessionDidExit_ownerSessionEnds_wipesTheVault() {
+        let (sut, vault, _) = makeSUT(activeAccount: "alice", keptAccounts: [])
+        sut.setMasterPin("123456")
+        sut.setLock(conversationId: conversationId, pin: "4321")
+
+        sut.sessionDidExit(exiting: "alice")
+
+        XCTAssertFalse(sut.isLocked(conversationId))
+        XCTAssertFalse(sut.masterPinConfigured)
+        XCTAssertTrue(vault.items.isEmpty, "restes : \(vault.items.keys.sorted())")
+    }
+
+    func test_exitRule_keptExitingAccount_neverWipes() {
+        XCTAssertFalse(ConversationLockExitRule.wipesLocks(exiting: "alice", owner: "alice", keptAccountIds: ["alice"]))
+        XCTAssertFalse(ConversationLockExitRule.wipesLocks(exiting: "alice", owner: nil, keptAccountIds: ["alice"]))
+        XCTAssertFalse(ConversationLockExitRule.wipesLocks(exiting: "alice", owner: "bob", keptAccountIds: ["alice"]))
+    }
+
+    func test_exitRule_endedOwner_wipes_evenWhileAnotherAccountIsKept() {
+        XCTAssertTrue(ConversationLockExitRule.wipesLocks(exiting: "alice", owner: "alice", keptAccountIds: ["bob"]))
+    }
+
+    func test_exitRule_endedNonOwner_wipesOnlyOnceTheOwnerIsGone() {
+        XCTAssertFalse(ConversationLockExitRule.wipesLocks(exiting: "bob", owner: "alice", keptAccountIds: ["alice"]))
+        XCTAssertTrue(ConversationLockExitRule.wipesLocks(exiting: "bob", owner: "alice", keptAccountIds: []))
+    }
+
+    /// Un coffre des versions antérieures n'a pas de propriétaire : il part
+    /// quand plus aucun compte n'est gardé sur l'appareil.
+    func test_exitRule_unknownOwner_wipesOnlyWhenNoAccountIsKept() {
+        XCTAssertTrue(ConversationLockExitRule.wipesLocks(exiting: "alice", owner: nil, keptAccountIds: []))
+        XCTAssertFalse(ConversationLockExitRule.wipesLocks(exiting: "bob", owner: nil, keptAccountIds: ["alice"]))
+        XCTAssertTrue(ConversationLockExitRule.wipesLocks(exiting: nil, owner: nil, keptAccountIds: []))
+    }
+
+    /// Le PIN maître prouvé sous un coffre sans propriétaire le donne au
+    /// compte ouvert : sa session terminée, le coffre part.
+    func test_attemptMasterPin_granted_onAnOwnerlessVault_adoptsTheActiveAccount() {
+        let vault = InMemoryConversationLockVault()
+        let (legacy, _, _) = makeSUT(vault: vault)
+        legacy.setMasterPin("123456")
+        XCTAssertNil(vault.items["meeshy_master_pin.owner"])
+
+        let (sut, _, _) = makeSUT(vault: vault, activeAccount: "alice", keptAccounts: ["bob"])
+        XCTAssertEqual(sut.attemptMasterPin("123456"), .granted)
+
+        XCTAssertEqual(vault.items["meeshy_master_pin.owner"], "alice")
+        sut.sessionDidExit(exiting: "alice")
         XCTAssertFalse(sut.masterPinConfigured)
     }
 }
