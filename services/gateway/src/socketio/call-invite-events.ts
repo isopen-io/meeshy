@@ -220,6 +220,9 @@ export function callInviteDependencies(input: {
           broadcastMessage,
           notificationService: input.notificationService?.() ?? null,
           engagement: (engagement ??= new EngagementService(prisma)),
+          // #20703 — l'invitation dans un appel n'a pas encore son débit : ses
+          // seaux vivent sur le serveur Fastify, que ce transport ne tient pas.
+          communityBudget: null,
         },
         {
           conversationId: request.conversationId,
