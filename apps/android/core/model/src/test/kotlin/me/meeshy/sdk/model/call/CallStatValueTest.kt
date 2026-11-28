@@ -68,7 +68,75 @@ class CallStatValueTest {
     fun `an aberrant available bitrate reads as unmeasured`() {
         assertThat(bitrateOf(Double.POSITIVE_INFINITY)).isEqualTo(0)
         assertThat(bitrateOf(Double.NaN)).isEqualTo(0)
-        assertThat(bitrateOf(3e9)).isEqualTo(Int.MAX_VALUE)
+        assertThat(bitrateOf(3e9)).isEqualTo(0)
+    }
+
+    // --- #20348 : l'estimation de débit a sa propre borne, comme sur iOS et le web ---
+
+    @Test
+    fun `an estimate beyond the plausibility bound is no estimate`() {
+        assertThat(CallStatValue.bitrateEstimate(2_147_483_648.0)).isEqualTo(0)
+        assertThat(bitrateOf(2_147_483_648.0)).isEqualTo(0)
+    }
+
+    @Test
+    fun `an estimate at the plausibility bound is kept`() {
+        assertThat(CallStatValue.MAX_BITRATE_ESTIMATE_BPS).isEqualTo(2_147_483_647)
+        assertThat(CallStatValue.bitrateEstimate(2_147_483_647.0)).isEqualTo(2_147_483_647)
+        assertThat(bitrateOf(2_147_483_647.0)).isEqualTo(2_147_483_647)
+    }
+
+    @Test
+    fun `a non finite, null or negative estimate is no estimate`() {
+        listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0.0, -5.0).forEach {
+            assertThat(CallStatValue.bitrateEstimate(it)).isEqualTo(0)
+        }
+    }
+
+    // --- #20348 : sans RTT sur aucune paire, celui du pair (remote-inbound-rtp) ---
+
+    private fun remoteInbound(id: String, kind: String, rttSeconds: Double?) =
+        entry(id, "remote-inbound-rtp", kind, rttSeconds?.let { mapOf("roundTripTime" to it) } ?: emptyMap())
+
+    @Test
+    fun `without a pair rtt, the remote-inbound rtt is read in ms`() {
+        val stats = CallStats.reduce(listOf(electedPair(emptyMap()), remoteInbound("RA", "audio", 0.12)))
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(120.0)
+    }
+
+    @Test
+    fun `the pair rtt wins over the remote-inbound one`() {
+        val stats = CallStats.reduce(listOf(electedPair(mapOf("currentRoundTripTime" to 0.05)), remoteInbound("RA", "audio", 0.4)))
+        assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(50.0)
+    }
+
+    @Test
+    fun `neither the pair nor the peer carries an rtt, it stays at zero`() {
+        val stats = CallStats.reduce(listOf(electedPair(emptyMap()), remoteInbound("RA", "audio", null)))
+        assertThat(stats.roundTripTimeMs).isEqualTo(0.0)
+    }
+
+    @Test
+    fun `the fallback reads the first remote-inbound of the stream order, whatever the report order`() {
+        val report = listOf(
+            electedPair(emptyMap()),
+            remoteInbound("RV", "video", 0.3),
+            remoteInbound("RB", "audio", 0.2),
+            remoteInbound("RA", "audio", 0.12),
+        )
+        listOf(report, report.reversed()).forEach {
+            assertThat(CallStats.reduce(it).roundTripTimeMs).isWithin(1e-9).of(120.0)
+        }
+    }
+
+    @Test
+    fun `a non finite or negative remote rtt is skipped for the next one`() {
+        listOf(Double.NaN, -1.0, Double.POSITIVE_INFINITY).forEach { aberrant ->
+            val stats = CallStats.reduce(
+                listOf(electedPair(emptyMap()), remoteInbound("RA", "audio", aberrant), remoteInbound("RB", "audio", 0.2)),
+            )
+            assertThat(stats.roundTripTimeMs).isWithin(1e-9).of(200.0)
+        }
     }
 
     // --- reduce : gigue -----------------------------------------------------

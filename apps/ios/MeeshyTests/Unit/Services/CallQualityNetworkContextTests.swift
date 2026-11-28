@@ -541,3 +541,91 @@ final class CallStatsStreamOrderTests: XCTestCase {
         XCTAssertEqual(reasons(report), [nil])
     }
 }
+
+// MARK: - #20348 — l'estimation hors bornes et le RTT absent de la paire, comme Android et le web
+
+final class CallStatsEstimateAndRemoteRttTests: XCTestCase {
+
+    private func elected(_ values: [String: Double] = [:]) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: "CP1", type: "candidate-pair",
+                           values: values.merging(["nominated": 1]) { current, _ in current },
+                           strings: ["state": "succeeded"])
+    }
+
+    private func remoteInbound(_ id: String, kind: String, rtt: Double?) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "remote-inbound-rtp", kind: kind,
+                           values: rtt.map { ["roundTripTime": $0] } ?? [:])
+    }
+
+    private func bitrate(_ bps: Double) -> Int {
+        CallStats.reduce(entries: [elected(["availableOutgoingBitrate": bps])]).availableOutgoingBitrateBps
+    }
+
+    func test_bitrateEstimate_beyondThePlausibilityBound_isNoEstimate() {
+        XCTAssertEqual(CallStatValue.bitrateEstimate(2_147_483_648), 0)
+        XCTAssertEqual(bitrate(2_147_483_648), 0)
+        XCTAssertEqual(bitrate(3e9), 0)
+    }
+
+    func test_bitrateEstimate_atThePlausibilityBound_isKept() {
+        XCTAssertEqual(CallStatValue.maxBitrateEstimateBps, 2_147_483_647)
+        XCTAssertEqual(CallStatValue.bitrateEstimate(2_147_483_647), 2_147_483_647)
+        XCTAssertEqual(bitrate(2_147_483_647), 2_147_483_647)
+    }
+
+    func test_bitrateEstimate_nonFiniteNullOrNegative_isNoEstimate() {
+        [Double.nan, .infinity, -.infinity, 0, -5].forEach { aberrant in
+            XCTAssertEqual(CallStatValue.bitrateEstimate(aberrant), 0, "\(aberrant)")
+        }
+    }
+
+    func test_reduce_noPairRtt_readsTheRemoteInboundRttInMilliseconds() {
+        let stats = CallStats.reduce(entries: [elected(), remoteInbound("RA", kind: "audio", rtt: 0.12)])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 120, accuracy: 0.001)
+    }
+
+    func test_reduce_pairRtt_winsOverTheRemoteInboundOne() {
+        let stats = CallStats.reduce(entries: [elected(["currentRoundTripTime": 0.05]), remoteInbound("RA", kind: "audio", rtt: 0.4)])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 50, accuracy: 0.001)
+    }
+
+    func test_reduce_neitherPairNorPeerRtt_readsZero() {
+        let stats = CallStats.reduce(entries: [elected(), remoteInbound("RA", kind: "audio", rtt: nil)])
+
+        XCTAssertEqual(stats.roundTripTimeMs, 0)
+    }
+
+    func test_reduce_remoteFallback_readsTheFirstOfTheStreamOrderWhateverTheReportOrder() {
+        let report = [
+            elected(),
+            remoteInbound("RV", kind: "video", rtt: 0.3),
+            remoteInbound("RB", kind: "audio", rtt: 0.2),
+            remoteInbound("RA", kind: "audio", rtt: 0.12)
+        ]
+
+        [report, report.reversed()].forEach { order in
+            XCTAssertEqual(CallStats.reduce(entries: order).roundTripTimeMs, 120, accuracy: 0.001)
+        }
+    }
+
+    func test_reduce_aberrantRemoteRtt_isSkippedForTheNextOne() {
+        [Double.nan, -1, .infinity].forEach { aberrant in
+            let stats = CallStats.reduce(entries: [
+                elected(),
+                remoteInbound("RA", kind: "audio", rtt: aberrant),
+                remoteInbound("RB", kind: "audio", rtt: 0.2)
+            ])
+
+            XCTAssertEqual(stats.roundTripTimeMs, 200, accuracy: 0.001, "\(aberrant)")
+        }
+    }
+
+    func test_rawProjection_readsTheRemoteInboundRoundTripTime() {
+        let entry = CallStats.RawEntry(id: "RA", type: "remote-inbound-rtp",
+                                       raw: ["kind": "audio" as NSString, "roundTripTime": NSNumber(value: 0.12)])
+
+        XCTAssertEqual(entry.values["roundTripTime"], 0.12)
+    }
+}
