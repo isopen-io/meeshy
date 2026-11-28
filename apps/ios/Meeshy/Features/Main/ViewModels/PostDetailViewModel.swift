@@ -694,7 +694,7 @@ class PostDetailViewModel: ObservableObject {
                 self.applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds,
+                    wireAction: event.action,
                     actorUserId: event.userId
                 )
             }
@@ -708,7 +708,7 @@ class PostDetailViewModel: ObservableObject {
                 self.applyCommentReactionAggregate(
                     commentId: event.commentId,
                     count: event.aggregation.count,
-                    reactorUserIds: event.aggregation.userIds,
+                    wireAction: event.action,
                     actorUserId: event.userId
                 )
             }

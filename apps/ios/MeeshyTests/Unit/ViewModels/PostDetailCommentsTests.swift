@@ -732,7 +732,7 @@ final class PostDetailCommentsTests: PostDetailViewModelTestCase {
         sut.commentHearts.markLiked(["r1"])
         _ = sut.commentHearts.begin("r1")
 
-        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, reactorUserIds: ["u9"], actorUserId: "u9")
+        sut.applyCommentReactionAggregate(commentId: "r1", count: 5, wireAction: "add", actorUserId: "u9")
 
         XCTAssertEqual(sut.repliesMap["c1"]?.first?.likes, 5)
         XCTAssertNil(sut.commentHearts.likeDelta["r1"])
@@ -753,17 +753,26 @@ final class PostDetailCommentsTests: PostDetailViewModelTestCase {
         sut.comments = [FeedComment(id: "c1", author: "alice", authorId: "a1", content: "Top", likes: 1)]
         _ = sut.commentHearts.begin("c1")
 
-        // Tiers "u9" like pendant que MON like n'est pas encore persisté
-        // (absent de userIds) : cœur préservé, mon like compté par-dessus.
-        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: "u9")
+        // Tiers "u9" like pendant que MON like n'est pas encore persisté :
+        // cœur préservé, et mon like compté par-dessus l'agrégat du tiers.
+        // L'assertion porte sur ce qui est AFFICHÉ (`likes + delta`), pas sur la
+        // base : depuis #20410 le registre GARDE le delta d'un geste en vol au
+        // lieu de l'absorber dans le compte rendu — même affichage, et le roster
+        // n'est plus consulté.
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, wireAction: "add", actorUserId: "u9")
         XCTAssertTrue(sut.commentHearts.isLiked("c1"), "le cœur en vol n'est pas éteint par l'agrégat d'un tiers")
-        XCTAssertEqual(sut.comments.first?.likes, 2, "le like en vol est compté par-dessus l'agrégat du tiers")
+        XCTAssertEqual(
+            sut.commentHearts.displayedLikes(of: try XCTUnwrap(sut.comments.first)), 2,
+            "le like en vol est compté par-dessus l'agrégat du tiers")
 
         // Événement dont JE suis l'acteur (unlike depuis un autre appareil) :
         // l'agrégat fait autorité et retire le cœur.
-        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, reactorUserIds: ["u9"], actorUserId: myId)
+        sut.applyCommentReactionAggregate(commentId: "c1", count: 1, wireAction: "remove", actorUserId: myId)
         XCTAssertFalse(sut.commentHearts.isLiked("c1"), "mon propre événement fait autorité pour mon cœur")
         XCTAssertEqual(sut.comments.first?.likes, 1)
+        XCTAssertEqual(
+            sut.commentHearts.displayedLikes(of: try XCTUnwrap(sut.comments.first)), 1,
+            "mon propre écho purge le delta optimiste")
     }
 
     // MARK: - topLevelComments

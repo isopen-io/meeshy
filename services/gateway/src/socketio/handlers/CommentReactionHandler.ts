@@ -98,19 +98,35 @@ export class CommentReactionHandler {
    * `commentAuthorSeparatedFrom` — retirer sa réaction reste permis après un
    * blocage, par décision écrite.
    *
-   * **Elle est lue APRÈS la mutation depuis #20337, et il faut dire ce que
-   * cela change.** #20236 la lisait avant, « pour que l'émission reste
-   * synchrone après elle (l'ordre du fil porte un compteur d'agrégation) » —
-   * une phrase juste du chemin LIKE (`SocialEventsHandler`, où l'émission est
-   * bien synchrone) et déjà inexacte ici : `createUpdateEvent` est une LECTURE
-   * EN BASE, donc un `await` siégeait déjà entre la mutation et l'émission.
-   * Nommer le roster EXIGE de lire après lui, puisque lui seul le produit.
+   * **Elle est lue APRÈS la mutation depuis #20337, et l'endroit où elle se lit
+   * est une conséquence de ce que la charge doit PORTER.** `createUpdateEvent`
+   * est le seul producteur du roster : nommer les réacteurs EXIGE de lire après
+   * lui. La fenêtre de réordonnancement s'élargit donc d'un `await` — elle ne
+   * s'ouvre pas (c'était déjà une LECTURE EN BASE qui siégeait là), et elle ne
+   * se fermerait pas en lisant avant.
    *
-   * La fenêtre de réordonnancement s'élargit donc d'un `await` ; elle ne
-   * s'ouvre pas. Ces deux événements voyagent sans curseur `_seq` et portent
-   * un compteur ABSOLU — deux lectures concurrentes rendent le même total
-   * final, et un client qui doute resynchronise (`comment:reaction-request-sync`).
-   * L'`unchanged`/`!removed` en dispense : un no-op ne lit rien.
+   * Ces deux événements voyagent sans curseur `_seq` — `emitWithSeq` n'estampille
+   * que les émissions vers UN destinataire, et celles-ci sont des diffusions de
+   * ROOM — et portent un compteur ABSOLU : **aucun ordre de livraison n'est
+   * promis, et ce qui rattrape l'écart est une relecture autoritative**
+   * (décision du 2026-11-27, #20414). L'`unchanged`/`!removed` en dispense : un
+   * no-op ne lit rien.
+   *
+   * **Et cette relecture n'est PAS la resynchronisation, contrairement à ce que
+   * ce doc-comment invoquait : `comment:reaction-request-sync` n'a AUCUN
+   * appelant applicatif.** Relevé exhaustif (#20414, décision du 2026-11-28) :
+   * le serveur la sert, les deux SDK la déclarent, zéro site d'application
+   * l'appelle sur iOS comme sur Android, l'événement n'existe pas côté web, et
+   * le sujet iOS qui porterait son ACK n'a aucun producteur. **Ce qui corrige un
+   * total périmé aujourd'hui est la relecture REST du fil**, à la prochaine
+   * ouverture — et iOS PERSISTE le compteur, donc un total périmé survit au
+   * redémarrage jusque-là. Son câblage, ou le retrait de ses déclarations
+   * mortes, est #20778.
+   *
+   * Les deux faces de la question — ce que l'ordre ne garantit pas, et ce que la
+   * convergence garantit (compteur absolu qui BORNE, relecture qui CORRIGE) :
+   * {@link ../../../decisions/2026-11-27-les-activites-a-compteur-absolu-ne-promettent-aucun-ordre-de-livraison-20414.md}
+   * {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md}
    */
   private async separationAround(
     actorId: string,

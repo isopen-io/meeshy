@@ -559,12 +559,26 @@ export class SocialEmissionCore {
    * **LA SÉPARATION AUTOUR D'UNE ACTIVITÉ DE COMMENTAIRE** (#20236), résolue
    * par l'APPELANT, AVANT sa mutation, et passée aux deux diffusions.
    *
-   * Ce n'est pas une commodité : rendre ces diffusions asynchrones décorrélait
-   * l'ORDRE du fil de l'ordre des écritures, et leur charge est ABSOLUE
-   * (`likeCount`) — un `comment:unliked` qui double son `comment:liked` fige
-   * chez le lecteur un compteur que la base contredit, et iOS le PERSISTE.
-   * Résolue avant l'écriture, l'émission redevient synchrone juste après elle
-   * (audit adversarial du lot).
+   * Leur charge est ABSOLUE (`likeCount`) : un `comment:unliked` livré avant
+   * son `comment:liked` fige chez le lecteur un compteur que la base contredit,
+   * et iOS le PERSISTE. Résoudre avant l'écriture RESSERRE cette fenêtre d'un
+   * `await` — ce n'est donc pas une commodité, et ce n'est pas davantage une
+   * garantie : **aucun ordre de livraison n'est promis**, deux gestes
+   * concurrents étant deux gestionnaires indépendants dont les accusés peuvent
+   * s'inverser, et l'adaptateur Redis n'ordonnant rien entre deux instances.
+   * Ce qui rattrape l'écart est une relecture autoritative — le prochain
+   * chargement REST du détail, qui réécrit le total persisté (décision du
+   * 2026-11-27, #20414).
+   *
+   * **Lire avant, ici, est une conséquence du ROSTER, pas une doctrine** : ce
+   * chemin le PEUT (il n'a aucun roster à nommer), celui de
+   * `CommentReactionHandler.separationAround` lit APRÈS parce qu'il le DOIT. Les
+   * deux écrivent les MÊMES lignes `commentReaction` — deux transports d'une
+   * seule mutation, donc une seule relecture les réconcilie. Aucun n'est un
+   * modèle pour l'autre, et la mesure de ce que vaut chaque mécanisme de
+   * convergence est à la seconde décision :
+   * {@link ../../../decisions/2026-11-27-les-activites-a-compteur-absolu-ne-promettent-aucun-ordre-de-livraison-20414.md}
+   * {@link ../../../decisions/2026-11-28-l-ordre-de-deux-activites-de-commentaire-est-au-mieux-la-convergence-est-sa-garantie-20414.md}
    */
   commentActivitySeparation(actorId: string, commentAuthorId: string | null | undefined): Promise<readonly string[] | null> {
     return this.activitySeparation(actorId, commentAuthorId);
