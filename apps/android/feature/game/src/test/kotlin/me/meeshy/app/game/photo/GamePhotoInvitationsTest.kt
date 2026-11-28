@@ -11,6 +11,8 @@ import me.meeshy.sdk.model.game.PhotoAlertMemory
 import me.meeshy.sdk.model.game.PhotoAlertPacing
 import me.meeshy.sdk.model.game.PhotoCatchUpStanding
 import me.meeshy.sdk.model.game.PhotoInvitationsSetting
+import me.meeshy.sdk.model.game.photo.NotebookEntry
+import me.meeshy.sdk.model.game.photo.NotebookStatus
 import org.junit.After
 import org.junit.Test
 
@@ -49,8 +51,11 @@ class GamePhotoInvitationsTest {
         val acknowledgements: MutableList<List<String>>,
     )
 
-    private fun sut(sessionStartedAt: Long? = now - hour, memories: Memories = Memories()): Sut {
-        val notebook = FakePhotoNotebook()
+    private fun sut(
+        sessionStartedAt: Long? = now - hour,
+        memories: Memories = Memories(),
+        notebook: FakePhotoNotebook = FakePhotoNotebook(),
+    ): Sut {
         val acknowledgements = mutableListOf<List<String>>()
         val invitations = GamePhotoInvitations(
             memories = memories,
@@ -116,10 +121,9 @@ class GamePhotoInvitationsTest {
 
     @Test
     fun `une etape que le carnet connait deja n'invite rien`() = runBlocking<Unit> {
-        val sut = sut()
         val seven = GamePhotoInvitations.moment("flame:7", flame(7))
         assertThat(seven).isNotNull()
-        sut.notebook.postpone(seven!!)
+        val sut = sut(notebook = FakePhotoNotebook(initial = listOf(NotebookEntry(seven!!, NotebookStatus.Pending, createdAt = 1L))))
 
         sut.invitations.observe("u1", flame(6), photo = null)
         val outcome = sut.invitations.observe("u1", flame(7), photo = null)
