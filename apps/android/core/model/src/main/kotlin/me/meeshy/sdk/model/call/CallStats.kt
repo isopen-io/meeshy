@@ -116,7 +116,7 @@ public data class CallStats(
          *   ONLY on the selected pair, with no fallback (#20284, web `readStats`): a pair
          *   that carries no traffic holds a weak or stale estimate, and the video tier
          *   would settle on it. No elected pair, or one without the field, yields `0` —
-         *   "no estimate", never "no bandwidth"
+         *   "no estimate", never "no bandwidth".
          *   An estimate beyond [CallStatValue.MAX_BITRATE_ESTIMATE_BPS] reads `0` too (#20348).
          * - `inbound-rtp` sums [packetsLost] and [bytesReceived]; splits
          *   `packetsReceived` into [inboundAudioPackets] / [inboundVideoPackets] by
