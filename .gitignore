@@ -446,3 +446,6 @@ apps/ios/fastlane/metadata/*/product_page_header/
 apps/ios/fastlane/metadata/*/search_results/
 apps/ios/fastlane/metadata/*/screenshots/
 tools/ml-conversion/voice_cloning_output/
+
+# AMSF — journaux des relevés rejoués localement (#20763)
+.amsf/baselines/.runs/
