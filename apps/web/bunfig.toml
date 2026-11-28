@@ -45,5 +45,8 @@
 # LA GARDE DES `act()` ABANDONNÉS passe EN PREMIER (#9509) : elle remplace
 # `act` sur l'objet de module de React, ce qui doit précéder tout import de
 # `react` par un autre préchargement ou un témoin.
+# LE FUSEAU passe avant elle (#20729) : `timezone-isolation.ts` n'importe rien,
+# il pose `TZ=UTC` pour qu'un poste qui exporte un autre fuseau rende le même
+# verdict que la CI.
 [test]
-preload = ["./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts", "./src/test-support/end-to-end-regime-isolation.ts", "./src/test-support/presence-isolation.ts", "./src/test-support/caption-reveals-isolation.ts"]
+preload = ["./src/test-support/timezone-isolation.ts", "./src/test-support/act-leak-guard.ts", "./src/test-support/interface-catalog-preload.ts", "./src/test-support/end-to-end-regime-isolation.ts", "./src/test-support/presence-isolation.ts", "./src/test-support/caption-reveals-isolation.ts"]
