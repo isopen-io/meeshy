@@ -340,12 +340,12 @@ export function registerInviteRoute(
       // bannissement commis entre la décision ci-dessus et cette ligne ne doit
       // pas être rallumé. Le refus est celui que la porte rend déjà en amont.
       const rejoin = entry.outcome === 'rejoin' && entry.participantId
-        ? await commitParticipantRejoin<SerializableParticipantRow>({
+        ? await givenBackOnFailure(spend, commitParticipantRejoin<SerializableParticipantRow>({
             prisma: fastify.prisma,
             participantId: entry.participantId,
             data: { ...REJOIN_PARTICIPANT_STATE, ...invitedMemberFields },
             include: invitedMemberInclude
-          })
+          }))
         : null;
       if (rejoin && rejoin.outcome !== 'rejoined') await giveBack();
       if (rejoin?.outcome === 'banned') {

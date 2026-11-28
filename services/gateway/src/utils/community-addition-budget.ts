@@ -54,8 +54,9 @@
  * montage de Socket.IO (`setCommunityAdmissionBudgetHost`). Et un débit
  * accepté pour une écriture qui n'a PAS lieu — course de bannissement, ligne
  * disparue, écriture qui lève — se REND ; une tentative vers un compte non
- * ajoutable, jamais. Le débannissement et l'entrée par lien en sont dispensés
- * par décision écrite (`decisions/2026-11-28-…-20740.md`).
+ * ajoutable, jamais. Le débannissement le paie quand il fait RENTRER dans la
+ * communauté ; l'entrée par lien, volontaire, en est dispensée
+ * (`decisions/2026-11-28-…-20740.md`).
  *
  * Le seau d'une cible ne se remplit plus par ajout/retrait (#20464) : un
  * sous-plafond par PAIRE (acteur, cible), 3 par jour, est débité AVANT le seau

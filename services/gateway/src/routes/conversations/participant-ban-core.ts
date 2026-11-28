@@ -9,6 +9,8 @@ import { liftBanOnly, resolveBanWrite, resolveUnbanWrite } from '../../services/
 import { returningMemberRefusalFor } from '../../services/conversations/newMemberAdmission'
 import { applyCommunityAdmission, loadSalonCommunity, planSalonEntry } from '../../services/conversations/communityMembershipSync'
 import { communityMemberAnnouncerOverIO } from '../../services/community-member-broadcast'
+import { givenBackOnFailure, hostedCommunityAdmissionBudget } from '../../services/conversations/communitySalonAdmissionBudget'
+import type { CommunityAdmissionBudget } from '../../services/conversations/memberAdmission'
 import { emitConversationMemberCountEvent } from '../../socketio/emitConversationMemberCount'
 import { endConversationMembership } from '../../socketio/endConversationMembership'
 import { resolveTargetParticipant, identifyTarget } from './utils/target-participant'
@@ -53,6 +55,8 @@ export type DemandeDeBannissement = {
   readonly currentUserId: string
   readonly platformRole: string | undefined
   readonly socketIO: PasserelleSocketDeConversation | null | undefined
+  /** #20740 — le budget des ajouts que paie un retour dans la communauté ; par défaut celui du serveur posé. */
+  readonly communityBudget?: CommunityAdmissionBudget | null
 }
 
 export type BannissementServi = {
@@ -393,12 +397,20 @@ export async function leverBannissementDeParticipant(
     community,
     targetParticipant.userId ? { kind: 'registered', userId: targetParticipant.userId } : { kind: 'guest' },
   )
-  const unban = communityAdmission.kind === 'refused' ? liftBanOnly() : proposedUnban
-  await prisma.participant.update({
+  // #20740 — faire RENTRER dans la communauté quelqu'un qui l'a quittée (ou
+  // qui n'en était plus) est un ajout sans accord : il paie le budget, et un
+  // refus lève le bannissement sans rendre l'appartenance, comme un refus de
+  // la communauté. Une cible restée membre n'entre pas : elle ne coûte rien.
+  const budget = demande.communityBudget === undefined ? hostedCommunityAdmissionBudget() : demande.communityBudget
+  const entersCommunity = communityAdmission.kind === 'admitted' && communityAdmission.creations.length + communityAdmission.reactivations.length > 0
+  const spend = community && entersCommunity && budget ? await budget(currentUserId, communityAdmission) : null
+  const throttled = spend !== null && !spend.verdict.allowed
+  const unban = communityAdmission.kind === 'refused' || throttled ? liftBanOnly() : proposedUnban
+  await givenBackOnFailure(throttled ? null : spend, prisma.participant.update({
     where: { id: targetParticipant.id },
     data: unban.data,
-  })
-  if (community && communityAdmission.kind === 'admitted') {
+  }))
+  if (community && communityAdmission.kind === 'admitted' && !throttled) {
     await applyCommunityAdmission(prisma, community.communityId, communityAdmission, communityMemberAnnouncerOverIO(prisma, socketIO?.getManager()?.getIO()))
   }
   invalidateParticipantLookup(targetParticipant.id, id)

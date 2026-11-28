@@ -114,7 +114,7 @@ const CIBLE_BANNIE = {
   shareLinkId: null,
 };
 
-async function debannir(monde: Monde & { readonly communityId?: string | null; readonly cible?: typeof CIBLE_BANNIE }) {
+async function debannir(monde: Monde & { readonly communityId?: string | null; readonly cible?: typeof CIBLE_BANNIE; readonly communityBudget?: any }) {
   const prisma: any = {
     ...communauteDouble(monde),
     participant: {
@@ -132,6 +132,7 @@ async function debannir(monde: Monde & { readonly communityId?: string | null; r
     currentUserId: ACTEUR,
     platformRole: 'USER',
     socketIO: null,
+    ...(monde.communityBudget !== undefined ? { communityBudget: monde.communityBudget } : {}),
   });
   return { verdict, prisma };
 }
@@ -351,5 +352,65 @@ describe('#16703 — restaurer un « supprimé pour moi » dans un salon d’une
 
     expect(horsCommunaute.res.statusCode).toBe(200);
     expect(publique.res.statusCode).toBe(200);
+  });
+});
+
+/**
+ * #20740 — débannir quelqu'un qui a QUITTÉ la communauté (ou qui n'en était
+ * plus) l'y fait rentrer sans son accord : c'est un ajout, il paie le budget.
+ * Refusé, le bannissement est levé sans rendre l'appartenance — l'issue d'un
+ * refus de la communauté. Une cible restée membre n'entre pas : rien ne coûte.
+ */
+describe('#20740 — débannir paie le budget des ajouts quand il fait rentrer dans la communauté', () => {
+  const budget = (allowed: boolean) => {
+    const rendre = jest.fn(async () => undefined);
+    const spend = jest.fn(async (_actorId: string, _admission: unknown) => ({ verdict: { allowed, retryAfter: allowed ? 0 : 60 }, rendre }));
+    return { spend, rendre };
+  };
+
+  it('refusé par le budget : lève le bannissement SANS rendre le salon ni la communauté', async () => {
+    const b = budget(false);
+    const { verdict, prisma } = await debannir({ lignes: [membre(ACTEUR, 'moderator'), ancien(CIBLE)], communityBudget: b.spend });
+
+    expect(verdict.genre).toBe('ok');
+    expect(b.spend).toHaveBeenCalledWith(ACTEUR, expect.objectContaining({ kind: 'admitted' }));
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-cible' }, data: { bannedAt: null } });
+    expect(prisma.communityMember.updateMany).not.toHaveBeenCalled();
+    expect(prisma.communityMember.createMany).not.toHaveBeenCalled();
+  });
+
+  it('accepté : rend le salon et la communauté, sans rendre le débit', async () => {
+    const b = budget(true);
+    const { prisma } = await debannir({ lignes: [membre(ACTEUR, 'moderator'), ancien(CIBLE)], communityBudget: b.spend });
+
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-cible' }, data: { bannedAt: null, isActive: true, leftAt: null } });
+    expect(prisma.communityMember.updateMany).toHaveBeenCalled();
+    expect(b.rendre).not.toHaveBeenCalled();
+  });
+
+  it('une écriture qui lève rend le débit', async () => {
+    const echec = budget(true);
+    const prisma: any = {
+      ...communauteDouble({ lignes: [membre(ACTEUR, 'moderator'), ancien(CIBLE)] }),
+      participant: {
+        findFirst: jest.fn<any>()
+          .mockResolvedValueOnce({ id: 'p-acteur', role: 'moderator', conversation: { communityId: COMMUNAUTE } })
+          .mockResolvedValueOnce(CIBLE_BANNIE),
+        update: jest.fn<any>().mockRejectedValue(new Error('base indisponible')),
+        findMany: jest.fn<any>().mockResolvedValue([]),
+      },
+    };
+    await expect(leverBannissementDeParticipant({
+      prisma, conversationIdentifier: CONV_ID, targetKey: CIBLE, currentUserId: ACTEUR, platformRole: 'USER', socketIO: null, communityBudget: echec.spend as never,
+    })).rejects.toThrow('base indisponible');
+    expect(echec.rendre).toHaveBeenCalledTimes(1);
+  });
+
+  it('une cible restée membre n’entre pas dans la communauté : le geste ne coûte rien', async () => {
+    const b = budget(false);
+    const { prisma } = await debannir({ lignes: [membre(ACTEUR), membre(CIBLE)], communityBudget: b.spend });
+
+    expect(b.spend).not.toHaveBeenCalled();
+    expect(prisma.participant.update).toHaveBeenCalledWith({ where: { id: 'p-cible' }, data: { bannedAt: null, isActive: true, leftAt: null } });
   });
 });

@@ -186,11 +186,11 @@ export async function admitConversationMember(
     // bannissement commis entre la décision ci-dessus et cette ligne ne doit
     // pas être rallumé. Le refus reste le verdict de CETTE porte, qui ne fait
     // jamais tomber le lot.
-    const committed = await commitParticipantRejoin<{ id: string }>({
+    const committed = await givenBackOnFailure(spend, commitParticipantRejoin<{ id: string }>({
       prisma,
       participantId: entry.participantId,
       data: { ...REJOIN_PARTICIPANT_STATE, ...addedMemberFields },
-    });
+    }));
     if (committed.outcome !== 'rejoined') await giveBack();
     if (committed.outcome === 'banned') return { userId, outcome: 'banned' };
     if (committed.outcome === 'vanished') return { userId, outcome: 'not-found' };

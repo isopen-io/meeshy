@@ -235,9 +235,7 @@ export function registerCreateConversationRoute(
       // if the creator blocked the other party OR the other party blocked the creator.
       if (type === 'direct' && uniqueParticipantIds.length === 1) {
         const blocked = await isBlockedBetween(prisma, userId, uniqueParticipantIds[0]);
-        if (blocked) {
-          throw createError(ErrorCode.USER_BLOCKED);
-        }
+        if (blocked) { await spend?.rendre(); throw createError(ErrorCode.USER_BLOCKED); }
 
         // Idempotence DM — une conversation directe entre deux users est
         // UNIQUE. Sans ce check, chaque « Nouvelle conversation → Créer »
@@ -337,6 +335,7 @@ export function registerCreateConversationRoute(
             }
           }
 
+          await spend?.rendre();
           const sealed = await sealReopenedDirect(prisma, nascentRegimeDeps(prisma), { conversation: existingDirect, enabledBy: userId });
 
           return sendSuccess(reply, {
@@ -350,6 +349,7 @@ export function registerCreateConversationRoute(
 
       // #20073 — un tête-à-tête chiffré ne naît que si chacun a un appareil chiffré ; personne n'est nommé.
       if (type === 'direct' && regime.mode === 'e2ee' && (await membersWithoutEndToEndDevice(prisma, [userId, ...uniqueParticipantIds])).length > 0) {
+        await spend?.rendre();
         return sendError(reply, 409, E2EE_PARTICIPANT_WITHOUT_DEVICE_MESSAGE, { code: E2EE_ERROR_CODES.PARTICIPANT_WITHOUT_DEVICE });
       }
 

@@ -10,6 +10,11 @@ import type { CommunityAdmission } from './communityMembershipSync';
 
 const ALLOWED: CommunityAdditionVerdict = { allowed: true, retryAfter: 0 };
 const NOTHING_TO_GIVE_BACK = async (): Promise<void> => undefined;
+/** Un débit ne se rend qu'UNE fois : un second appel rendrait les débits d'autres gestes, sur des seaux partagés. */
+const once = (give: () => Promise<void>): (() => Promise<void>) => {
+  let given: Promise<void> | null = null;
+  return () => (given ??= give());
+};
 const settled = (verdict: CommunityAdditionVerdict): UndoableCommunityAddition => ({ verdict, rendre: NOTHING_TO_GIVE_BACK });
 
 /**
@@ -80,9 +85,9 @@ async function spendCommunityEntrantsUndoable(
   }
   return {
     verdict: ofTargets.verdict,
-    rendre: async () => {
+    rendre: once(async () => {
       await Promise.all([ofTargets.rendre(), refundCommunityAdditionByActor(fastify, actorId, invited.length)]);
-    },
+    }),
   };
 }
 

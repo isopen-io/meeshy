@@ -24,6 +24,8 @@ jest.mock('../../../utils/logger', () => ({
 }));
 
 import Fastify from 'fastify';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import {
   givenBackOnFailure,
@@ -73,6 +75,25 @@ describe('#20740 — le budget des ajouts, atteint hors d’une route', () => {
       await spend.rendre();
     }
     await app.close();
+  });
+
+  it('un débit ne se rend qu’UNE fois : un second rendu ne prend pas sur les gestes des autres', async () => {
+    const app = Fastify({ logger: false });
+    const autre = '507f1f77bcf86cd7994390a2';
+    const spend = await spendCommunitySalonAdmissionUndoable(app, autre, entre(CIBLE));
+    for (let i = 1; i < COMMUNITY_ADDITION_BUDGET.pairPerDay; i += 1) {
+      expect((await spendCommunitySalonAdmissionUndoable(app, autre, entre(CIBLE))).verdict.allowed).toBe(true);
+    }
+    await spend.rendre();
+    await spend.rendre();
+    expect((await spendCommunitySalonAdmissionUndoable(app, autre, entre(CIBLE))).verdict.allowed).toBe(true);
+    expect((await spendCommunitySalonAdmissionUndoable(app, autre, entre(CIBLE))).verdict.allowed).toBe(false);
+    await app.close();
+  });
+
+  it('le montage de Socket.IO pose le serveur dont l’appel paie les seaux', () => {
+    const source = readFileSync(join(__dirname, '../../../socketio/MeeshySocketIOHandler.ts'), 'utf8');
+    expect(source).toMatch(/setCommunityAdmissionBudgetHost\(fastify\)/);
   });
 
   it('une tentative vers un compte non ajoutable ne se rend pas : elle reste comptée', async () => {

@@ -215,6 +215,8 @@ export function callInviteDependencies(input: {
       const community = request.community !== undefined
         ? request.community
         : await loadSalonCommunity(prisma, { communityId: conversation.communityId, actorId: request.inviterUserId });
+      const communityBudget = (input.communityBudget ?? hostedCommunityAdmissionBudget)();
+      if (community && !communityBudget) logger.warn('call-invite: no community addition budget host — admission not debited', { conversationId: request.conversationId });
       const verdict = await admitConversationMember(
         {
           prisma,
@@ -225,7 +227,7 @@ export function callInviteDependencies(input: {
           engagement: (engagement ??= new EngagementService(prisma)),
           // #20740 — faire sonner quelqu'un dans le salon d'une communauté
           // privée l'y fait entrer : il paie les MÊMES seaux que les routes.
-          communityBudget: (input.communityBudget ?? hostedCommunityAdmissionBudget)(),
+          communityBudget,
         },
         {
           conversationId: request.conversationId,
